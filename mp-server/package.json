@@ -1,0 +1,17 @@
+{
+  "name": "mohas-roham-mp-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Co-op (2-4 archers) wave-survival multiplayer server skeleton for the single-file game 'Mohas Roham'. PREP/scaffolding only: boots, serves static files, manages rooms over WebSocket, broadcasts a server-tick heartbeat/state. Monster/gameplay netcode is stubbed with TODOs.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

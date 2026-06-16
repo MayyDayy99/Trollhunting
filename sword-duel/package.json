@@ -1,0 +1,23 @@
+{
+  "name": "sword-duel",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "1v1 kézkövetéses kardpárbaj — egy kamera, két játékos (Three.js + TensorFlow.js Hands).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "test:fight": "node test-fight.mjs"
+  },
+  "dependencies": {
+    "@tensorflow-models/hand-pose-detection": "2.0.1",
+    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
+    "@tensorflow/tfjs-converter": "^4.22.0",
+    "@tensorflow/tfjs-core": "^4.22.0",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

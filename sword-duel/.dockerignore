@@ -1,0 +1,9 @@
+node_modules
+dist
+test-fight.mjs
+.git
+.gitignore
+*.md
+deploy/certs
+.vscode
+.DS_Store

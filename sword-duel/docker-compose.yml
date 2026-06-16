@@ -1,0 +1,26 @@
+services:
+  sword-duel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sword-duel:latest
+    container_name: sword-duel
+    restart: unless-stopped
+    ports:
+      # HTTPS — ezt használd LAN-on / IdeaHubon (a kamera megy a self-signed
+      # cert elfogadása után).
+      - "443:443"
+      # HTTP — csak localhost kényelmi fallback (nincs kitéve a LAN-ra).
+      # 8088 (nem 8080), mert a 8080-at Windowson gyakran lefoglalja a WinNAT/más app,
+      # és a foglalt port miatt az EGÉSZ konténer nem indul el. Ha 8088 is ütközik,
+      # írd át pl. 8090-re. (A kamera localhoston HTTPS-en is megy, ld. README.)
+      - "127.0.0.1:8088:80"
+    volumes:
+      # A self-signed certet futásidőben mountoljuk (előbb futtasd a gen-cert-et!).
+      - ./deploy/certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--no-check-certificate",
+             "-O", "/dev/null", "https://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

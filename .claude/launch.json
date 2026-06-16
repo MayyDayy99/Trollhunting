@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sword-duel",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "sword-duel", "run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "gamedev-static",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "-l", "5174", "."],
+      "port": 5174
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+# =============================================================================
+#  Mohas Roham co-op server — docker-compose
+# =============================================================================
+#  Run:    docker compose up --build
+#  Then:   open http://localhost:8080  (lobby) or .../mohas-roham.html (game)
+#  WS:     ws://localhost:8080/ws
+#
+#  TRANSPORT NOTE: this game uses NO camera, so the getUserMedia secure-context
+#  rule does NOT apply. ws:// is fine on localhost. For LAN / cross-origin, put
+#  this behind a TLS terminator and use wss:// (and serve the page over https://
+#  so the browser doesn't block ws:// as mixed content).
+# =============================================================================
+services:
+  mp-server:
+    build: .
+    image: mohas-roham-mp-server:0.1.0
+    container_name: mohas-roham-mp
+    ports:
+      # host:container — change the host side to remap (e.g. "9090:8080").
+      # 8090 a hoston (a 8080-at Windowson gyakran lefoglalja a WinNAT).
+      - "8090:8080"
+    environment:
+      PORT: "8080"
+      HOST: "0.0.0.0"
+      TICK_HZ: "20"
+      HOST_IP: "${HOST_IP:-}"
+    restart: unless-stopped
+    healthcheck:
+      # Mirrors the Dockerfile HEALTHCHECK; compose surfaces it in `docker ps`.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3

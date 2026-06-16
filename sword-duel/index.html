@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sword Duel — kézkövetéses kardpárbaj</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <video id="cam" playsinline muted></video>
+
+  <div id="hud">
+    <div class="hpwrap left">
+      <div class="pname" style="color:#36c5ff">JÁTÉKOS 1</div>
+      <div class="hpbar"><div id="p1hpFill" class="hpfill p1"></div></div>
+      <div id="p1hpNum" class="hpnum">100</div>
+    </div>
+
+    <div id="timer" class="timer">2:00</div>
+
+    <div class="hpwrap right">
+      <div class="pname" style="color:#ff7a3d">JÁTÉKOS 2</div>
+      <div class="hpbar"><div id="p2hpFill" class="hpfill p2"></div></div>
+      <div id="p2hpNum" class="hpnum">100</div>
+    </div>
+
+    <div id="p1status" class="status"></div>
+    <div id="p2status" class="status"></div>
+
+    <div class="centerwrap">
+      <div id="center" class="center"></div>
+      <div id="centerSub" class="sub"></div>
+      <div id="stats" class="stats"></div>
+    </div>
+  </div>
+
+  <div id="flashP1" class="flash p1"></div>
+  <div id="flashP2" class="flash p2"></div>
+
+  <div id="err"></div>
+  <div id="dbg"></div>
+
+  <div id="start" class="screen">
+    <div class="startcard">
+      <div class="eyebrow">MOTION ARCADE</div>
+      <h1>SWORD&nbsp;DUEL</h1>
+      <p class="lead">1v1 kézkövetéses kardpárbaj — egy kamera, két játékos.</p>
+      <p class="how">
+        Álljatok a kamera elé egymás mellé (<b style="color:#36c5ff">bal = Játékos 1</b>,
+        <b style="color:#ff7a3d">jobb = Játékos 2</b>). A kezetekkel vezetitek a kardot:
+        gyors suhintással sebeztek, a pengéitek összeérve blokkoltok. 2 perc — akinek több
+        élete marad, nyer.
+      </p>
+      <button id="startBtn">BELÉPÉS ▶</button>
+      <div id="startMsg" class="startmsg"></div>
+      <div id="loading" class="loading"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

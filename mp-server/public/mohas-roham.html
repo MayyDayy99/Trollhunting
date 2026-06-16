@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mohás Roham — íjász túlélő</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#0a1018;height:100%;
+    font-family:-apple-system,'Segoe UI',sans-serif;-webkit-user-select:none;user-select:none;color:#e9f1ff;cursor:none;}
+  canvas{display:block;}
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:5;}
+
+  /* célkereszt */
+  #cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;pointer-events:none;}
+  #cross .dot{position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;
+    background:#fff;transform:translate(-50%,-50%);box-shadow:0 0 6px rgba(0,0,0,.8);}
+  #cross .ln{position:absolute;background:rgba(255,255,255,.85);box-shadow:0 0 4px rgba(0,0,0,.8);
+    transition:transform .05s linear;}
+
+  /* felső HUD */
+  #wave{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:6;text-align:center;
+    text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  #wave .n{font:800 30px/1 inherit;color:#ffd27a;letter-spacing:.04em;}
+  #wave .left{font:600 13px/1.4 inherit;color:#b9c8e6;}
+  #score{position:fixed;top:16px;right:18px;z-index:6;text-align:right;text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  #score .n{font:800 26px/1 inherit;color:#7fe2ff;}
+  #score small{font:600 10px/1.2 inherit;letter-spacing:.14em;text-transform:uppercase;color:#9db4d6;}
+
+  /* HP csík */
+  #hpwrap{position:fixed;left:18px;bottom:18px;z-index:6;width:280px;}
+  #hpwrap .lab{font:700 12px/1 inherit;letter-spacing:.1em;text-transform:uppercase;color:#cfe0ff;margin-bottom:6px;
+    text-shadow:0 2px 8px rgba(0,0,0,.8);}
+  #hpbar{height:20px;border-radius:8px;background:rgba(8,14,28,.7);border:2px solid rgba(180,200,240,.25);overflow:hidden;}
+  #hpfill{height:100%;width:100%;background:linear-gradient(90deg,#c9521f,#ff7a3d,#ffd27a);transition:width .2s;}
+
+  /* feszítés-erő */
+  #powwrap{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:6;width:170px;height:8px;
+    border-radius:6px;background:rgba(8,14,28,.6);border:1px solid rgba(180,200,240,.25);opacity:0;transition:opacity .15s;}
+  #powwrap.on{opacity:1;}
+  #powfill{height:100%;width:0%;border-radius:6px;background:linear-gradient(90deg,#5fe0ff,#7fe2ff,#fff);}
+
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
+    background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(4,8,16,.7) 100%);}
+  #hurt{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;
+    background:radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(180,20,20,.55) 100%);}
+
+  #toast{position:fixed;left:50%;top:30%;transform:translateX(-50%) scale(.6);opacity:0;z-index:7;
+    font:900 64px/1 inherit;color:#ffd27a;text-shadow:0 4px 24px rgba(0,0,0,.8);text-align:center;pointer-events:none;
+    transition:opacity .3s, transform .3s;}
+  #toast.show{opacity:1;transform:translateX(-50%) scale(1);}
+
+  /* képernyők */
+  .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:default;
+    background:radial-gradient(ellipse at 50% 38%, rgba(26,44,82,.92), rgba(8,14,24,.97));backdrop-filter:blur(3px);}
+  .card{max-width:600px;text-align:center;padding:34px;border-radius:22px;
+    background:rgba(14,22,40,.6);border:1px solid rgba(180,200,240,.18);box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .card .eyebrow{font:700 12px/1 inherit;letter-spacing:.42em;color:#8fa6c9;text-transform:uppercase;}
+  .card h1{font:900 clamp(40px,8vw,72px)/1 inherit;margin:10px 0 8px;letter-spacing:.02em;
+    background:linear-gradient(90deg,#7fe2ff,#fff,#ffd27a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .card p{font:600 16px/1.6 inherit;color:#c3d4f0;margin:6px 0;}
+  .card .keys{font:600 14px/1.9 inherit;color:#a9bcdc;margin:16px 0 22px;}
+  .card .keys b{color:#ffe7b8;}
+  .card button{font:800 22px/1 inherit;letter-spacing:.05em;color:#061018;padding:16px 40px;border:none;border-radius:14px;
+    cursor:pointer;background:linear-gradient(90deg,#5fe0ff,#36c5ff);box-shadow:0 8px 28px rgba(54,197,255,.5);transition:transform .1s, filter .15s;}
+  .card button:hover{filter:brightness(1.1);} .card button:active{transform:scale(.95);}
+  .hide{display:none!important;}
+  #over .stat{font:800 22px/1.5 inherit;color:#ffd27a;margin:10px 0;}
+  #radar{position:fixed;right:18px;bottom:64px;z-index:6;width:160px;height:160px;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle at 50% 50%, rgba(12,20,36,.62), rgba(6,11,20,.82));
+    border:2px solid rgba(180,200,240,.28);box-shadow:0 6px 22px rgba(0,0,0,.5), inset 0 0 24px rgba(8,14,28,.6);}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="cross">
+    <div class="dot"></div>
+  </div>
+  <div id="wave"><div class="n">HULLÁM 1</div><div class="left">trollok: 0</div></div>
+  <div id="score"><div class="n">0</div><small>pont</small></div>
+  <div id="hpwrap"><div class="lab">Életerő</div><div id="hpbar"><div id="hpfill"></div></div></div>
+  <div id="powwrap"><div id="powfill"></div></div>
+  <canvas id="radar" width="160" height="160"></canvas>
+</div>
+<div id="vignette"></div>
+<div id="hurt"></div>
+<div id="toast"></div>
+
+<div id="start" class="screen">
+  <div class="card">
+    <div class="eyebrow">Mohás világ · íjász túlélő</div>
+    <h1>MOHÁS&nbsp;ROHAM</h1>
+    <p>A mohás trollok hordákban özönlenek a tisztásra. Te vagy az utolsó íjász.</p>
+    <div class="keys">
+      <b>Egér</b> = célzás &nbsp;·&nbsp; <b>Tartsd a bal egért</b> = íj feszítése, <b>engedd el</b> = lövés<br>
+      <b>WASD</b> = mozgás &nbsp;·&nbsp; <b>Szóköz</b> = ugrás &nbsp;·&nbsp; <b>Shift</b> = futás &nbsp;·&nbsp; <b>Esc</b> = szünet<br>
+      Minél tovább feszíted, annál erősebb és gyorsabb a nyíl. Fejlövés = dupla sebzés!
+    </div>
+    <button id="startBtn">JÁTÉK ▶</button>
+  </div>
+</div>
+
+<div id="pause" class="screen hide">
+  <div class="card">
+    <div class="eyebrow">Szünet</div>
+    <h1>SZÜNET</h1>
+    <p>Kattints a folytatáshoz.</p>
+    <button id="resumeBtn">FOLYTATÁS ▶</button>
+  </div>
+</div>
+
+<div id="over" class="screen hide">
+  <div class="card">
+    <div class="eyebrow">Elestél</div>
+    <h1>VÉGE</h1>
+    <div class="stat" id="overStat"></div>
+    <button id="restartBtn">ÚJRA ▶</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- CO-OP: expose connectCoop to the (non-module) game IIFE without changing single-player. net-client.js never runs unless the game opts in via ?room. -->
+<script type="module">
+  try {
+    const m = await import('./net-client.js');
+    window.__coopConnect = m.connectCoop || (m.default && m.default.connectCoop) || null;
+  } catch (e) { window.__coopConnect = null; console.warn('[coop] net-client load failed', e); }
+  window.dispatchEvent(new Event('coop-net-ready'));
+</script>
+<script>
+(function(){
+'use strict';
+
+/* ===================== Alap ===================== */
+const GROUND_Y = 0;
+const ARENA_R = 34;       // bejárható holdkör-tisztás
+const SPAWN_R = 50;       // a trollok a ködös fasor mögül jönnek
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp  = (a,b,t)=>a+(b-a)*t;
+const rand  = (a,b)=>a+Math.random()*(b-a);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1726);
+scene.fog = new THREE.Fog(0x0e1726, 40, 130);
+
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 400);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); // FPS: ne renderelj 2x-es felbontáson
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap; // olcsóbb mint a PCFSoft
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+document.body.appendChild(renderer.domElement);
+
+/* ===================== Procedurális textúrák (a troll-fájlból) ===================== */
+function glowTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=64;
+  const x=c.getContext('2d');
+  const g=x.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.35,'rgba(255,255,255,.55)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g; x.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+}
+function noiseTexture(size, blobs, light, dark){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const x=c.getContext('2d');
+  x.fillStyle='#808080'; x.fillRect(0,0,size,size);
+  for(let i=0;i<blobs;i++){
+    x.fillStyle = Math.random()<.5 ? light : dark; x.globalAlpha=.08+Math.random()*.12;
+    x.beginPath(); x.arc(Math.random()*size,Math.random()*size,1+Math.random()*4,0,6.3); x.fill();
+  }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(3,3); return t;
+}
+function mossTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=256;
+  const x=c.getContext('2d'); x.fillStyle='#2d4a36'; x.fillRect(0,0,256,256);
+  const cols=['#37603f','#2a4a32','#456b46','#26412c'];
+  for(let i=0;i<900;i++){ x.fillStyle=cols[i%4]; x.globalAlpha=.4;
+    x.beginPath(); x.arc(Math.random()*256,Math.random()*256,1+Math.random()*4,0,6.3); x.fill(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(10,10); return t;
+}
+const GLOW=glowTexture(), SKIN_N=noiseTexture(128,500,'#aaaaaa','#555555'), MOSS_T=mossTexture();
+
+/* ===================== Fények ===================== */
+/* ---- EDIT J+ (lighting ranges) — REPLACE lines 178-185 (the whole
+        "Fények" block). Colors deliberately UNCHANGED; only ranges/frustum
+        grow, plus one extra cool ground-bounce hemisphere for depth. ---- */
+scene.add(new THREE.HemisphereLight(0x6f86d6, 0x26301f, 0.55));
+const key=new THREE.DirectionalLight(0xbcd0ff,0.95); key.position.set(34,60,26);
+key.castShadow=true; key.shadow.mapSize.set(1024,1024); // FPS: feleakkora árnyék-textúra
+key.shadow.camera.left=-40; key.shadow.camera.right=40; key.shadow.camera.top=40; key.shadow.camera.bottom=-40;
+key.shadow.camera.near=1; key.shadow.camera.far=110; key.shadow.bias=-0.0005; key.shadow.normalBias=0.03;
+scene.add(key);
+const rim=new THREE.DirectionalLight(0x9fd8ff,0.5); rim.position.set(-24,28,-44); scene.add(rim);
+const moonFill=new THREE.PointLight(0x88aaff,0.4,120,2); moonFill.position.set(-40,30,-60); scene.add(moonFill);
+
+/* ===================== Anyagok / segédek ===================== */
+const std=(o)=>new THREE.MeshStandardMaterial(Object.assign({roughness:.9,metalness:0,flatShading:true},o));
+const skinMat=std({color:0x5f9168,bumpMap:SKIN_N,bumpScale:0.015});
+const skinDark=std({color:0x4a7355,bumpMap:SKIN_N,bumpScale:0.015});
+const bellyMat=std({color:0x9ec089});
+const hairMat=std({color:0x2c4636,roughness:.97});
+const tuskMat=std({color:0xeee2cf,roughness:.5});
+const clothMat=std({color:0x5a3c26,roughness:1});
+const woodMat=std({color:0x6e4a2c,roughness:.85,bumpMap:SKIN_N,bumpScale:0.02});
+const woodDark=std({color:0x402c1b,roughness:.95});
+const rockMat=std({color:0x4a525e,roughness:.95,bumpMap:SKIN_N,bumpScale:0.05});
+const mossMat=std({color:0x3c5a3e,roughness:1,map:MOSS_T,bumpMap:MOSS_T,bumpScale:0.06});
+const stemMat=std({color:0xe8dcc2,roughness:.8});
+const capMat=std({color:0xc44a43,roughness:.7});
+const glowCapM=new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.2,roughness:.6,flatShading:true});
+const eyeMat=new THREE.MeshStandardMaterial({color:0x2a1c08,emissive:0xff5a2a,emissiveIntensity:2.0,roughness:.4});
+const arrowWood=std({color:0x8a6a40,roughness:.7});
+const featherMat=std({color:0xd64b3a,roughness:.8,side:THREE.DoubleSide});
+const metalMat=new THREE.MeshStandardMaterial({color:0xbfc6d2,metalness:.7,roughness:.3});
+
+function mesh(geo,mat,x,y,z,sx,sy,sz){
+  const m=new THREE.Mesh(geo,mat); m.position.set(x||0,y||0,z||0);
+  if(sx!==undefined) m.scale.set(sx, sy===undefined?sx:sy, sz===undefined?sx:sz);
+  m.castShadow=true; m.receiveShadow=true; return m;
+}
+function jitter(geo,axz,ay){
+  const p=geo.attributes.position;
+  for(let i=0;i<p.count;i++){ p.setX(i,p.getX(i)+(Math.random()-0.5)*axz); p.setZ(i,p.getZ(i)+(Math.random()-0.5)*axz); p.setY(i,p.getY(i)+(Math.random()-0.5)*ay); }
+  geo.computeVertexNormals(); return geo;
+}
+
+/* ===================== Aréna / díszlet ===================== */
+const groundGeo=new THREE.CircleGeometry(150,96);
+const ground=new THREE.Mesh(groundGeo, mossMat);
+ground.rotation.x=-Math.PI/2; ground.position.y=GROUND_Y; ground.receiveShadow=true;
+scene.add(ground);
+// középső kő-emelvény
+/* ===== EDIT C — central altar (replaces ARENA_R-sized dais). REPLACE lines 224-225 =====
+   Compact fixed-radius cairn so it does NOT balloon with ARENA_R; <0.6 high so walkable.
+   Adds the cyan rune torus as the spawn-point landmark. */
+const dais=new THREE.Mesh(jitter(new THREE.CylinderGeometry(3.4,4.2,0.55,24,2),0.14,0.07), rockMat);
+dais.position.y=-0.18; dais.receiveShadow=true; dais.castShadow=true; scene.add(dais);
+const altarRune=mesh(new THREE.TorusGeometry(2.4,0.10,6,32),
+  new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.1,roughness:.6,flatShading:true}),
+  0,0.12,0);
+altarRune.rotation.x=-Math.PI/2; altarRune.receiveShadow=true; scene.add(altarRune);
+
+/* ===== EDIT C2 — terrain shape + walkable paths. INSERT immediately AFTER the altarRune block (after old line 225) =====
+   (1) Rolling jittered "bog skirt" UNDER + outside the play area — vertical variety in the
+       silhouette toward the treeline WITHOUT lifting the flat walk plane (it sits at y=-0.15,
+       below GROUND_Y=0, so the player never stands on its jittered verts).
+   (2) Flagstone worn paths: 4 flat inlaid discs radiating to the stone-circle gaps,
+       flush at y=GROUND_Y+0.005 — decorative, walkable, no collision. */
+const bogMossMat=std({color:0x2d4a36,roughness:1,map:MOSS_T,bumpMap:MOSS_T,bumpScale:0.09});
+const skirtGeo=jitter(new THREE.CircleGeometry(150,96), 0.0, 0.9);   // jitter Y only -> rolling bog, X/Z untouched so rim stays circular
+const bogSkirt=new THREE.Mesh(skirtGeo, bogMossMat);
+bogSkirt.rotation.x=-Math.PI/2; bogSkirt.position.y=-0.15; bogSkirt.receiveShadow=true; bogSkirt.renderOrder=-1;
+scene.add(bogSkirt);
+// worn flagstone paths from altar toward the 4 cardinal stone-circle gaps
+const flagMat=std({color:0x3a4450,roughness:.95,map:MOSS_T,bumpMap:MOSS_T,bumpScale:0.05});
+for(let p=0;p<4;p++){ const ang=p*Math.PI/2 + Math.PI/4;
+  for(let s=0;s<7;s++){ const d=4.5 + s*4.6;
+    const fs=mesh(new THREE.CircleGeometry(rand(1.6,2.4),10), flagMat,
+      Math.cos(ang)*d + rand(-0.5,0.5), GROUND_Y+0.005 + s*0.0006, Math.sin(ang)*d + rand(-0.5,0.5));
+    fs.rotation.x=-Math.PI/2; fs.rotation.z=rand(0,6.28); fs.castShadow=false; fs.receiveShadow=true; scene.add(fs); }
+}
+
+function tree(x,z,s){
+  const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(s||1);
+  const trunk=new THREE.Mesh(jitter(new THREE.CylinderGeometry(0.3,0.6,4.5,9,4),0.12,0.08), woodDark);
+  trunk.position.y=2.25; trunk.rotation.z=(Math.random()-0.5)*0.18; trunk.castShadow=true; trunk.receiveShadow=true; g.add(trunk);
+  for(let i=0;i<4;i++){ const a=Math.random()*6.28, len=1.2+Math.random()*1.2;
+    const b=mesh(new THREE.CylinderGeometry(0.06,0.13,len,6), woodDark, 0,3.4+Math.random()*0.8,0);
+    b.rotation.z=Math.cos(a)*0.8; b.rotation.x=Math.sin(a)*0.8; b.geometry.translate(0,len/2,0); g.add(b); }
+  // mohás korona-foltok
+  for(let i=0;i<5;i++){ const c=mesh(new THREE.SphereGeometry(0.5+Math.random()*0.4,7,6), mossMat,
+    (Math.random()-0.5)*1.4, 4.4+Math.random()*1.0, (Math.random()-0.5)*1.4); c.castShadow=true; g.add(c); }
+  scene.add(g);
+}
+function rock(x,z,r){ const m=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(r,0), r*0.25, r*0.25), rockMat);
+  m.position.set(x,GROUND_Y+r*0.4,z); m.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
+  m.castShadow=true; m.receiveShadow=true; scene.add(m); }
+const swayers=[];
+function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(sc);
+  g.add(mesh(new THREE.CylinderGeometry(0.09,0.13,0.42,8), glow?std({color:0xbfe8ef}):stemMat,0,0.21,0));
+  g.add(mesh(new THREE.SphereGeometry(0.3,10,7,0,6.28,0,Math.PI/2), glow?glowCapM:capMat,0,0.4,0,1,0.75,1));
+  if(glow){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x7fe2ff,transparent:true,opacity:0.5,depthWrite:false}));
+    sp.scale.setScalar(0.9); sp.position.y=0.5; g.add(sp); }
+  g.userData.phase=Math.random()*6.28; swayers.push(g); scene.add(g); }
+
+  /* ---- megalit kőkör (henge) az aréna peremén ---- */
+  const N_STONE=14, RING=ARENA_R+5; const STONE=jitter(new THREE.BoxGeometry(1.6,5.5,1.0,2,3,2),0.25,0.2);
+  const stoneIM=new THREE.InstancedMesh(STONE, rockMat, N_STONE); stoneIM.castShadow=true; stoneIM.receiveShadow=true;
+  const _sm=new THREE.Matrix4(), _sq=new THREE.Quaternion(), _ss=new THREE.Vector3(), _sp=new THREE.Vector3(), _se=new THREE.Euler();
+  for(let i=0;i<N_STONE;i++){ const a=(i/N_STONE)*6.283 + rand(-0.05,0.05), r=RING+rand(-1,1.5); const fallen=Math.random()<0.18; const h=rand(0.85,1.25);
+    _se.set(fallen?Math.PI/2*rand(.7,1):(Math.random()-0.5)*0.12, a+rand(-0.3,0.3), (Math.random()-0.5)*0.16);
+    _sp.set(Math.cos(a)*r, fallen?0.5:2.4*h, Math.sin(a)*r); _sq.setFromEuler(_se); _ss.set(rand(0.8,1.3),h,rand(0.8,1.3));
+    _sm.compose(_sp,_sq,_ss); stoneIM.setMatrixAt(i,_sm); }
+  stoneIM.instanceMatrix.needsUpdate=true; scene.add(stoneIM);
+
+/* ===================== HERO LANDMARKS — "Sunken Moon-Circle" =====================
+   Self-contained block. Uses only helpers/materials defined ABOVE the dais:
+   mesh, jitter, std, rand, GLOW, swayers, rockMat, mossMat, woodMat, woodDark,
+   stemMat, glowCapM, GROUND_Y, ARENA_R. No globals leak (all wrapped in an IIFE
+   except the one shared rune material, declared local). Decorative, no collision. */
+(function buildLandmarks(){
+  // shared weathered-stone emissive rune material (cyan beacon language)
+  const runeMat = new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.15,roughness:.6,flatShading:true});
+  // helper: a tinted cyan glow sprite (same trick as the glow-mushrooms)
+  function glowSprite(scale,opacity,color){
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:color||0x7fe2ff,transparent:true,opacity:opacity||0.5,depthWrite:false,blending:THREE.AdditiveBlending}));
+    sp.scale.setScalar(scale||1.2); return sp;
+  }
+  // helper: scatter a few mossy lichen blobs on a stone (echoes tree() crowns)
+  function lichen(group,n,spread,yc,r){
+    for(let i=0;i<n;i++){ const c=mesh(new THREE.SphereGeometry(r*(0.5+Math.random()*0.5),6,5), mossMat,
+      (Math.random()-0.5)*spread, yc+(Math.random()-0.5)*spread*0.6, (Math.random()-0.5)*spread); c.castShadow=true; group.add(c); }
+  }
+
+  /* ---------- 1) RUINED MEGALITH ARCH (trilithon moon-gate) ---------- */
+  function megalithArch(x,z,facing,s){
+    const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=facing; g.scale.setScalar(s||1);
+    function upright(px,lean){
+      const u=new THREE.Mesh(jitter(new THREE.BoxGeometry(1.7,6.2,1.4,2,4,2),0.3,0.22), rockMat);
+      u.position.set(px,3.0,0); u.rotation.z=lean; u.castShadow=true; u.receiveShadow=true; g.add(u);
+      lichen(g,3,1.4,4.6,0.5);
+    }
+    upright(-2.6, 0.06); upright(2.6,-0.05);
+    // lintel resting askew across the top
+    const lintel=new THREE.Mesh(jitter(new THREE.BoxGeometry(7.4,1.3,1.5,4,2,2),0.28,0.2), rockMat);
+    lintel.position.set(-0.2,6.25,0); lintel.rotation.z=-0.07; lintel.rotation.y=0.04;
+    lintel.castShadow=true; lintel.receiveShadow=true; g.add(lintel);
+    lichen(g,2,1.8,6.4,0.55);
+    scene.add(g);
+  }
+
+  /* ---------- 2) THE OLD WELL (mossy cracked ring) ---------- */
+  function oldWell(x,z,s){
+    const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(s||1);
+    const rim=new THREE.Mesh(jitter(new THREE.CylinderGeometry(1.25,1.4,1.1,16,2,true),0.06,0.06), rockMat);
+    rim.position.y=0.55; rim.castShadow=true; rim.receiveShadow=true; g.add(rim);
+    // inner dark water disc + faint cyan glow rising
+    const water=mesh(new THREE.CircleGeometry(1.15,16),
+      new THREE.MeshStandardMaterial({color:0x0c2630,emissive:0x1d6b78,emissiveIntensity:0.7,roughness:.3,flatShading:true}),0,0.36,0);
+    water.rotation.x=-Math.PI/2; water.castShadow=false; water.receiveShadow=false; g.add(water);
+    // mossy lip + a couple fallen stones beside it
+    lichen(g,4,2.0,1.0,0.35);
+    const fallen=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(0.7,0),0.18,0.18),rockMat);
+    fallen.position.set(1.7,0.28,0.6); fallen.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+    fallen.castShadow=true; fallen.receiveShadow=true; g.add(fallen);
+    const sp=glowSprite(1.6,0.42,0x7fe2ff); sp.position.y=0.9; g.add(sp);
+    scene.add(g);
+  }
+
+  /* ---------- 3) FALLEN GIANT TREE + root-ball (log-bridge landmark) ---------- */
+  function fallenTree(x,z,rot,s){
+    const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=rot; g.scale.setScalar(s||1);
+    const trunk=new THREE.Mesh(jitter(new THREE.CylinderGeometry(0.95,1.25,11,10,4),0.12,0.1), woodDark);
+    trunk.rotation.z=Math.PI/2; trunk.position.set(0,1.05,0); trunk.castShadow=true; trunk.receiveShadow=true; g.add(trunk);
+    // mossy crown patches along the top (matches living tree())
+    for(let i=0;i<6;i++){ const c=mesh(new THREE.SphereGeometry(0.55+Math.random()*0.4,7,6), mossMat,
+      (i-2.5)*1.7, 1.7+Math.random()*0.3, (Math.random()-0.5)*0.8); c.castShadow=true; g.add(c); }
+    // root-ball disc at one end (broken-off look)
+    const root=new THREE.Mesh(jitter(new THREE.CylinderGeometry(2.0,1.7,0.7,12,2),0.35,0.25), woodMat);
+    root.rotation.z=Math.PI/2; root.position.set(-5.6,1.4,0); root.castShadow=true; root.receiveShadow=true; g.add(root);
+    // a few jutting roots
+    for(let i=0;i<5;i++){ const a=rand(0,6.28), len=1.0+Math.random();
+      const rt=mesh(new THREE.CylinderGeometry(0.06,0.16,len,5), woodDark, -5.7,1.4,0);
+      rt.geometry.translate(0,len/2,0); rt.rotation.z=Math.PI/2+Math.cos(a)*0.6; rt.rotation.x=Math.sin(a)*0.9; g.add(rt); }
+    scene.add(g);
+  }
+
+  /* ---------- 4) BROKEN PILLAR CLUSTER ---------- */
+  function brokenPillars(x,z,rot){
+    const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=rot;
+    const hs=[3.4,2.1,4.3], offs=[[-1.3,0.4],[1.1,-0.9],[0.2,1.3]];
+    for(let i=0;i<3;i++){ const h=hs[i];
+      const col=new THREE.Mesh(jitter(new THREE.CylinderGeometry(0.55,0.7,h,9,3),0.1,0.12), rockMat);
+      col.position.set(offs[i][0],h/2,offs[i][1]); col.rotation.z=(Math.random()-0.5)*0.12;
+      col.castShadow=true; col.receiveShadow=true; g.add(col);
+      lichen(g,2,1.0,h*0.7,0.3); }
+    // toppled segment + rubble on the ground
+    const top=new THREE.Mesh(jitter(new THREE.CylinderGeometry(0.55,0.6,2.2,9,2),0.12,0.12), rockMat);
+    top.rotation.z=Math.PI/2; top.position.set(2.3,0.55,1.6); top.rotation.y=0.5;
+    top.castShadow=true; top.receiveShadow=true; g.add(top);
+    for(let i=0;i<4;i++){ const rb=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(rand(0.3,0.55),0),0.15,0.15),rockMat);
+      rb.position.set(rand(-2,2.6),0.2,rand(-2,2.6)); rb.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+      rb.castShadow=true; rb.receiveShadow=true; g.add(rb); }
+    scene.add(g);
+  }
+
+  /* ---------- 5) MOSS SHRINE / CAIRN with rune-orb beacon ---------- */
+  function cairnShrine(x,z){
+    const g=new THREE.Group(); g.position.set(x,GROUND_Y,z);
+    // stacked flattened stones, narrowing upward
+    let y=0; const rads=[0.95,0.75,0.55,0.4];
+    for(let i=0;i<rads.length;i++){ const hh=0.32;
+      const s=new THREE.Mesh(jitter(new THREE.CylinderGeometry(rads[i]*0.85,rads[i],hh,8,1),0.07,0.05), rockMat);
+      s.position.set((Math.random()-0.5)*0.18, y+hh/2, (Math.random()-0.5)*0.18);
+      s.rotation.y=rand(0,3); s.castShadow=true; s.receiveShadow=true; g.add(s); y+=hh; }
+    lichen(g,3,1.1,0.5,0.28);
+    // rune-orb beacon on top (cyan, echoes glowCapM)
+    const orb=mesh(new THREE.IcosahedronGeometry(0.34,0), runeMat, 0, y+0.4, 0); orb.castShadow=false; g.add(orb);
+    const sp=glowSprite(1.5,0.55,0x7fe2ff); sp.position.y=y+0.4; g.add(sp);
+    // small carved ring at base (amber accent via reuse of runeMat? keep cyan for cohesion)
+    const ring=mesh(new THREE.TorusGeometry(0.6,0.07,5,18), runeMat, 0,0.05,0); ring.rotation.x=-Math.PI/2; ring.castShadow=false; g.add(ring);
+    g.userData.phase=Math.random()*6.28; swayers.push(g); // gentle sway like mushrooms (orb shimmer)
+    scene.add(g);
+  }
+
+  /* ---------- 6) SKYLINE HERO BOULDERS (beyond the treeline) ---------- */
+  function skylineRock(x,z,r,lean){
+    const m=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(r,0), r*0.3, r*0.3), rockMat);
+    m.position.set(x,GROUND_Y+r*0.35,z); m.rotation.set(rand(0,3),rand(0,3),rand(0,3)); m.rotation.x+=lean||0;
+    m.castShadow=true; m.receiveShadow=true; scene.add(m);
+    // moss cap so the far silhouette still reads as "our world"
+    const c=mesh(new THREE.SphereGeometry(r*0.5,7,6), mossMat, x, GROUND_Y+r*0.7, z); c.castShadow=true; scene.add(c);
+  }
+
+  /* ===================== PLACEMENTS ===================== */
+  // North moon-gate framing the moon (moon is at -X,-Z); sit it on the stone ring r=39
+  megalithArch(Math.cos(-Math.PI/2)* (ARENA_R+5), Math.sin(-Math.PI/2)*(ARENA_R+5), 0, 1.0);
+  // a second smaller arch off to the SE rim for skyline variety
+  megalithArch(Math.cos(0.9)*(ARENA_R+5), Math.sin(0.9)*(ARENA_R+5), 0.9-Math.PI/2, 0.78);
+
+  // mid-glade roamable hero props (kept off-center, away from the spawn altar)
+  oldWell(Math.cos(0.6)*14, Math.sin(0.6)*14, 1.0);
+  fallenTree(Math.cos(2.7)*18, Math.sin(2.7)*18, 2.7+1.3, 1.0);
+  brokenPillars(Math.cos(3.9)*22, Math.sin(3.9)*22, 1.1);
+  cairnShrine(Math.cos(2.3)*11, Math.sin(2.3)*11);
+  // a second well-less landmark: lone broken pillar pair on the W side for orientation
+  brokenPillars(Math.cos(4.9)*20, Math.sin(4.9)*20, -0.4);
+
+  // outskirts skyline boulders (beyond the r=95 treeline), individually meshed (tiny count)
+  skylineRock(Math.cos(0.3)*78,  Math.sin(0.3)*78,  5.5, 0.15);
+  skylineRock(Math.cos(2.1)*92,  Math.sin(2.1)*92,  6.5,-0.1);
+  skylineRock(Math.cos(4.4)*70,  Math.sin(4.4)*70,  4.8, 0.2);
+  skylineRock(Math.cos(5.6)*100, Math.sin(5.6)*100, 7.0, 0.0);
+})();
+
+// szórj fákat/köveket/gombákat az arénán kívülre (díszlet + takarás)
+for(let i=0;i<24;i++){ const a=rand(0,6.28), r=rand(ARENA_R+8, 95); tree(Math.cos(a)*r, Math.sin(a)*r, rand(0.8,1.7)); }
+for(let i=0;i<28;i++){ const a=rand(0,6.28), r=rand(ARENA_R+6, 120); rock(Math.cos(a)*r, Math.sin(a)*r, rand(0.5,1.8)); }
+// fű-foltok az arénában
+const grassMat=std({color:0x47803f,roughness:1});
+/* ===================== FOLIAGE: Sunken Moon-Circle ground-cover ===================== */
+/* Insert this whole block in place of the OLD grass loop (lines 255-258) AND the OLD
+   mushroom loop (line 253). It defines its own fern material + flower fn, reuses
+   grassMat/rockMat/stemMat/GLOW/mesh/rand/swayers. ARENA_R is already 34 here. */
+
+const fernMat = std({color:0x3f6e3a, roughness:1});                 // dark fern/reed
+const leafMat = std({color:0x8a5a3a, roughness:.95, side:THREE.DoubleSide}); // litter
+const petalAmber = new THREE.MeshStandardMaterial({color:0x6e5a2a, emissive:0xffd27a, emissiveIntensity:.9, roughness:.6, flatShading:true});
+const petalCyan  = new THREE.MeshStandardMaterial({color:0x16414f, emissive:0x36c5ff, emissiveIntensity:1.0, roughness:.6, flatShading:true});
+
+// reusable scratch (local to this block)
+const _fm=new THREE.Matrix4(), _fq=new THREE.Quaternion(), _fs=new THREE.Vector3(), _fp=new THREE.Vector3(), _fe=new THREE.Euler();
+// density-falloff radius sampler: rMin..rMax, bias>1 packs toward rMin (centre)
+function rFall(rMin,rMax,bias){ return rMin + (rMax-rMin)*Math.pow(Math.random(), bias); }
+
+// tiny swaying wildflower (stem + flat emissive cap) — joins swayers[]
+function flower(x,z,sc,cyan){ const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(sc);
+  g.add(mesh(new THREE.CylinderGeometry(0.012,0.02,0.34,5), fernMat, 0,0.17,0));
+  const cap=mesh(new THREE.CircleGeometry(0.11,6), cyan?petalCyan:petalAmber, 0,0.35,0);
+  cap.rotation.x=-Math.PI/2 + rand(-0.25,0.25); cap.castShadow=false; g.add(cap);
+  g.userData.phase=Math.random()*6.28; swayers.push(g); scene.add(g); }
+
+// ---- TUFT GRASS (instanced, dense centre falloff) ----
+(function(){ const N=620, BLADE=new THREE.ConeGeometry(0.05,0.6,4);
+  const im=new THREE.InstancedMesh(BLADE, grassMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
+  for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(1.2, ARENA_R+6, 1.7), h=rand(0.6,1.5);
+    _fp.set(Math.cos(a)*r, GROUND_Y+0.3*h, Math.sin(a)*r);
+    _fe.set((Math.random()-0.5)*0.45, rand(0,6.283), (Math.random()-0.5)*0.45); _fq.setFromEuler(_fe);
+    _fs.set(rand(0.7,1.5), h, rand(0.7,1.5)); _fm.compose(_fp,_fq,_fs); im.setMatrixAt(i,_fm); }
+  im.instanceMatrix.needsUpdate=true; scene.add(im);
+})();
+
+// ---- FERNS / REEDS (instanced, soften treeline + altar fringe) ----
+(function(){ const N=150, REED=new THREE.ConeGeometry(0.04,1.15,4);
+  const im=new THREE.InstancedMesh(REED, fernMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
+  for(let i=0;i<N;i++){ const a=rand(0,6.283);
+    // 75% in the outer fringe ring, 25% hugging the altar
+    const r = (Math.random()<0.75) ? rand(ARENA_R-4, ARENA_R+12) : rand(4.5, 9);
+    const h=rand(0.8,1.7);
+    _fp.set(Math.cos(a)*r, GROUND_Y+0.575*h, Math.sin(a)*r);
+    _fe.set((Math.random()-0.5)*0.5, rand(0,6.283), (Math.random()-0.5)*0.5); _fq.setFromEuler(_fe);
+    _fs.set(rand(0.6,1.2), h, rand(0.6,1.2)); _fm.compose(_fp,_fq,_fs); im.setMatrixAt(i,_fm); }
+  im.instanceMatrix.needsUpdate=true; scene.add(im);
+})();
+
+// ---- PEBBLES (instanced ground stones, worn-flagstone fleck) ----
+(function(){ const N=110, PEB=new THREE.DodecahedronGeometry(0.16,0);
+  const im=new THREE.InstancedMesh(PEB, rockMat, N); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;
+  for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+14, 1.2), s=rand(0.5,1.6);
+    _fp.set(Math.cos(a)*r, GROUND_Y+0.05*s, Math.sin(a)*r);
+    _fe.set(rand(0,3.14), rand(0,6.283), rand(0,3.14)); _fq.setFromEuler(_fe);
+    _fs.set(s, s*rand(0.5,0.8), s); _fm.compose(_fp,_fq,_fs); im.setMatrixAt(i,_fm); }
+  im.instanceMatrix.needsUpdate=true; scene.add(im);
+})();
+
+// ---- FALLEN LEAVES (instanced flat litter quads) ----
+(function(){ const N=140, LEAF=new THREE.PlaneGeometry(0.22,0.13);
+  const im=new THREE.InstancedMesh(LEAF, leafMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
+  for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+8, 1.4);
+    _fp.set(Math.cos(a)*r, GROUND_Y+0.02, Math.sin(a)*r);
+    _fe.set(-Math.PI/2 + (Math.random()-0.5)*0.4, rand(0,6.283), (Math.random()-0.5)*0.4); _fq.setFromEuler(_fe);
+    const s=rand(0.7,1.5); _fs.set(s,s,s); _fm.compose(_fp,_fq,_fs); im.setMatrixAt(i,_fm); }
+  im.instanceMatrix.needsUpdate=true; scene.add(im);
+})();
+
+// ---- GLOW-MUSHROOMS (groups, swaying — reuse existing mushroom() fn) ----
+for(let i=0;i<30;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+10, 1.3);
+  mushroom(Math.cos(a)*r, Math.sin(a)*r, rand(0.4,1.3), Math.random()<0.45); }
+
+// ---- WILDFLOWERS (groups, swaying — warm amber + rare cyan accents) ----
+for(let i=0;i<22;i++){ const a=rand(0,6.283), r=rFall(3, ARENA_R, 1.5);
+  flower(Math.cos(a)*r, Math.sin(a)*r, rand(0.8,1.6), Math.random()<0.25); }
+/* ===================== /FOLIAGE ===================== */
+
+/* ---- EDIT K+ (sky/moon/stars/treeline) — REPLACE lines 261-269
+        (the "/* hold + csillagok *​/" block through the stars IIFE). ---- */
+
+/* gradient sky-dome: huge back-side sphere, vertex-coloured zenith->horizon.
+   Renders behind everything; fog:false so it stays a clean gradient. */
+(function skyDome(){
+  const geo=new THREE.SphereGeometry(380,24,16);
+  const top=new THREE.Color(0x0a1322), bot=new THREE.Color(0x16223a);
+  const pos=geo.attributes.position, col=new Float32Array(pos.count*3), c=new THREE.Color();
+  for(let i=0;i<pos.count;i++){ const h=Math.max(0,pos.getY(i)/380);
+    c.copy(bot).lerp(top, Math.pow(h,0.6)); col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const dome=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide,fog:false,depthWrite:false}));
+  dome.renderOrder=-10; scene.add(dome);
+})();
+
+/* moon — bigger disc + TWO stacked glow sprites (tight core + soft halo) */
+const moon=new THREE.Mesh(new THREE.SphereGeometry(5,24,18), new THREE.MeshBasicMaterial({color:0xeaf2ff,fog:false}));
+moon.position.set(-60,46,-110); scene.add(moon);
+const moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9db8e8,transparent:true,opacity:0.45,depthWrite:false,fog:false}));
+moonGlow.scale.setScalar(40); moonGlow.position.copy(moon.position); scene.add(moonGlow);
+const moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x6f8ad0,transparent:true,opacity:0.22,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
+moonHalo.scale.setScalar(95); moonHalo.position.copy(moon.position); scene.add(moonHalo);
+
+/* stars — 480 on a 200-radius dome */
+(function stars(){ const n=480,pos=new Float32Array(n*3);
+  for(let i=0;i<n;i++){ let x,y,z; do{ x=Math.random()*2-1; y=Math.random(); z=Math.random()*2-1; } while(x*x+y*y+z*z>1||y<0.05);
+    const r=200/Math.sqrt(x*x+y*y+z*z); pos[i*3]=x*r; pos[i*3+1]=y*r; pos[i*3+2]=z*r; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({map:GLOW,color:0xcdd8ff,size:0.9,sizeAttenuation:true,fog:false,transparent:true,opacity:0.9,depthWrite:false}))); })();
+
+/* distant tree-line silhouette: a ring of dark low cones at r~140 sitting on
+   the fog wall, giving the horizon a ragged forest edge. fog:false so they
+   read as a flat far backdrop; flatShading for the low-poly silhouette. */
+(function treelineSilhouette(){
+  const mat=new THREE.MeshBasicMaterial({color:0x0b1422,fog:false});
+  const N=64, R=140, im=new THREE.InstancedMesh(new THREE.ConeGeometry(1,1,5), mat, N);
+  const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), p=new THREE.Vector3();
+  for(let i=0;i<N;i++){ const a=(i/N)*6.283+rand(-0.04,0.04), r=R+rand(-12,12);
+    const h=rand(10,20), w=rand(3,6);
+    p.set(Math.cos(a)*r, h*0.5-1.5, Math.sin(a)*r); s.set(w,h,w);
+    m.compose(p,q,s); im.setMatrixAt(i,m); }
+  im.instanceMatrix.needsUpdate=true; im.renderOrder=-5; scene.add(im);
+})();
+
+/* ---- EDIT L+ (fireflies) — REPLACE lines 272-277.
+        90 fireflies over the whole glade. ---- */
+const FCOUNT=90, fBase=new Float32Array(FCOUNT*3), fPos=new Float32Array(FCOUNT*3), fSeed=[];
+for(let i=0;i<FCOUNT;i++){ const a=rand(0,6.28), r=rand(4,ARENA_R+10);
+  fBase[i*3]=Math.cos(a)*r; fBase[i*3+1]=rand(0.5,4.5); fBase[i*3+2]=Math.sin(a)*r;
+  fSeed.push([rand(0.4,1.1), rand(0,6.28), rand(0,6.28)]); }
+const fGeo=new THREE.BufferGeometry(); fGeo.setAttribute('position',new THREE.BufferAttribute(fPos,3));
+scene.add(new THREE.Points(fGeo,new THREE.PointsMaterial({map:GLOW,color:0xffd27a,size:0.22,sizeAttenuation:true,transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false})));
+
+/* ---- EDIT M+ (NEW — bog-spores + ground-mist) — INSERT immediately
+        after the firefly block above (still inside scene setup). These
+        obey fog (in-world volume). The spores drift; SCOUNT entries are
+        animated in the loop (see EDIT N). ---- */
+const SCOUNT=120, sBase=new Float32Array(SCOUNT*3), sPos=new Float32Array(SCOUNT*3), sSeed=[];
+for(let i=0;i<SCOUNT;i++){ const a=rand(0,6.28), r=rand(2,ARENA_R+12);
+  sBase[i*3]=Math.cos(a)*r; sBase[i*3+1]=rand(0.3,6); sBase[i*3+2]=Math.sin(a)*r;
+  sSeed.push([rand(0.08,0.25), rand(0,6.28), rand(0.2,0.6)]); }
+const sGeo=new THREE.BufferGeometry(); sGeo.setAttribute('position',new THREE.BufferAttribute(sPos,3));
+scene.add(new THREE.Points(sGeo,new THREE.PointsMaterial({map:GLOW,color:0x7fb8d8,size:0.13,sizeAttenuation:true,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false})));
+// faint additive ground-mist disc hugging the moss (reads as low fog band)
+const mist=mesh(new THREE.CircleGeometry(120,48), new THREE.MeshBasicMaterial({map:GLOW,color:0x2b3f5e,transparent:true,opacity:0.18,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false}), 0, GROUND_Y+0.06, 0);
+mist.rotation.x=-Math.PI/2; mist.castShadow=false; mist.receiveShadow=false; scene.add(mist);
+
+/* ===================== Játékos / FPS kamera ===================== */
+const player={ pos:new THREE.Vector3(0,1.7,0), yaw:0, pitch:0, hp:100, maxHp:100, alive:true, vy:0, feet:0, onGround:true, jumpReady:true };
+camera.rotation.order='YXZ';
+function applyCamera(){
+  camera.position.copy(player.pos);
+  camera.rotation.y=player.yaw; camera.rotation.x=player.pitch; camera.rotation.z=0;
+}
+
+/* ===================== Megmászható objektumok (ugrás + ráállás) ===================== */
+const climbBoxes=[]; // {minX,maxX,minZ,maxZ,top}
+function climbBox(cx,cy,cz,w,height,d,mat){
+  const m=mesh(new THREE.BoxGeometry(w,height,d), mat||rockMat, cx, cy+height/2, cz);
+  m.castShadow=true; m.receiveShadow=true; scene.add(m);
+  climbBoxes.push({minX:cx-w/2, maxX:cx+w/2, minZ:cz-d/2, maxZ:cz+d/2, top:cy+height});
+  return m;
+}
+// a (x,z) alatti megtámasztó magasság: a legmagasabb doboz-tető a lábak + lépés-tűrés alatt
+function groundAt(x,z,feet){ let s=GROUND_Y;
+  for(const b of climbBoxes){ if(x>b.minX&&x<b.maxX&&z>b.minZ&&z<b.maxZ && b.top<=feet+0.55 && b.top>s) s=b.top; }
+  return s; }
+// lépcső -> emelvény (a lépés-tűrés miatt felsétálható)
+for(let i=0;i<4;i++) climbBox(9, GROUND_Y+i*0.4, -5-i*1.3, 2.6, 0.5, 1.5, rockMat);
+climbBox(9, GROUND_Y+1.6, -11.5, 3.2, 0.5, 3.0, rockMat); // tető-emelvény
+// fa ládák egymás mellett/tetején (ugrálós)
+climbBox(-7.0, GROUND_Y, 5.5, 1.4,0.9,1.4, woodMat);
+climbBox(-8.6, GROUND_Y, 6.2, 1.4,0.9,1.4, woodMat);
+climbBox(-7.6, GROUND_Y, 4.0, 1.4,1.8,1.4, woodMat);
+// lapos kőlépcsők kifelé
+climbBox(13, GROUND_Y, 11, 2.4,0.45,2.4, rockMat);
+climbBox(16, GROUND_Y+0.45, 13, 2.4,0.5,2.4, rockMat);
+
+
+/* ===================== Íj (kamerára szerelt ranger-longbow nézet-modell) ===================== */
+const bow=new THREE.Group();
+// Jobb oldalt, enyhén megdöntve; a belső él (belly) a játékos felé fordul, így a D-ív látszik.
+bow.position.set(0.34,-0.26,-0.62); // állás/tükrözés: BOW_PRESETS + B gomb (lásd lent)
+camera.add(bow); scene.add(camera);
+
+/* --- anyagok: meleg, csiszolt fa + szaru + bőr --- */
+const staveWood = std({color:0x8a5a2b, roughness:.38, metalness:.04, bumpMap:SKIN_N, bumpScale:0.010}); // csiszolt juhar/dió has-fa
+const heartWood = std({color:0x4d2f17, roughness:.46, metalness:.02, bumpMap:SKIN_N, bumpScale:0.012}); // sötét gesztfa-mag
+const backWood  = std({color:0xc79a5e, roughness:.44, metalness:.03}); // világos szijács-csík a háton (rim-fény)
+const hornMat   = std({color:0x2c1c10, roughness:.30, metalness:.18}); // polírozott szaru-nock
+const gripLeather=std({color:0x2a1a12, roughness:.92, bumpMap:SKIN_N, bumpScale:0.016}); // tooled bőr-fogás
+const stringMat = new THREE.MeshBasicMaterial({color:0xf2f5ff});
+const servingMat= std({color:0xc7d2ec, roughness:.5, metalness:.25}); // nock-pont tekercselés
+
+/* --- a teljes íj-stave fél-profilja (a markolattól a tipig), Z = előre-hajlás (belly) --- */
+const HALF=0.50;                 // fél-magasság (magas longbow sziluett)
+// pontok: [x(oldal), y(fel), z(előre)] — a longbow finom egyszeres D-íve, a tip enyhén előre fordul
+const limbProfile=[
+  [0.000, 0.000, 0.022],        // markolat-tő (legvastagabb has)
+  [0.004, 0.110, 0.018],
+  [0.009, 0.230, 0.006],
+  [0.013, 0.340,-0.010],
+  [0.015, 0.430,-0.030],
+  [0.012, 0.490,-0.052],        // tip felé elvékonyodik és előre kanyarodik
+  [0.008, 0.500,-0.060]         // nock-pont (horn)
+];
+const TIP_U=[0.008, 0.500,-0.060], TIP_L=[0.008,-0.500,-0.060];
+
+function staveTube(pts, r0, r1){
+  const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2])));
+  curve.curveType='catmullrom'; curve.tension=0.5;
+  // sugár-tapér: a markolatnál vastag, a tipnél vékony — tubularSegments mentén kézzel skálázzuk
+  const g=new THREE.TubeGeometry(curve, 40, 1, 10, false);
+  const pos=g.attributes.position, N=g.parameters.tubularSegments+1, R=g.parameters.radialSegments+1;
+  const center=new THREE.Vector3();
+  for(let i=0;i<N;i++){
+    const t=i/(N-1), rad=lerp(r0,r1,t)* (1 + 0.12*Math.sin(t*Math.PI)); // enyhe középső duzzanat
+    center.copy(curve.getPointAt(t));
+    for(let j=0;j<R;j++){ const k=i*R+j;
+      const vx=pos.getX(k)-center.x, vy=pos.getY(k)-center.y, vz=pos.getZ(k)-center.z;
+      pos.setXYZ(k, center.x+vx*rad, center.y+vy*rad, center.z+vz*rad);
+    }
+  }
+  g.computeVertexNormals(); return g;
+}
+
+// két végtag-csoport, a markolat közelében forgatható pivottal (flex-animációhoz)
+const limbU=new THREE.Group(); limbU.position.set(0, 0.045,0); bow.add(limbU);
+const limbL=new THREE.Group(); limbL.position.set(0,-0.045,0); bow.add(limbL);
+
+function buildLimb(grp, sign){
+  const pts=limbProfile.map(p=>[p[0], sign*p[1], p[2]]);
+  // fő has-fa (vastag tő -> vékony tip)
+  const main=new THREE.Mesh(staveTube(pts,0.030,0.0085), staveWood); main.castShadow=true; grp.add(main);
+  // sötét geszt-mag a has belsejében — kétszínű mélység
+  const heartPts=pts.map(p=>[p[0], p[1], p[2]+0.006]);
+  const heart=new THREE.Mesh(staveTube(heartPts,0.018,0.004), heartWood); grp.add(heart);
+  // világos szijács-csík a háton (a tip felé) — elkapja a perem-fényt
+  const backPts=pts.slice(1).map(p=>[p[0], p[1], p[2]-0.010]);
+  const back=new THREE.Mesh(staveTube(backPts,0.009,0.003), backWood); grp.add(back);
+  // szaru-nock a végén (kis polírozott kúp)
+  const tip=pts[pts.length-1];
+  const nockHorn=mesh(new THREE.CylinderGeometry(0.0055,0.010,0.040,8), hornMat, tip[0], tip[1], tip[2]);
+  nockHorn.lookAt(new THREE.Vector3(pts[pts.length-2][0],pts[pts.length-2][1],pts[pts.length-2][2]));
+  nockHorn.castShadow=true; grp.add(nockHorn);
+  // a húr-bevágás (kis él) a nock orrán
+  grp.add(mesh(new THREE.SphereGeometry(0.006,8,6), hornMat, tip[0], tip[1], tip[2]-0.004));
+}
+buildLimb(limbU, 1); buildLimb(limbL, -1);
+
+/* --- markolat (deep-section longbow grip) + bőr-tekercs + nyíl-polc --- */
+const gripCore=mesh(new THREE.CylinderGeometry(0.034,0.034,0.165,16), staveWood, 0,0,0.012);
+gripCore.scale.z=1.5;                       // mély D-szelvény (előre vastagabb has)
+gripCore.castShadow=true; bow.add(gripCore);
+// háti lapítás, hogy ne legyen pont henger
+const gripBack=mesh(new THREE.BoxGeometry(0.030,0.165,0.012), staveWood, 0,0,-0.026); bow.add(gripBack);
+// egyetlen elegáns bőr-fogás (átfedő gyűrűk, sima, nem szöszös)
+const wrap=new THREE.Group(); bow.add(wrap);
+for(let i=0;i<7;i++){
+  const ring=mesh(new THREE.TorusGeometry(0.036,0.0055,8,18), gripLeather, 0,-0.060+i*0.020,0.012);
+  ring.rotation.x=Math.PI/2; ring.scale.z=1.45; ring.castShadow=true; wrap.add(ring);
+}
+// nyíl-polc + ablak (a riser jobb oldalán, hogy a nyíl rajta üljön)
+const shelf=mesh(new THREE.BoxGeometry(0.055,0.014,0.040), staveWood, 0.030,0.052,0.030); shelf.castShadow=true; bow.add(shelf);
+const rest =mesh(new THREE.CylinderGeometry(0.0035,0.0035,0.045,6), gripLeather, 0.046,0.060,0.030); rest.rotation.z=Math.PI/2; bow.add(rest);
+
+/* --- húr (két szakasz a nock-ig) + nock-pont (string-pull point) --- */
+const nock=new THREE.Group(); bow.add(nock);
+const serving=mesh(new THREE.CylinderGeometry(0.006,0.006,0.060,8), servingMat,0,0,0); serving.rotation.x=Math.PI/2; nock.add(serving);
+// a húr maga (két vékony szakasz felső/alsó tip -> nock)
+function strSeg(){ const m=mesh(new THREE.CylinderGeometry(0.0026,0.0026,1,5), stringMat,0,0,0); m.castShadow=false; m.receiveShadow=false; return m; }
+const sUp=strSeg(), sLo=strSeg(); bow.add(sUp); bow.add(sLo);
+
+const _tipU=new THREE.Vector3(), _tipL=new THREE.Vector3();
+const _localTipU=new THREE.Vector3(TIP_U[0],TIP_U[1],TIP_U[2]);
+const _localTipL=new THREE.Vector3(TIP_L[0],TIP_L[1],TIP_L[2]);
+const _upY=new THREE.Vector3(0,1,0), _dir=new THREE.Vector3();
+function setString(){
+  limbU.updateMatrix(); limbL.updateMatrix();
+  _tipU.copy(_localTipU).applyMatrix4(limbU.matrix);
+  _tipL.copy(_localTipL).applyMatrix4(limbL.matrix);
+  const np=nock.position;
+  [[sUp,_tipU],[sLo,_tipL]].forEach(([s,tip])=>{
+    _dir.copy(np).sub(tip); const len=_dir.length();
+    s.position.copy(tip).addScaledVector(_dir,0.5);
+    s.scale.set(1,len,1);
+    s.quaternion.setFromUnitVectors(_upY, _dir.normalize());
+  });
+}
+
+/* --- nockolt nyíl (csak feszítéskor látszik) --- */
+const nockArrow=new THREE.Group();
+(function(){
+  const shaft=mesh(new THREE.CylinderGeometry(0.0055,0.0055,0.78,8), arrowWood,0,0,0.39); shaft.rotation.x=Math.PI/2; nockArrow.add(shaft);
+  // kovácsolt broadhead (lapos rombusz)
+  const head=mesh(new THREE.ConeGeometry(0.020,0.075,4),  metalMat,0,0,-0.038); head.rotation.x=-Math.PI/2; head.rotation.z=Math.PI/4; nockArrow.add(head);
+  const collar=mesh(new THREE.CylinderGeometry(0.007,0.009,0.02,8), metalMat,0,0,0.005); collar.rotation.x=Math.PI/2; nockArrow.add(collar);
+  // három piros tollazat a vég felé
+  [0,1,2].forEach(i=>{ const f=mesh(new THREE.PlaneGeometry(0.080,0.040), featherMat,0,0,0.70); f.rotation.y=Math.PI/2; f.rotation.z=i*(Math.PI*2/3); nockArrow.add(f); });
+  // szaru-nock a vég
+  nockArrow.add(mesh(new THREE.CylinderGeometry(0.008,0.0065,0.014,8), hornMat,0,0,0.775));
+  nockArrow.children.forEach(o=>{ if(o.isMesh) o.castShadow=true; });
+})();
+nockArrow.visible=false;
+nockArrow.rotation.y=Math.PI; // a ~180°-os íjpózban a nyíl hegye a jelenetbe (a célkereszt felé) mutasson
+bow.add(nockArrow);
+
+/* --- feszítés/lövés animációs állapot --- */
+const BOW_BASE_X=0.34, BOW_BASE_Y=-0.10, BOW_BASE_Z=-0.62, BOW_BASE_ROTZ=0.13;
+const FOV_BASE=camera.fov;
+let prevCharge=0, bowKick=0, bowKickRot=0, relTwang=0, idleT=0;
+// élő íj-hangoló: B = be/ki, J/L yaw, I/K pitch, U/O roll, N/M méret, P tükör
+const bowAdj={rx:0.05, ry:-3.22, rz:-0.27, s:0.90, mx:1, mz:-1}; // beégetett póz; mz = limb-görbület tükör (B-vel hangolható)
+let bowTune=false;
+bow.traverse(o=>{ if(o.isMesh && o.material && 'side' in o.material) o.material.side=THREE.DoubleSide; });
+const bowTuneEl=document.createElement('div');
+bowTuneEl.style.cssText='position:fixed;left:12px;top:12px;z-index:20;display:none;font:600 12px/1.5 ui-monospace,Consolas,monospace;color:#ffe7b8;background:rgba(8,14,28,.88);border:1px solid rgba(255,210,122,.4);padding:8px 12px;border-radius:8px;white-space:pre;';
+document.body.appendChild(bowTuneEl);
+function applyBowAdj(){ bow.scale.set(bowAdj.s*bowAdj.mx, bowAdj.s, bowAdj.s*bowAdj.mz);
+  nockArrow.rotation.y=(bowAdj.mz>0?Math.PI:0); // nyíl-hegy iránya a görbület-tükörhöz igazítva
+  bowTuneEl.textContent='ÍJ HANGOLÁS  (B = kilép)\nJ/L yaw='+bowAdj.ry.toFixed(2)+'   I/K pitch='+bowAdj.rx.toFixed(2)+'\nU/O roll='+bowAdj.rz.toFixed(2)+'   N/M méret='+bowAdj.s.toFixed(2)+'\nP balra-jobbra='+bowAdj.mx+'   Z görbület-tükör='+bowAdj.mz+'\n=> írd meg a számokat, és beégetem'; }
+applyBowAdj();
+
+/* ===================== Nyíl-lövedékek (pool) ===================== */
+const GRAV=9.2;
+const JUMP_V=5.2;
+const arrows=[];
+function makeArrow(){
+  const g=new THREE.Group();
+  const shaft=mesh(new THREE.CylinderGeometry(0.018,0.018,0.82,6), arrowWood,0,0,0); shaft.rotation.x=Math.PI/2; g.add(shaft);
+  const tip=mesh(new THREE.ConeGeometry(0.045,0.13,6), metalMat,0,0,-0.46); tip.rotation.x=-Math.PI/2; g.add(tip);
+  [0,1,2].forEach(i=>{ const f=mesh(new THREE.BoxGeometry(0.005,0.12,0.1), featherMat,0,0,0.36); f.rotation.z=i*Math.PI/1.5; g.add(f); });
+  g.visible=false; g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  scene.add(g);
+  return { g, vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, stuck:false, dmg:25 };
+}
+for(let i=0;i<30;i++) arrows.push(makeArrow());
+function fireArrow(charge){
+  const a=arrows.find(x=>!x.active) || arrows[0];
+  const fwd=new THREE.Vector3(); camera.getWorldDirection(fwd);
+  const start=camera.position.clone().addScaledVector(fwd,0.6); start.y-=0.05;
+  a.g.position.copy(start); a.prev.copy(start);
+  const speed=22+charge*30;
+  a.vel.copy(fwd).multiplyScalar(speed);
+  a.dmg=18+charge*30;
+  a.life=0; a.active=true; a.stuck=false; a.g.visible=true;
+  orientArrow(a);
+  AUD.twang(charge);
+  coopOnShot(start, fwd, charge); // CO-OP: relay this shot to peers (no-op offline)
+}
+function orientArrow(a){
+  const look=a.g.position.clone().add(a.vel);
+  a.g.lookAt(look);
+}
+
+/* ===================== Szörnyek (mohás trollok) ===================== */
+const monsters=[];
+/* ---- 5 troll-típus (art-direkciós újratervezés, erős sziluett-különbség) ---- */
+const TROLL_TYPES = {
+  grunt: { id:'grunt', name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:4.5, skin:0x5f9168, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.05, shoulderW:1.0, torsoW:1.0, neckLen:0.0, tuskScale:1.0, earLen:0.34, noTusks:false,
+    build(m){
+const g=m.g;
+// ---- HAFTED STONE-&-WOOD CLUB, parented to the RIGHT FIST so it swings with the attack ----
+// (arms.R drives walk + attack rotation; hanging the club off the fist makes the bash read).
+// fist sits at arm-local ~ (0,-0.72,0.04); we lash the haft into the grip and let the head ride above it.
+const fistR = m.arms.R;
+const club = new THREE.Group();
+club.position.set(0.04, -0.78, 0.10);   // in the fist, angled forward out of the knuckles
+club.rotation.set(-0.35, 0.0, 0.10);
+// wooden haft (tapered, slightly knotty via woodMat's bump)
+const haft = mesh(new THREE.CylinderGeometry(0.055, 0.085, 0.95, 7), woodMat, 0, 0.30, 0);
+club.add(haft);
+// dark-wood pommel knot at the grip end
+haft.add(mesh(new THREE.SphereGeometry(0.075, 7, 6), woodDark, 0, -0.50, 0));
+// chunky striking HEAD: a knotted dark-wood burl with embedded mossy stone studs
+const headGrp = new THREE.Group(); headGrp.position.set(0, 0.62, 0); haft.add(headGrp);
+headGrp.add(mesh(jitter(new THREE.DodecahedronGeometry(0.20, 0), 0.05, 0.05), woodDark, 0, 0, 0, 1.0, 1.15, 1.0));
+// three small stone studs ringing the burl (the "teeth" of the club)
+[[0.17, 0.05, 0.02],[-0.15, -0.02, 0.06],[0.02, 0.06, -0.16]].forEach(p=>
+  headGrp.add(mesh(new THREE.DodecahedronGeometry(0.075, 0), woodMat, p[0], p[1], p[2])));
+// a creep of moss on the club head — keeps it in the species' material trinity
+headGrp.add(mesh(new THREE.SphereGeometry(0.11, 7, 6), mossMat, -0.06, 0.10, 0.07, 1.0, 0.7, 1.0));
+fistR.add(club);
+// ---- extra MOSS on the crown for character (the species signature, denser up top on the baseline) ----
+m.head.add(mesh(new THREE.SphereGeometry(0.10, 7, 6), mossMat, 0.12, 0.26, -0.04));
+m.head.add(mesh(new THREE.SphereGeometry(0.075, 6, 5), mossMat, -0.15, 0.22, -0.02, 1.2, 0.7, 1.0));
+// a small mossy clump crusted on the right shoulder (ties club arm into the back-moss line)
+m.arms.R.add(mesh(jitter(new THREE.DodecahedronGeometry(0.13, 0), 0.04, 0.04), mossMat, 0.04, 0.16, -0.08));
+    } },
+  scout: { id:'scout', name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:9.0, skin:0x8fd64a, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.32, shoulderW:0.78, torsoW:0.72, neckLen:0.0, tuskScale:0.0, noTusks:true, earLen:0.85,
+    build(m){
+const g=m.g;
+  // LITHE LIMBS — thin the rigged arm/leg Groups so the imp reads lean & wiry.
+  // Scaling the Group (not its children) keeps the hip/shoulder pivots at y0.62/y1.5
+  // and does NOT touch rotation, so walk/attack/death animations are unaffected.
+  ['L','R'].forEach(k=>{ m.arms[k].scale.set(0.78,1.06,0.78); m.legs[k].scale.set(0.84,1.12,0.84); });
+
+  // OVERSIZED BAT-EARS (the giveaway) — earLen:0.85 already grows the base ear cones;
+  // add a paler inner-ear membrane inside each so the huge ears catch the light and
+  // read as the silhouette signature even as a black cutout.
+  [-1,1].forEach(s=>{
+    const inner=mesh(new THREE.ConeGeometry(0.05,0.55,5), bellyMat, s*0.40,0.07,-0.02);
+    inner.rotation.z=-s*1.3; inner.rotation.x=-0.18; m.head.add(inner);
+  });
+
+  // TWITCHY POINTED SNOUT — small needle fangs instead of tusks (noTusks removed the
+  // big base tusks). Two tiny down-fangs at the lip keep the predator read without bulk.
+  [-1,1].forEach(s=>{
+    const fang=mesh(new THREE.ConeGeometry(0.022,0.10,4), tuskMat, s*0.07,-0.13,0.40);
+    fang.rotation.x=0.18; m.head.add(fang);
+  });
+  // a couple of upper snaggle teeth poking up for a sly grin
+  [-1,1].forEach(s=>{
+    const tip=mesh(new THREE.ConeGeometry(0.018,0.07,4), tuskMat, s*0.05,-0.05,0.42);
+    tip.rotation.x=-0.25; m.head.add(tip);
+  });
+
+  // CRUDE BONE DAGGERS strapped along each forearm — parented to the arm Groups so they
+  // swing with the dash/attack motion and sell "fast & armed". Local pos near the fist.
+  ['L','R'].forEach(k=>{
+    const dagger=mesh(new THREE.ConeGeometry(0.038,0.32,4), tuskMat, 0.11,-0.50,0.11);
+    dagger.rotation.x=-0.15; dagger.rotation.z=0.12;
+    // tiny bound-grip wrap at the dagger base for a crude hand-made look
+    dagger.add(mesh(new THREE.CylinderGeometry(0.045,0.05,0.06,6), woodDark, 0,-0.15,0));
+    m.arms[k].add(dagger);
+  });
+
+  // a single sparse moss tuft over one ear — keeps family unity (the quick scout wears
+  // the least moss of the caste, per the art direction).
+  m.head.add(mesh(new THREE.SphereGeometry(0.07,7,6), mossMat, 0.20,0.20,-0.05));
+    } },
+  brute: { id:'brute', name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.2, skin:0x6f7a72, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.18, shoulderW:1.5, torsoW:1.35, neckLen:-0.10, tuskScale:2.2, earLen:0.22,
+    build(m){
+const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
+  // SHRINK THE HEAD so it reads buried between the shoulders (tiny sunken head = key brute silhouette).
+  // neckLen:-0.10 already drops the head group; scaling it down sells the "no neck, all shoulders" read.
+  m.head.scale.setScalar(0.82);
+  // THICKEN THE FRAME: bulk arms & legs (rescale sub-groups only — pivots/rotations untouched, rig safe).
+  ['L','R'].forEach(k=>{ m.arms[k].scale.set(1.28,1.0,1.28); m.legs[k].scale.set(1.22,1.0,1.22); });
+  // BOULDER PAULDRONS — the unmistakable wide granite silhouette: mossy rock domes capping each shoulder,
+  // each topped with a bare grey stone nub. Placed on g over the shoulder line (~y1.62), spread by shoulderW.
+  [[0.80,1.62,-0.04],[-0.80,1.62,-0.04]].forEach(p=>{
+    g.add(mesh(jitter(new THREE.DodecahedronGeometry(0.42,0),0.07,0.07), mossDk, p[0],p[1],p[2]));
+    g.add(mesh(new THREE.DodecahedronGeometry(0.20,0), woodMat, p[0],p[1]+0.20,p[2]-0.08)); // grey stone nub (woodMat = warm rock)
+  });
+  // STONE BACK-HUMP: a hunched slab of mossy granite filling the back, widening the standing mass.
+  g.add(mesh(jitter(new THREE.DodecahedronGeometry(0.46,0),0.06,0.06), mossDk, 0,1.30,-0.46, 1.25,1.0,1.0));
+  // small stone scree on the hump for crusty texture
+  g.add(mesh(new THREE.DodecahedronGeometry(0.16,0), woodDark, -0.18,1.50,-0.42));
+  // GIANT TWO-HANDED STONE MAUL in the right fist — hung off g at a fixed pose (the AI swings arms.R, the
+  // club stays gripped-looking; matches the base-club pattern so it reads as carried, never floats off the rig).
+  const club=mesh(new THREE.CylinderGeometry(0.10,0.14,1.25,7), woodDark, 0,0,0);
+  club.position.set(0.66,1.02,0.05); club.rotation.x=0.55; club.rotation.z=-0.12;
+  const head=mesh(jitter(new THREE.DodecahedronGeometry(0.34,0),0.07,0.07), mossDk, 0,0.64,0); // mossy boulder head
+  head.add(mesh(new THREE.DodecahedronGeometry(0.16,0), woodMat, 0.10,0.06,0.10)); // bare stone chip on the maul
+  club.add(head); g.add(club);
+  // HUGE BROKEN TUSKS jutting from the jaw — extra pair beyond the base's tuskScale:2.2 set, jagged & splayed.
+  [-1,1].forEach(s=>{ const t=mesh(new THREE.ConeGeometry(0.07,0.36,5), tuskMat, s*0.21,-0.05,0.22);
+    t.rotation.x=-0.5; t.rotation.z=s*0.28; m.head.add(t); });
+  // a brow-ridge moss crust to anchor the sunken-eyes "two coals in shadow" look on the tiny head
+  m.head.add(mesh(new THREE.SphereGeometry(0.14,7,6), mossDk, 0,0.16,0.18, 1.6,0.6,1.0));
+    } },
+  shaman: { id:'shaman', name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x2f6f6a, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18, postureLean:0.0, shoulderW:0.9, torsoW:0.85, neckLen:0.15, tuskScale:1.2, earLen:0.5,
+    build(m){
+const g=m.g;
+      // ONE shared per-monster glow material for every mystic part (crystal/horns/runes) -> returned on m.staffMat (already disposed by disposeMonster)
+      const staffMat=new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.4,roughness:.5,flatShading:true});
+      m.staffMat=staffMat;
+
+      // --- slim, regal proportions: thin the limbs & lengthen the head a touch (tall priest silhouette) ---
+      ['L','R'].forEach(k=>{ m.arms[k].scale.set(0.82,1.08,0.82); m.legs[k].scale.set(0.85,1.1,0.85); });
+      m.head.scale.set(0.92,1.12,0.95); m.head.position.y=1.95+0.15; // neckLen lift -> taller stance
+
+      // --- ANTLER-HORN CROWN sweeping back from the skull (the regal giveaway), parented to head in HEAD-LOCAL space ---
+      [-1,1].forEach(s=>{
+        const horn=mesh(new THREE.ConeGeometry(0.055,0.6,5), staffMat, s*0.20,0.26,-0.06);
+        horn.rotation.z=s*0.62; horn.rotation.x=-0.42;
+        const tine=mesh(new THREE.ConeGeometry(0.032,0.26,5), staffMat, s*0.10,0.30,0.02); tine.rotation.x=0.5; horn.add(tine); // forward branch
+        const back=mesh(new THREE.ConeGeometry(0.028,0.20,5), staffMat, -s*0.04,0.24,-0.06); back.rotation.x=-0.5; horn.add(back); // rear branch
+        m.head.add(horn);
+      });
+      // small crystal third-eye gem on the brow to tie the crown together
+      m.head.add(mesh(new THREE.OctahedronGeometry(0.05,0), staffMat, 0,0.14,0.30));
+
+      // --- bone-bead priest necklace across the pale throat/chest (HEAD-LOCAL, drapes under the jaw) ---
+      for(let i=-2;i<=2;i++){ const bead=mesh(new THREE.SphereGeometry(0.035,6,5), tuskMat, i*0.085,-0.34+Math.abs(i)*0.018,0.33); m.head.add(bead); }
+
+      // --- CEREMONIAL CRYSTAL STAFF in the right hand (kept on g so it doesn't swing with the attack arm) ---
+      const staff=mesh(new THREE.CylinderGeometry(0.04,0.05,1.42,7), woodMat, 0.55,1.05,0.06); staff.rotation.x=0.18;
+      // bound moss grip + bone cap at the base
+      staff.add(mesh(new THREE.SphereGeometry(0.07,7,6), mossMat, 0,-0.10,0,1,0.6,1));
+      staff.add(mesh(new THREE.ConeGeometry(0.05,0.12,6), tuskMat, 0,-0.74,0)); // pointed bone ferrule
+      // crowning crystal (m.staffCrystal -> AI pulses its emissiveIntensity)
+      const crystal=mesh(new THREE.OctahedronGeometry(0.17,0), staffMat, 0,0.80,0); staff.add(crystal); m.staffCrystal=crystal;
+      crystal.add(mesh(new THREE.OctahedronGeometry(0.085,0), staffMat, 0,0,0,1,2.0,1)); // inner spike for sparkle
+      // two small orbiting runes near the head of the staff
+      staff.add(mesh(new THREE.OctahedronGeometry(0.05,0), staffMat, 0.13,0.56,0.02));
+      staff.add(mesh(new THREE.OctahedronGeometry(0.05,0), staffMat, -0.11,0.42,-0.02));
+      g.add(staff);
+
+      // --- shoulder moss-mantle clumps (denser moss on the old mystic = family signature, refined not bulky) ---
+      [[0.42,1.66,-0.06],[-0.42,1.66,-0.06]].forEach(p=> g.add(mesh(new THREE.SphereGeometry(0.16,8,6), mossMat, p[0],p[1],p[2], 1.1,0.7,1)));
+
+      // --- healing AURA sprite (m.aura -> AI pulses opacity; already disposed) ---
+      const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.45,depthWrite:false,blending:THREE.AdditiveBlending}));
+      aura.scale.setScalar(2.8); aura.position.y=1.3; g.add(aura); m.aura=aura;
+
+      // ability/animation state the shaman AI reads every frame
+      m.healTimer=rand(1.5,3.0); m.auraPulse=0;
+    } },
+  spitter: { id:'spitter', name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:2.8, skin:0x9fb84a, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.10, shoulderW:0.95, torsoW:1.25, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
+    build(m){
+const g=m.g, head=m.head;
+      // ── per-monster bile material (the ONLY new material → disposed via m.spitMat) ──
+      const spitMat=std({color:0xb6c95a, emissive:0x7e9a2e, emissiveIntensity:0.35, roughness:0.45}); m.spitMat=spitMat;
+
+      // ── BOTTOM-HEAVY TOAD SILHOUETTE: thick stubby legs, thin little arms, low squat ──
+      ['L','R'].forEach(k=>{ m.legs[k].scale.set(1.28,0.82,1.28); m.arms[k].scale.set(0.78,0.9,0.78); });
+
+      // ── HUGE SAGGING BILE-BELLY: a big glowing translucent-looking sac drooping from the gut ──
+      g.add(mesh(new THREE.SphereGeometry(0.6,12,9), spitMat, 0,0.86,0.30, 1.34,1.12,1.02));   // main sac
+      g.add(mesh(new THREE.SphereGeometry(0.30,9,7), spitMat, 0,0.55,0.40, 1.1,0.9,1.0));        // lower droop lobe
+      g.add(mesh(new THREE.SphereGeometry(0.20,8,6), bellyMat, 0,1.02,0.50, 1.2,0.8,0.7));       // pale highlight ridge
+      // moss patch crusted on the belly's upper crown (family unity)
+      g.add(mesh(new THREE.SphereGeometry(0.16,7,6), mossMat, -0.10,1.18,0.18, 1.1,0.6,1));
+
+      // ── OOZING BACK-PUSTULE CLUSTER: clumped pale-yellow bile sacs (diseased read) ──
+      [[0.40,1.46,-0.24,0.21],[-0.42,1.30,-0.22,0.23],[0.04,1.58,-0.30,0.18],[0.24,1.10,-0.42,0.20],[-0.20,1.04,-0.40,0.17]]
+        .forEach(p=> g.add(mesh(new THREE.SphereGeometry(p[3],8,6), spitMat, p[0],p[1],p[2], 1,0.84,1)));
+      // moss caps on the two biggest sacs (so the back still reads Mossfolk)
+      [[0.40,1.57,-0.24],[-0.42,1.43,-0.22]].forEach(p=> g.add(mesh(new THREE.SphereGeometry(0.12,7,6), mossMat, p[0],p[1],p[2], 1,0.6,1)));
+
+      // ── WIDE CROOKED FROG-MOUTH + PUFFED THROAT (ranged-gross read) ──
+      head.add(mesh(new THREE.SphereGeometry(0.20,9,7), m.bodySkin, 0,-0.16,0.30, 1.6,0.5,1.15));   // wide flat jaw shelf
+      head.add(mesh(new THREE.SphereGeometry(0.22,9,7), spitMat, 0,-0.30,0.26, 1.25,0.95,1.0));     // bulging throat/bile sac
+      [-1,1].forEach(s=> head.add(mesh(new THREE.SphereGeometry(0.13,7,6), m.bodySkin, s*0.26,0.02,0.18, 1.0,1.1,0.9))); // puffed cheeks
+      // snaggled crooked little tusks jutting from the wide mouth
+      [-1,1].forEach(s=>{ const t=mesh(new THREE.ConeGeometry(0.04,0.15,4), tuskMat, s*0.22,-0.10,0.30); t.rotation.x=-0.2; t.rotation.z=s*0.55; head.add(t); });
+      // a single drip-bead of bile dangling from the lip (the gross detail)
+      head.add(mesh(new THREE.SphereGeometry(0.05,6,5), spitMat, 0.06,-0.30,0.36, 1,1.4,1));
+
+      m.rangedTimer=rand(1.2,2.6);
+    } },
+};
+
+/* ---- ellenséges lövedék-pool (köpködő mohabombái) ---- */
+const bombMat=std({color:0x6b8f3a,roughness:1});
+const ebombs=[];
+function makeBomb(){
+  const g=new THREE.Group();
+  g.add(mesh(new THREE.DodecahedronGeometry(0.18,0), bombMat,0,0,0));
+  [[0.1,0.05,0.05],[-0.08,-0.04,0.08]].forEach(p=> g.add(mesh(new THREE.SphereGeometry(0.08,6,5), mossMat,p[0],p[1],p[2])));
+  g.visible=false; g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); scene.add(g);
+  return { g, vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, dmg:12, spin:rand(2,5) };
+}
+for(let i=0;i<24;i++) ebombs.push(makeBomb());
+function spitterFire(m){
+  const b=ebombs.find(x=>!x.active) || ebombs[0];
+  const p=m.g.position, sx=p.x, sy=p.y+m.bodyCY*0.9, sz=p.z;
+  const tx=player.pos.x, ty=player.pos.y-0.2, tz=player.pos.z;
+  const dx=tx-sx, dz=tz-sz, dist=Math.hypot(dx,dz);
+  const T=clamp(dist/12,0.55,1.6);
+  const vy=((ty-sy)+0.5*GRAV*T*T)/T, vx=dx/T, vz=dz/T;
+  b.g.position.set(sx,sy,sz); b.prev.set(sx,sy,sz); b.vel.set(vx,vy,vz);
+  b.dmg=10+wave*0.5; b.life=0; b.active=true; b.g.visible=true;
+  sparks.burst(sx,sy,sz,8,0x9acb3a,4,0.4); if(AUD.growl) AUD.growl();
+}
+function updateBombs(dt){
+  for(const b of ebombs){ if(!b.active) continue;
+    b.prev.copy(b.g.position); b.vel.y-=GRAV*dt; b.g.position.addScaledVector(b.vel,dt);
+    b.g.rotation.x+=b.spin*dt; b.g.rotation.y+=b.spin*0.7*dt; b.life+=dt;
+    const bp=b.g.position;
+    if(player.alive){ const ddx=bp.x-player.pos.x, ddz=bp.z-player.pos.z;
+      if(Math.hypot(ddx,ddz)<0.7 && bp.y<player.pos.y+0.4 && bp.y>player.pos.y-1.6){
+        damagePlayer(b.dmg); gore.burst(bp.x,bp.y,bp.z,16,0x6b8f3a,5,0.5); gore.burst(bp.x,bp.y,bp.z,6,0x2c4636,4,0.3);
+        b.active=false; b.g.visible=false; continue; } }
+    if(bp.y<=GROUND_Y+0.12){ gore.burst(bp.x,GROUND_Y+0.1,bp.z,14,0x6b8f3a,4,0.4);
+      if(player.alive && Math.hypot(bp.x-player.pos.x,bp.z-player.pos.z)<1.3) damagePlayer(b.dmg*0.5);
+      b.active=false; b.g.visible=false; continue; }
+    if(b.life>5){ b.active=false; b.g.visible=false; }
+  }
+}
+function resetBombs(){ for(const b of ebombs){ b.active=false; b.g.visible=false; } }
+
+/* ===== SHARED BASE BODY (everything before T.build(m)) — drop-in replacement for makeMonster body =====
+   r128. Uses only existing helpers/materials: mesh, std, jitter, GLOW, MOSS_T, SKIN_N, mossMat,
+   skinDark, bellyMat, tuskMat, woodMat, woodDark, eyeMat, rand, lerp, THREE.*
+   Keeps EVERY rigged handle + field from the contract. Mesh count ~30 (well within budget). */
+
+function makeMonster(type, scale, hp, speed){
+  let T;
+  if(typeof type==='string' && TROLL_TYPES[type]) T=TROLL_TYPES[type];
+  else { speed=hp; hp=scale; scale=type; T=TROLL_TYPES.grunt; }
+
+  const g=new THREE.Group(); g.scale.setScalar(scale);
+
+  /* per-monster cloned materials (disposed in disposeMonster) */
+  const bodySkin = (T.skin!==undefined)
+    ? std({color:T.skin, bumpMap:SKIN_N, bumpScale:0.018})
+    : skinMat;
+  const myEye = eyeMat.clone();
+  if(T.eyeColor!==undefined) myEye.emissive=new THREE.Color(T.eyeColor);
+  const eyeGlowCol = (T.eyeColor!==undefined) ? T.eyeColor : 0xff7a3d;
+
+  /* per-type silhouette levers (read from TROLL_TYPES; safe defaults) */
+  const postureLean = (T.postureLean!==undefined) ? T.postureLean : 0.0;   // forward spine lean (rad)
+  const shoulderW   = (T.shoulderW   !==undefined) ? T.shoulderW   : 1.0;   // arm-spread mult
+  const torsoW      = (T.torsoW      !==undefined) ? T.torsoW      : 1.0;   // belly width mult
+  const neckLen     = (T.neckLen     !==undefined) ? T.neckLen     : 0.0;   // raises head group
+  const tuskScale   = (T.tuskScale   !==undefined) ? T.tuskScale   : 1.0;
+  const earLen      = (T.earLen      !==undefined) ? T.earLen      : 0.34;
+  const noTusks     = !!T.noTusks;
+
+  /* small helper: a 3-toe foot so footfalls read */
+  function foot(parent){
+    parent.add(mesh(new THREE.SphereGeometry(0.2,8,6), bodySkin, 0,-0.6,0.10, 1.25,0.6,1.5));
+    [-1,0,1].forEach(i=> parent.add(
+      mesh(new THREE.ConeGeometry(0.05,0.14,5), tuskMat, i*0.085,-0.62,0.26, 1,1,1)
+    ));
+  }
+
+  /* ---------- LEGS (hips y0.62, rotate.x for walk) ---------- */
+  const legs={};
+  [-1,1].forEach(s=>{
+    const leg=new THREE.Group(); leg.position.set(s*0.22*torsoW, 0.62, 0);
+    leg.add(mesh(new THREE.CylinderGeometry(0.17,0.22,0.40,7), bodySkin, 0,-0.18,0));  // thigh
+    leg.add(mesh(new THREE.CylinderGeometry(0.14,0.16,0.30,7), bodySkin, 0,-0.46,0.02)); // shin
+    foot(leg);
+    leg.add(mesh(new THREE.DodecahedronGeometry(0.15,0), mossMat, s*0.05,-0.10,-0.10)); // mossy knee clump
+    g.add(leg); legs[s<0?'L':'R']=leg;
+  });
+
+  /* ---------- TORSO (belly + chest + mossy back) ---------- */
+  const torso=new THREE.Group(); torso.rotation.x=postureLean; g.add(torso);
+  // big rounded belly
+  torso.add(mesh(new THREE.SphereGeometry(0.6,12,9), bodySkin, 0,1.05,0, 1.0*torsoW,0.95,0.85));
+  // pale under-belly / chest plate (family belly motif)
+  torso.add(mesh(new THREE.SphereGeometry(0.44,11,8), bellyMat, 0,0.96,0.30, 1.0*torsoW,0.9,0.6));
+  // upper chest / trapezius
+  torso.add(mesh(new THREE.SphereGeometry(0.46,11,8), bodySkin, 0,1.46,-0.04, 1.08*shoulderW,0.78,0.82));
+  // collar / throat
+  torso.add(mesh(new THREE.CylinderGeometry(0.17,0.24,0.18,8), bodySkin, 0,1.74+neckLen*0.5,0.0));
+  // MOSS crust on back + shoulders (species signature) — irregular clumps
+  [[0.40,1.42,-0.16,0.24],[-0.40,1.36,-0.18,0.22],[0,1.02,-0.42,0.26],[0.22,1.66,-0.20,0.16],[-0.20,1.60,-0.22,0.15]]
+    .forEach(p=> torso.add(mesh(new THREE.DodecahedronGeometry(p[3],0), mossMat, p[0],p[1],p[2], 1,0.7,1)));
+
+  /* ---------- ARMS (shoulders y1.5, rotate.x walk/attack, rotate.z death) ---------- */
+  const arms={};
+  [-1,1].forEach(s=>{
+    const arm=new THREE.Group(); arm.position.set(s*0.5*shoulderW, 1.5, 0);
+    arm.add(mesh(new THREE.CylinderGeometry(0.14,0.12,0.42,7), bodySkin, 0,-0.21,0));     // upper arm
+    arm.add(mesh(new THREE.SphereGeometry(0.10,7,6), mossMat, 0,-0.02,-0.04));            // mossy shoulder cap
+    arm.add(mesh(new THREE.CylinderGeometry(0.12,0.10,0.34,7), bodySkin, 0,-0.55,0.02));  // forearm
+    // oversized 3-knuckle fist (knuckle-dragging family)
+    arm.add(mesh(new THREE.SphereGeometry(0.17,8,6), skinDark, 0,-0.74,0.04, 1.0,0.9,1.1));
+    [-1,0,1].forEach(i=> arm.add(mesh(new THREE.SphereGeometry(0.06,6,5), skinDark, i*0.085,-0.80,0.12)));
+    arm.rotation.x=0.5; g.add(arm); arms[s<0?'L':'R']=arm;
+  });
+
+  /* ---------- HEAD (group at y1.95, +neckLen) ---------- */
+  const head=new THREE.Group(); head.position.set(0, 1.95+neckLen, 0.05); g.add(head);
+  // cranium
+  head.add(mesh(new THREE.SphereGeometry(0.38,12,10), bodySkin, 0,0,0, 1,0.95,1));
+  // mossy scalp cap
+  head.add(mesh(new THREE.SphereGeometry(0.30,9,7), mossMat, 0,0.18,-0.10, 1.2,0.7,1.0));
+  // heavy brow ridge (mossy wedge that shadows the eyes)
+  head.add(mesh(new THREE.SphereGeometry(0.30,9,6), mossMat, 0,0.10,0.22, 1.3,0.45,0.7));
+  // snout / muzzle
+  head.add(mesh(new THREE.SphereGeometry(0.18,9,7), bodySkin, 0,-0.06,0.34, 1.1,0.95,1.3));
+  // nostrils
+  [-1,1].forEach(s=> head.add(mesh(new THREE.SphereGeometry(0.035,6,5), skinDark, s*0.06,-0.02,0.50)));
+
+  /* eyes: cloned-eyeMat spheres (keep `myEye` so frame-902 flash works) + additive glow */
+  const eyes=[];
+  [-1,1].forEach(s=>{
+    const e=mesh(new THREE.SphereGeometry(0.07,8,7), myEye, s*0.15,0.05,0.30); head.add(e); eyes.push(e);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:eyeGlowCol,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending}));
+    sp.scale.setScalar(0.32); sp.position.set(s*0.15,0.05,0.34); head.add(sp);
+  });
+
+  /* lower jaw + tooth row (family teeth motif) */
+  head.add(mesh(new THREE.SphereGeometry(0.16,8,6), bodySkin, 0,-0.20,0.30, 1.15,0.7,1.0)); // jaw
+  [-2,-1,0,1,2].forEach(i=>{
+    const t=mesh(new THREE.ConeGeometry(0.035,0.10,4), tuskMat, i*0.07,-0.10,0.40); t.rotation.x=Math.PI; head.add(t);
+  });
+  // up-tusks (scaled per type; scout has none)
+  if(!noTusks){
+    [-1,1].forEach(s=>{
+      const t=mesh(new THREE.ConeGeometry(0.05,0.20*tuskScale,5), tuskMat, s*0.13,-0.10,0.30);
+      t.rotation.x=-0.35; t.rotation.z=s*0.12; head.add(t);
+    });
+  }
+  // ears (length is a silhouette lever)
+  [-1,1].forEach(s=>{
+    const ear=mesh(new THREE.ConeGeometry(0.10,earLen,6), bodySkin, s*0.40,0.06,-0.02);
+    ear.rotation.z=-s*1.3; ear.rotation.x=-0.2; head.add(ear);
+  });
+
+  g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+  scene.add(g);
+
+  const m={ g, legs, arms, head, eyes, eyeMat:myEye, bodySkin, hp, maxHp:hp, speed, walkPhase:Math.random()*6.28,
+    alive:true, dying:0, atkCd:0, hurtFlash:0, scale,
+    bodyR:0.85*scale, bodyCY:1.1*scale, headCY:1.95*scale, headR:0.42*scale,
+    type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
+    dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0 };
+  if(T.build) T.build(m);
+  m.headCY=m.head.position.y*scale; m.headR=0.42*scale*(m.head.scale.x||1); // fejlövés-gömb a valós fejhez
+  return m;
+}
+function disposeMonster(m){
+  m.g.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); if(o.isSprite && o.material) o.material.dispose(); });
+  if(m.eyeMat) m.eyeMat.dispose();
+  if(m.bodySkin && m.bodySkin!==skinMat) m.bodySkin.dispose();
+  if(m.aura && m.aura.material) m.aura.material.dispose();
+  if(m.staffMat) m.staffMat.dispose();
+  if(m.spitMat) m.spitMat.dispose();
+}
+
+/* ===================== Effektek (szikra / por / vér) ===================== */
+class Particles{
+  constructor(max,size,grav){ this.max=max; this.grav=grav; this.idx=0;
+    this.pos=new Float32Array(max*3); this.col=new Float32Array(max*3); this.vel=new Float32Array(max*3);
+    this.life=new Float32Array(max); this.ml=new Float32Array(max); this.base=[];
+    for(let i=0;i<max;i++) this.base.push([1,1,1]);
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(this.pos,3)); g.setAttribute('color',new THREE.BufferAttribute(this.col,3));
+    this.points=new THREE.Points(g,new THREE.PointsMaterial({size,map:GLOW,vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:true,sizeAttenuation:true}));
+    this.points.frustumCulled=false; scene.add(this.points); this._c=new THREE.Color();
+  }
+  burst(x,y,z,n,color,spd,up){ this._c.set(color);
+    for(let k=0;k<n;k++){ const i=this.idx++%this.max; this.pos[i*3]=x; this.pos[i*3+1]=y; this.pos[i*3+2]=z;
+      const a=rand(0,6.28), p=Math.acos(rand(-1,1)), s=spd*rand(0.3,1);
+      this.vel[i*3]=Math.sin(p)*Math.cos(a)*s; this.vel[i*3+1]=Math.cos(p)*s+spd*(up||0.3); this.vel[i*3+2]=Math.sin(p)*Math.sin(a)*s;
+      const ml=rand(0.4,0.9); this.life[i]=ml; this.ml[i]=ml; this.base[i][0]=this._c.r; this.base[i][1]=this._c.g; this.base[i][2]=this._c.b; }
+  }
+  update(dt){ for(let i=0;i<this.max;i++){ if(this.life[i]<=0){ this.col[i*3]=this.col[i*3+1]=this.col[i*3+2]=0; continue; }
+    this.life[i]-=dt; this.vel[i*3+1]-=this.grav*dt;
+    this.pos[i*3]+=this.vel[i*3]*dt; this.pos[i*3+1]+=this.vel[i*3+1]*dt; this.pos[i*3+2]+=this.vel[i*3+2]*dt;
+    const k=Math.max(0,this.life[i]/this.ml[i]), b=this.base[i];
+    this.col[i*3]=b[0]*k; this.col[i*3+1]=b[1]*k; this.col[i*3+2]=b[2]*k; }
+    this.points.geometry.attributes.position.needsUpdate=true; this.points.geometry.attributes.color.needsUpdate=true; }
+}
+const sparks=new Particles(400,0.3,9), gore=new Particles(500,0.35,12);
+let shake=0;
+
+/* ===================== Audio (szintetizált) ===================== */
+const AUD=(function(){
+  let ctx=null,master=null,noise=null;
+  function unlock(){ if(ctx){ if(ctx.state==='suspended') ctx.resume(); return; }
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; ctx=new AC();
+    master=ctx.createGain(); master.gain.value=0.45; master.connect(ctx.destination);
+    const len=ctx.sampleRate*0.5, b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=Math.random()*2-1; noise=b; }
+  function tone(f,t0,dur,type,g,glide){ const o=ctx.createOscillator(),ga=ctx.createGain(); o.type=type||'sine';
+    o.frequency.setValueAtTime(f,t0); if(glide) o.frequency.exponentialRampToValueAtTime(Math.max(1,glide),t0+dur);
+    ga.gain.setValueAtTime(0.0001,t0); ga.gain.exponentialRampToValueAtTime(g,t0+0.006); ga.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(ga).connect(master); o.start(t0); o.stop(t0+dur+0.02); }
+  function nz(t0,dur,g,ftype,f,q){ const s=ctx.createBufferSource(); s.buffer=noise; const bi=ctx.createBiquadFilter();
+    bi.type=ftype; bi.frequency.value=f; bi.Q.value=q||1; const ga=ctx.createGain();
+    ga.gain.setValueAtTime(0.0001,t0); ga.gain.exponentialRampToValueAtTime(g,t0+0.005); ga.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    s.connect(bi).connect(ga).connect(master); s.start(t0); s.stop(t0+dur+0.02); }
+  const ok=()=>ctx;
+  return {
+    unlock,
+    twang(c){ if(!ok())return; const t=ctx.currentTime; tone(220-c*40,t,0.18,'triangle',0.3,90); nz(t,0.12,0.2,'bandpass',1400,1.2); },
+    whoosh(){ if(!ok())return; nz(ctx.currentTime,0.16,0.12,'bandpass',900,1.4); },
+    hit(){ if(!ok())return; const t=ctx.currentTime; tone(150,t,0.18,'sine',0.32,60); nz(t,0.12,0.22,'lowpass',500,0.8); },
+    head(){ if(!ok())return; const t=ctx.currentTime; tone(1200,t,0.16,'square',0.22,500); tone(800,t,0.2,'sine',0.18,300); },
+    growl(){ if(!ok())return; const t=ctx.currentTime; tone(90,t,0.4,'sawtooth',0.12,60); },
+    die(){ if(!ok())return; const t=ctx.currentTime; tone(260,t,0.5,'sawtooth',0.22,40); nz(t,0.4,0.16,'lowpass',700,0.6); },
+    hurt(){ if(!ok())return; const t=ctx.currentTime; tone(120,t,0.3,'square',0.3,50); nz(t,0.18,0.2,'lowpass',400,0.7); },
+    wave(){ if(!ok())return; const t=ctx.currentTime; [392,523,659].forEach((f,i)=>tone(f,t+i*0.13,0.4,'triangle',0.28)); },
+    over(){ if(!ok())return; const t=ctx.currentTime; [440,349,262].forEach((f,i)=>tone(f,t+i*0.22,0.6,'sawtooth',0.3,f*0.6)); },
+  };
+})();
+
+/* ===================== Bemenet (pointer lock + egér + WASD) =====================
+   Robusztus: a pointer lock canvas-kattintásra (újra)indul + retry; lock-vesztés
+   NEM pause-ol; ha a lock nem elérhető, jobbgomb-húzás = nézés. Mozgás és nézés
+   minden frame-ben fut, ezért egyszerre is megy. */
+const keys=Object.create(null);
+let drawing=false, charge=0, locked=false;
+const cv=renderer.domElement;
+
+const lockHint=document.createElement('div'); lockHint.id='lockhint';
+lockHint.style.cssText='position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:7;'+
+  'font:600 14px/1.4 -apple-system,"Segoe UI",sans-serif;color:#cfe0ff;background:rgba(8,14,28,.55);'+
+  'border:1px solid rgba(180,200,240,.25);padding:7px 14px;border-radius:10px;pointer-events:none;'+
+  'opacity:0;transition:opacity .2s;text-shadow:0 2px 8px rgba(0,0,0,.8);text-align:center;';
+lockHint.textContent='Kattints az egér rögzítéséhez · vagy húzd a jobb egérgombot a nézéshez';
+document.body.appendChild(lockHint);
+function showLockHint(on){ lockHint.style.opacity=on?'1':'0'; }
+
+const POINTERLOCK_SUPPORTED=!!cv.requestPointerLock;
+let lockRetryT=null;
+function requestLock(){ if(!POINTERLOCK_SUPPORTED){ showLockHint(running); return; }
+  try{ const r=cv.requestPointerLock(); if(r&&typeof r.then==='function') r.catch(()=>{}); }catch(_){} }
+function ensureLock(){ if(!running||locked) return; requestLock(); clearTimeout(lockRetryT);
+  lockRetryT=setTimeout(()=>{ if(running&&!locked) requestLock(); },250); }
+
+let dragLook=false, dragBtn=-1, lastMX=0, lastMY=0;
+const LOOK_S=0.0022;
+function applyLook(dx,dy){ player.yaw-=dx*LOOK_S; player.pitch=clamp(player.pitch-dy*LOOK_S,-1.45,1.45); }
+
+addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
+  if(k==='escape'&&running) pauseGame();
+  else if(k==='b'){ bowTune=!bowTune; bowTuneEl.style.display=bowTune?'block':'none'; if(bowTune) applyBowAdj(); }
+  else if(bowTune){ const A=bowAdj;
+    if(k==='j') A.ry-=0.05; else if(k==='l') A.ry+=0.05;
+    else if(k==='i') A.rx-=0.05; else if(k==='k') A.rx+=0.05;
+    else if(k==='u') A.rz-=0.05; else if(k==='o') A.rz+=0.05;
+    else if(k==='n') A.s=Math.max(0.2,A.s-0.04); else if(k==='m') A.s+=0.04;
+    else if(k==='p') A.mx=-A.mx;
+    else if(k==='z') A.mz=-A.mz;
+    applyBowAdj(); }
+});
+addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+
+document.addEventListener('pointerlockchange',()=>{ locked=(document.pointerLockElement===cv); showLockHint(running&&!locked&&!dragLook); });
+document.addEventListener('pointerlockerror',()=>{ locked=false; showLockHint(running&&!dragLook); });
+
+addEventListener('mousemove',e=>{
+  if(locked){ applyLook(e.movementX,e.movementY); }
+  else if(dragLook&&running){ applyLook(e.clientX-lastMX,e.clientY-lastMY); lastMX=e.clientX; lastMY=e.clientY; }
+});
+
+function startDraw(){ if(running&&player.alive){ drawing=true; charge=0; } }
+cv.addEventListener('mousedown',e=>{
+  if(!running) return;
+  if(!locked){
+    if(e.button===2||!POINTERLOCK_SUPPORTED){ dragLook=true; dragBtn=e.button; lastMX=e.clientX; lastMY=e.clientY; showLockHint(false); }
+    else ensureLock();
+    if(e.button===0) startDraw();
+    e.preventDefault(); return;
+  }
+  if(e.button===0) startDraw();
+});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('mouseup',e=>{
+  if(e.button===dragBtn){ dragLook=false; dragBtn=-1; showLockHint(running&&!locked); } // csak a kezdő gomb állítja le a nézést
+  if(e.button!==0) return;
+  if(drawing){ if(charge>0.12) fireArrow(charge); drawing=false; charge=0; powwrap.classList.remove('on'); }
+});
+addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; if(running) pauseGame(); });
+cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
+
+/* ===================== HUD ===================== */
+const hpfill=document.getElementById('hpfill'), waveN=document.querySelector('#wave .n'),
+  waveLeft=document.querySelector('#wave .left'), scoreN=document.querySelector('#score .n'),
+  powwrap=document.getElementById('powwrap'), powfill=document.getElementById('powfill'),
+  hurtEl=document.getElementById('hurt'), toastEl=document.getElementById('toast'),
+  startScreen=document.getElementById('start'), pauseScreen=document.getElementById('pause'), overScreen=document.getElementById('over');
+let toastT=null;
+function toast(txt){ toastEl.textContent=txt; toastEl.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('show'),1400); }
+// célkereszt vonalak
+const cross=document.getElementById('cross');
+['t','b','l','r'].forEach(d=>{ const e=document.createElement('div'); e.className='ln '+d; cross.appendChild(e); });
+function setCross(spread){ // spread 0..1 (feszítéskor szétnyílik)
+  const off=6+spread*18, L=10;
+  const set=(sel,css)=>{ const el=cross.querySelector(sel); Object.assign(el.style,css); };
+  cross.querySelectorAll('.ln').forEach(e=>{ e.style.width=e.style.height=''; });
+  setCross_one('.t',{left:'50%',top:'50%',width:'2px',height:L+'px',transform:`translate(-50%,calc(-50% - ${off+L/2}px))`});
+  setCross_one('.b',{left:'50%',top:'50%',width:'2px',height:L+'px',transform:`translate(-50%,calc(-50% + ${off+L/2}px))`});
+  setCross_one('.l',{left:'50%',top:'50%',width:L+'px',height:'2px',transform:`translate(calc(-50% - ${off+L/2}px),-50%)`});
+  setCross_one('.r',{left:'50%',top:'50%',width:L+'px',height:'2px',transform:`translate(calc(-50% + ${off+L/2}px),-50%)`});
+}
+function setCross_one(sel,css){ Object.assign(cross.querySelector(sel).style,css); }
+setCross(0);
+
+/* ===================== Minimap / radar ===================== */
+const radarCv=document.getElementById('radar');
+const RADAR_PX=160, RADAR_DPR=Math.min(devicePixelRatio||1,2);
+radarCv.width=RADAR_PX*RADAR_DPR; radarCv.height=RADAR_PX*RADAR_DPR;
+const rctx=radarCv.getContext('2d'); rctx.scale(RADAR_DPR,RADAR_DPR);
+const R_CENTER=RADAR_PX/2, R_RIM=R_CENTER-8, R_WORLDMAX=SPAWN_R+3;
+function threatCss(m){ return m && m.threat!==undefined ? '#'+m.threat.toString(16).padStart(6,'0') : '#9bd0a0'; }
+function drawRadar(t){
+  if(!running){ rctx.clearRect(0,0,RADAR_PX,RADAR_PX); return; }
+  const cx=R_CENTER, cy=R_CENTER; rctx.clearRect(0,0,RADAR_PX,RADAR_PX);
+  const cyaw=Math.cos(player.yaw), syaw=Math.sin(player.yaw);
+  const arenaR=(ARENA_R/R_WORLDMAX)*R_RIM;
+  rctx.beginPath(); rctx.arc(cx,cy,arenaR,0,6.283); rctx.strokeStyle='rgba(255,210,122,.35)'; rctx.lineWidth=1.5; rctx.stroke();
+  rctx.beginPath(); rctx.arc(cx,cy,R_RIM,0,6.283); rctx.strokeStyle='rgba(127,226,255,.22)'; rctx.lineWidth=1; rctx.stroke();
+  // bejövő spawn-ívek
+  for(let i=0;i<spawnAngles.length;i++){
+    const a=spawnAngles[i], dx=Math.cos(a), dz=Math.sin(a);
+    const sx=dx*cyaw-dz*syaw, sy=dx*syaw+dz*cyaw, ang=Math.atan2(sy,sx);
+    const next=(i===0), pulse=0.5+0.5*Math.sin(t*6-i*0.6), span=next?0.42:0.30;
+    rctx.beginPath(); rctx.arc(cx,cy,R_RIM,ang-span/2,ang+span/2); rctx.lineWidth=next?4:2.5;
+    const aMul=next?(0.55+0.45*pulse):(0.25+0.35*pulse);
+    rctx.strokeStyle='rgba(255,'+(next?90:150)+','+(next?60:90)+','+aMul.toFixed(3)+')'; rctx.stroke();
+  }
+  // szörny-pontok
+  for(const mo of monsters){ if(!mo.alive && !(mo.dying>0)) continue;
+    const dx=mo.g.position.x-player.pos.x, dz=mo.g.position.z-player.pos.z;
+    const sx=dx*cyaw-dz*syaw, sy=dx*syaw+dz*cyaw, px=sx, py=sy;
+    const wd=Math.hypot(px,py); let rr=(wd/R_WORLDMAX)*R_RIM; const clamped=rr>R_RIM; if(clamped) rr=R_RIM;
+    const ux=wd>1e-4?px/wd:0, uy=wd>1e-4?py/wd:0, dxs=cx+ux*rr, dys=cy+uy*rr;
+    rctx.globalAlpha=mo.dying>0?Math.max(0,1-mo.dying):1;
+    if(clamped){ rctx.beginPath(); rctx.arc(dxs,dys,3,0,6.283); rctx.strokeStyle=threatCss(mo); rctx.lineWidth=1.5; rctx.stroke(); }
+    else { rctx.beginPath(); rctx.arc(dxs,dys,mo.scale>1.05?3.6:2.8,0,6.283); rctx.fillStyle=threatCss(mo); rctx.fill(); }
+    rctx.globalAlpha=1;
+  }
+  // játékos + nézés-ék
+  rctx.beginPath(); rctx.moveTo(cx,cy); rctx.arc(cx,cy,arenaR*0.9,-Math.PI/2-0.5,-Math.PI/2+0.5); rctx.closePath();
+  const wg=rctx.createRadialGradient(cx,cy,2,cx,cy,arenaR); wg.addColorStop(0,'rgba(127,226,255,.42)'); wg.addColorStop(1,'rgba(127,226,255,0)');
+  rctx.fillStyle=wg; rctx.fill();
+  rctx.beginPath(); rctx.arc(cx,cy,3.2,0,6.283); rctx.fillStyle='#eaf2ff'; rctx.fill(); rctx.strokeStyle='rgba(54,197,255,.9)'; rctx.lineWidth=1.4; rctx.stroke();
+}
+
+/* ===================== Hullám-rendszer / játékállapot ===================== */
+let running=false, wave=0, score=0, toSpawn=0, spawnTimer=0, aliveCount=0, intermission=0, spawnAngles=[];
+function startWave(n){
+  wave=n; toSpawn=4+n*2; spawnTimer=0; intermission=0;
+  spawnAngles=[]; for(let i=0;i<toSpawn;i++) spawnAngles.push(rand(0,6.28)); // radar-előrejelzéshez
+  waveN.textContent='HULLÁM '+n; AUD.wave(); toast('HULLÁM '+n);
+}
+function pickTrollType(){
+  const w=wave, haveShaman=monsters.some(m=>m.alive && m.typeId==='shaman');
+  const table=[
+    ['grunt',   Math.max(2.0, 6 - w*0.25)],
+    ['scout',   w>=1 ? clamp(1.5 + w*0.35, 0, 6) : 0],
+    ['brute',   w>=3 ? clamp((w-2)*0.55, 0, 4) : 0],
+    ['shaman',  w>=4 ? (haveShaman?0.15:clamp((w-3)*0.3,0,1.6)) : 0],
+    ['spitter', w>=2 ? clamp((w-1)*0.45, 0, 4) : 0],
+  ];
+  let total=0; for(const e of table) total+=e[1];
+  if(total<=0) return 'grunt';
+  let r=Math.random()*total;
+  for(const e of table){ r-=e[1]; if(r<=0) return e[0]; }
+  return 'grunt';
+}
+function spawnMonster(){
+  const a=(spawnAngles.length ? spawnAngles.shift() : rand(0,6.28)), r=SPAWN_R+rand(-2,3);
+  const id=pickTrollType(), T=TROLL_TYPES[id];
+  const baseSc=rand(0.85,1.15)*(1+wave*0.01), baseHp=28+wave*9, baseSp=(1.5+wave*0.12)*rand(0.85,1.15);
+  const sc=baseSc*T.scaleMul, hp=Math.round(baseHp*T.hpMul), sp=Math.min(baseSp*T.speedMul, T.speedCap);
+  const m=makeMonster(id, sc, hp, sp);
+  m.g.position.set(Math.cos(a)*r, GROUND_Y, Math.sin(a)*r);
+  monsters.push(m); aliveCount++;
+  if(Math.random()<0.5 && AUD.growl) AUD.growl();
+}
+function damagePlayer(d){
+  player.hp=Math.max(0,player.hp-d); hpfill.style.width=(player.hp/player.maxHp*100)+'%';
+  hurtEl.style.opacity=Math.min(0.9,0.4+d*0.03); shake=Math.max(shake,0.25); AUD.hurt();
+  if(player.hp<=0 && player.alive){ player.alive=false; gameOver(); }
+}
+function addScore(n){ score+=n; scoreN.textContent=score; }
+function killMonster(m, headshot){
+  m.alive=false; m.dying=0.001;
+  const p=m.g.position;
+  let dx=p.x-player.pos.x, dz=p.z-player.pos.z; const dl=Math.hypot(dx,dz)||1; dx/=dl; dz/=dl;
+  m.deathDir={x:dx,z:dz}; m.deathSpin=rand(-1,1);
+  // halál-stílus: típus → fejlövés → véletlen
+  let style;
+  const big=(m.maxHp>=60);
+  if(headshot && Math.random()<0.7){ style='burst'; }
+  else if(m.typeId){
+    switch(m.typeId){
+      case 'brute':   style=Math.random()<0.5?'burst':'topple'; break;
+      case 'shaman':  style='dissolve'; break;
+      case 'spitter': style=Math.random()<0.6?'sink':'dissolve'; break;
+      case 'scout':   style=Math.random()<0.6?'sink':'stagger'; break;
+      default:        style=pick(['topple','stagger','crumple','topple']); break;
+    }
+  } else { style=(big&&Math.random()<0.4)?'burst':pick(['topple','dissolve','sink','stagger','crumple']); }
+  m.deathStyle=style;
+  const bx=p.x, by=p.y+m.bodyCY, bz=p.z; AUD.die();
+  switch(style){
+    case 'burst': gore.burst(bx,by,bz,headshot?40:30,0x5f9168,11,0.5); gore.burst(bx,by,bz,14,0x9ec089,9,0.6); sparks.burst(bx,by,bz,18,0xffd27a,8,0.5); shake=Math.max(shake,headshot?0.45:0.34); if(headshot)AUD.head(); break;
+    case 'dissolve': gore.burst(bx,by,bz,16,0x7fe2ff,4,0.7); sparks.burst(bx,by,bz,12,0x36c5ff,3,0.8); shake=Math.max(shake,0.12); AUD.growl(); break;
+    case 'sink': gore.burst(bx,p.y+0.1,bz,18,0x3c5a3e,4,0.25); shake=Math.max(shake,0.16); break;
+    default: gore.burst(bx,by,bz,24,0x5f9168,6,0.4); gore.burst(bx,by,bz,10,0x2c4636,5,0.3); shake=Math.max(shake,0.18); break;
+  }
+  if(m.typeId==='shaman'){ addScore(60); toast('SÁMÁN LETERÍTVE!'); }
+  addScore(headshot?150:100);
+}
+
+/* ===================== Fő ciklus ===================== */
+const clock=new THREE.Clock(); let prevT=0;
+const fwd=new THREE.Vector3(), right=new THREE.Vector3(), tmp=new THREE.Vector3();
+
+function update(dt,t){
+  /* --- játékos mozgás --- */
+  if(running && player.alive){
+    fwd.set(-Math.sin(player.yaw),0,-Math.cos(player.yaw));
+    right.set(Math.cos(player.yaw),0,-Math.sin(player.yaw));
+    const sp=(keys['shift']?8:4.6);
+    let mx=0,mz=0;
+    if(keys['w']) { mx+=fwd.x; mz+=fwd.z; } if(keys['s']){ mx-=fwd.x; mz-=fwd.z; }
+    if(keys['d']){ mx+=right.x; mz+=right.z; } if(keys['a']){ mx-=right.x; mz-=right.z; }
+    const len=Math.hypot(mx,mz); if(len>0){ mx/=len; mz/=len;
+      player.pos.x+=mx*sp*dt; player.pos.z+=mz*sp*dt;
+      const rr=Math.hypot(player.pos.x,player.pos.z); if(rr>ARENA_R){ player.pos.x*=ARENA_R/rr; player.pos.z*=ARENA_R/rr; } }
+    // ugrás + gravitáció + ráállás a megmászható objektumokra
+    if(keys[' '] && player.onGround && player.jumpReady){ player.vy=JUMP_V; player.onGround=false; player.jumpReady=false; }
+    if(!keys[' ']) player.jumpReady=true;
+    const wasGround=player.onGround;
+    player.vy-=GRAV*dt; player.feet+=player.vy*dt;
+    const support=groundAt(player.pos.x, player.pos.z, player.feet);
+    if(wasGround && support>player.feet){ player.feet=lerp(player.feet, support, Math.min(1,dt*12)); if(support-player.feet<0.02) player.feet=support; player.vy=0; player.onGround=true; }
+    else if(player.feet<=support){ player.feet=support; player.vy=0; player.onGround=true; }
+    else player.onGround=false;
+    player.pos.y=player.feet+1.7+(player.onGround?Math.sin(t*8)*Math.min(len,1)*0.04:0); // szemmagasság + járás-bólogatás
+  }
+
+  /* --- íj feszítés + lövés-animáció (csak futó játékban tölt) --- */
+  idleT+=dt;
+  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powfill.style.width=(charge*100)+'%'; nockArrow.visible=true; }
+  else { nockArrow.visible=false; }
+  // elengedés-detektálás -> twang + FOV-rúgás + limb-snap
+  if(prevCharge>0.12 && charge<=0.0001){ bowKick=1; bowKickRot=1; relTwang=0.14; camera.fov=FOV_BASE+5.5; camera.updateProjectionMatrix(); }
+  prevCharge=charge;
+
+  // húr/nyíl hátrahúzás a tölts szerint + elengedéskor előre-csattanó twang
+  const PULL=0.30;
+  const twang = (relTwang>0 ? Math.sin(relTwang*70)*0.020*relTwang*7 : 0);
+  const pull  = charge*PULL + twang;
+  nock.position.set(0,0,-Math.max(0,pull)*bowAdj.mz);           // húr a néző felé (görbület-tükörrel kompenzálva)
+  nockArrow.position.set(0.046,0.060, (-pull+0.04)*bowAdj.mz);  // a nyíl a nockkal együtt csúszik (mz-kompenzált)
+
+  // a végtagok valódi hajlása (longbow szép ívben görbül), elengedéskor visszacsapódik
+  let flex=charge*0.22;
+  if(bowKick>0){ flex += -bowKick*0.12*Math.cos(bowKick*11); }
+  limbU.rotation.x=flex; limbL.rotation.x=-flex;
+
+  setString();
+  setCross(drawing?charge:0);
+
+  // FOV vissza-lerp a rúgás után
+  if(Math.abs(camera.fov-FOV_BASE)>0.05){ camera.fov=lerp(camera.fov,FOV_BASE,Math.min(1,dt*10)); camera.updateProjectionMatrix(); }
+  else if(camera.fov!==FOV_BASE){ camera.fov=FOV_BASE; camera.updateProjectionMatrix(); }
+  if(bowKick>0)  bowKick =Math.max(0, bowKick - dt*4.0);
+  if(relTwang>0) relTwang=Math.max(0, relTwang - dt);
+
+  // lélegzés + sway idle-ban, töltéskor stabilizálódik és kissé behúzódik
+  const steady=1-charge*0.7;
+  const breath=Math.sin(idleT*1.6)*0.006*steady, sway=Math.cos(idleT*0.9)*0.004*steady;
+  bow.position.x=BOW_BASE_X + sway + bowKick*0.018 - charge*0.010;
+  bow.position.y=BOW_BASE_Y + breath - charge*0.014 - bowKick*0.022;
+  bow.position.z=BOW_BASE_Z + charge*0.020 + bowKick*0.045;     // töltéskor kissé közelebb, de a near-plane (0.05) bőven biztos
+  bow.rotation.x=bowAdj.rx;
+  bow.rotation.y=bowAdj.ry + (bowAdj.ry<0?-1:1)*charge*0.05;
+  bow.rotation.z=bowAdj.rz + charge*0.045 + bowKickRot*0.05*Math.sin(idleT*40);
+  if(bowKickRot>0) bowKickRot=Math.max(0, bowKickRot - dt*5.0);
+
+  /* --- nyilak (szünetben befagynak) --- */
+  if(running) for(const a of arrows){ if(!a.active) continue;
+    if(a.stuck){ a.life+=dt; if(a.life>3){ a.active=false; a.g.visible=false; } continue; }
+    a.prev.copy(a.g.position);
+    a.vel.y-=GRAV*dt;
+    a.g.position.addScaledVector(a.vel,dt);
+    orientArrow(a);
+    a.life+=dt;
+    // talaj
+    if(a.g.position.y<=GROUND_Y+0.02){ a.g.position.y=GROUND_Y+0.02; a.stuck=true; a.life=0;
+      sparks.burst(a.g.position.x,0.1,a.g.position.z,8,0x8b7355,3,0.4); continue; }
+    // szörny-találat (szakasz vs gömb, hogy ne fúrjon át)
+    let hit=null, head=false;
+    for(const m of monsters){ if(!m.alive) continue;
+      const c=tmp.set(m.g.position.x, m.g.position.y+m.headCY, m.g.position.z);
+      if(segDist(a.prev,a.g.position,c)<m.headR){ hit=m; head=true; break; }
+      c.set(m.g.position.x, m.g.position.y+m.bodyCY, m.g.position.z);
+      if(segDist(a.prev,a.g.position,c)<m.bodyR){ hit=m; break; }
+    }
+    if(hit){ const dmg=a.dmg*(head?2:1);
+      if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg); } // CO-OP: server applies dmg/kill/score
+      else { hit.hp-=dmg; hit.hurtFlash=0.15; }
+      const hp=a.g.position;
+      sparks.burst(hp.x,hp.y,hp.z, head?22:14, head?0xffd27a:0xff6a4a, 6, 0.3);
+      if(head) AUD.head(); else AUD.hit();
+      if(head) toast('FEJLÖVÉS!');
+      a.active=false; a.g.visible=false;
+      if(!coopIsRemote(hit) && hit.hp<=0) killMonster(hit, head);
+    }
+    if(a.life>6){ a.active=false; a.g.visible=false; }
+  }
+  if(running) updateBombs(dt); // köpködő-bombák (szünetben befagynak)
+
+  /* --- szörnyek --- */
+  aliveCount=0;
+  for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i];
+    if(m.dying>0){ m.dying+=dt; const k=m.dying; const g=m.g, p=g.position;
+      switch(m.deathStyle){
+        case 'topple': {
+          const f=easeOutCubic(Math.min(1,k/0.9));
+          g.rotation.x=lerp(0,1.55,f); g.rotation.z=lerp(0,m.deathSpin*0.3,f); p.y=GROUND_Y-0.05*f;
+          m.head.rotation.x=lerp(0,0.9,Math.min(1,k/0.6)); m.head.rotation.z=lerp(0,m.deathSpin*0.6,Math.min(1,k/0.7));
+          m.arms.L.rotation.x=lerp(0.5,1.7,f); m.arms.L.rotation.z=lerp(0,0.5,f);
+          m.arms.R.rotation.x=lerp(0.5,1.7,f); m.arms.R.rotation.z=lerp(0,-0.5,f);
+          m.legs.L.rotation.x=lerp(0,-0.4,f); m.legs.R.rotation.x=lerp(0,-0.5,f);
+          if(k>1.55){ scene.remove(g); disposeMonster(m); monsters.splice(i,1); } continue;
+        }
+        case 'dissolve': {
+          const r=Math.min(1,k/1.4); g.position.y=GROUND_Y+r*1.4; g.rotation.y+=dt*1.2;
+          const sc=m.scale*(1+r*0.35); g.scale.set(sc,sc*(1-r*0.9),sc);
+          if(m.eyeMat) m.eyeMat.emissiveIntensity=lerp(2,0,r);
+          if(Math.random()<0.6) gore.burst(p.x+rand(-0.4,0.4),p.y+rand(0.3,1.3),p.z+rand(-0.4,0.4),2,0x7fe2ff,2.5,0.8);
+          if(k>1.5){ scene.remove(g); disposeMonster(m); monsters.splice(i,1); } continue;
+        }
+        case 'burst': {
+          const r=Math.min(1,k/0.9), blow=easeOutCubic(r);
+          m.head.position.y=lerp(m.head.position.y,2.6,dt*8); m.head.rotation.x+=dt*9; m.head.rotation.z+=dt*7;
+          m.arms.L.rotation.z=lerp(0,1.6,blow); m.arms.R.rotation.z=lerp(0,-1.6,blow);
+          m.arms.L.rotation.x+=dt*6; m.arms.R.rotation.x+=dt*6;
+          m.legs.L.rotation.z=lerp(0,0.9,blow); m.legs.R.rotation.z=lerp(0,-0.9,blow); g.rotation.y+=dt*4;
+          g.scale.setScalar(Math.max(0.0001,m.scale*(1-blow*0.95)));
+          if(k<0.25 && Math.random()<0.5) gore.burst(p.x,p.y+m.bodyCY,p.z,4,0x5f9168,10,0.5);
+          if(k>1.1){ scene.remove(g); disposeMonster(m); monsters.splice(i,1); } continue;
+        }
+        case 'sink': {
+          const r=easeOutCubic(Math.min(1,k/1.2)); g.position.y=GROUND_Y-r*1.7;
+          const sc=m.scale*(1-r*0.5); g.scale.set(sc,sc*(1-r*0.3),sc); g.rotation.y+=dt*0.6;
+          m.head.rotation.x=lerp(0,0.5,r);
+          if(k<0.7 && Math.random()<0.4) gore.burst(p.x+rand(-0.3,0.3),GROUND_Y+0.1,p.z+rand(-0.3,0.3),3,0x3c5a3e,3,0.2);
+          if(k>1.4){ scene.remove(g); disposeMonster(m); monsters.splice(i,1); } continue;
+        }
+        case 'stagger': {
+          if(k<0.7){ const s=easeOutBack(Math.min(1,k/0.7)); g.rotation.x=lerp(0,-0.35,s);
+            p.x+=m.deathDir.x*dt*1.4; p.z+=m.deathDir.z*dt*1.4;
+            m.arms.L.rotation.x=0.5+Math.sin(k*22)*0.6; m.arms.R.rotation.x=0.5-Math.sin(k*22)*0.6; m.head.rotation.z=Math.sin(k*18)*0.3;
+          } else { const f=easeOutCubic(Math.min(1,(k-0.7)/0.8)); g.rotation.x=lerp(-0.35,1.5,f); p.y=GROUND_Y-0.05*f;
+            m.head.rotation.x=lerp(0,1.0,f); m.arms.L.rotation.x=lerp(0.5,1.6,f); m.arms.R.rotation.x=lerp(0.5,1.6,f);
+            m.legs.L.rotation.x=lerp(0,-0.5,f); m.legs.R.rotation.x=lerp(0,-0.5,f); }
+          if(k>1.9){ scene.remove(g); disposeMonster(m); monsters.splice(i,1); } continue;
+        }
+        case 'crumple': {
+          const r=easeOutCubic(Math.min(1,k/1.0)); p.y=GROUND_Y-r*0.55;
+          m.legs.L.rotation.x=lerp(0,1.4,r); m.legs.R.rotation.x=lerp(0,1.4,r); g.rotation.x=lerp(0,0.95,r);
+          m.head.rotation.x=lerp(0,1.1,Math.min(1,k/0.8)); m.arms.L.rotation.x=lerp(0.5,2.0,r); m.arms.R.rotation.x=lerp(0.5,2.0,r);
+          const flat=Math.min(1,Math.max(0,(k-0.9)/0.5)); g.scale.set(m.scale,m.scale*(1-flat*0.35),m.scale);
+          if(k>1.5){ scene.remove(g); disposeMonster(m); monsters.splice(i,1); } continue;
+        }
+        default: {
+          g.rotation.x=lerp(0,-1.4,Math.min(1,k*2)); g.position.y=GROUND_Y-Math.min(0.5,k*0.8);
+          g.scale.setScalar(m.scale*(1-Math.min(1,k*0.7)*0.5));
+          if(k>1.0){ scene.remove(g); disposeMonster(m); monsters.splice(i,1); } continue;
+        }
+      }
+    }
+    if(!m.alive) continue;
+    aliveCount++;
+    if(coopIsRemote(m)){ /* CO-OP: server owns this monster's movement/attacks; skip local AI (interpolated in coopTick) */ }
+    else trollAI(m, dt, t); // típus-függő mozgás/támadás (belül running&&alive gate)
+    // sérülés-villanás a szemeken
+    if(m.hurtFlash>0){ m.hurtFlash-=dt; const f=m.hurtFlash>0?1:0; m.eyes.forEach(e=>e.material.emissiveIntensity=2+f*4); }
+    else m.eyes.forEach(e=>e.material.emissiveIntensity=2);
+  }
+
+  /* --- hullám-vezérlés --- */
+  if(running && !coopShouldSuppressLocalSpawner()){
+    if(toSpawn>0 && aliveCount<14){ spawnTimer-=dt; if(spawnTimer<=0){ spawnMonster(); toSpawn--; spawnTimer=Math.max(0.25,1.0-wave*0.03); } }
+    else if(aliveCount===0 && intermission<=0){ intermission=3; toast('HULLÁM ' + wave + ' TELJESÍTVE'); addScore(50+wave*10); }
+    if(intermission>0){ intermission-=dt; if(intermission<=0) startWave(wave+1); }
+    waveLeft.textContent='trollok: '+(aliveCount+toSpawn);
+  }
+  else if(running && coop){ coopTick(dt); waveLeft.textContent='trollok: '+aliveCount; }
+
+  /* --- effektek --- */
+  sparks.update(dt); gore.update(dt);
+  drawRadar(t);
+  // szentjánosbogarak
+  for(let i=0;i<FCOUNT;i++){ const s=fSeed[i];
+    fPos[i*3]=fBase[i*3]+Math.sin(t*s[0]+s[1])*0.4; fPos[i*3+1]=fBase[i*3+1]+Math.sin(t*s[0]*0.8+s[2])*0.3; fPos[i*3+2]=fBase[i*3+2]+Math.cos(t*s[0]+s[1])*0.4; }
+  fGeo.attributes.position.needsUpdate=true;
+/* ---- EDIT N+ (loop) — INSERT right AFTER the existing firefly update
+        (after `fGeo.attributes.position.needsUpdate=true;`, ~line 920).
+        `t` is the same elapsed-seconds value already used there. ---- */
+for(let i=0;i<SCOUNT;i++){ const s=sSeed[i];
+  sPos[i*3]=sBase[i*3]+Math.sin(t*s[0]+s[1])*0.7;
+  sPos[i*3+1]=sBase[i*3+1]+Math.sin(t*s[0]*0.6+s[1])*0.5 + (((t*s[2])%8)/8)*0.6;
+  sPos[i*3+2]=sBase[i*3+2]+Math.cos(t*s[0]*0.8+s[1])*0.7; }
+sGeo.attributes.position.needsUpdate=true;
+  for(const g of swayers){ g.rotation.z=Math.sin(t*1.6+g.userData.phase)*0.06; }
+  // hurt vignette lecsengés
+  if(parseFloat(hurtEl.style.opacity)>0) hurtEl.style.opacity=Math.max(0,parseFloat(hurtEl.style.opacity)-dt*1.2);
+
+  /* --- kamera --- */
+  applyCamera();
+  if(shake>0.002){ camera.position.x+=(Math.random()-0.5)*shake; camera.position.y+=(Math.random()-0.5)*shake; camera.position.z+=(Math.random()-0.5)*shake; shake*=Math.pow(0.0015,dt); }
+}
+
+/* szakasz(a,b) – pont(p) távolság */
+function segDist(a,b,p){ const abx=b.x-a.x,aby=b.y-a.y,abz=b.z-a.z; const apx=p.x-a.x,apy=p.y-a.y,apz=p.z-a.z;
+  const ab2=abx*abx+aby*aby+abz*abz; let t=ab2>1e-9?(apx*abx+apy*aby+apz*abz)/ab2:0; t=clamp(t,0,1);
+  const cx=a.x+abx*t,cy=a.y+aby*t,cz=a.z+abz*t; return Math.hypot(p.x-cx,p.y-cy,p.z-cz); }
+
+/* segédek a halál-animációkhoz */
+const pick=(arr)=>arr[(Math.random()*arr.length)|0];
+const easeOutCubic=(x)=>1-Math.pow(1-x,3);
+const easeOutBack=(x)=>{ const c1=1.70158, c3=c1+1, u=x-1; return 1+c3*u*u*u+c1*u*u; };
+
+/* ===================== Troll AI (típus-függő) ===================== */
+function trollAI(m, dt, t){
+  if(!(running && player.alive)) return;
+  const T=m.type, p=m.g.position;
+  const dx=player.pos.x-p.x, dz=player.pos.z-p.z, d=Math.hypot(dx,dz)||0.0001;
+  m.g.rotation.y=Math.atan2(dx,dz);
+  if(T.id==='shaman'){ const pulse=0.6+Math.abs(Math.sin(t*3))*0.6;
+    if(m.staffCrystal) m.staffCrystal.material.emissiveIntensity=1.0+pulse;
+    if(m.auraPulse>0) m.auraPulse=Math.max(0,m.auraPulse-dt*2);
+    if(m.aura) m.aura.material.opacity=0.3+pulse*0.18+(m.auraPulse||0)*0.5; }
+  if(m.rooted>0){ m.rooted-=dt; m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.5,0.1); return; }
+  const walkAnim=()=>{ m.walkPhase+=dt*(4+m.speed); const sw=Math.sin(m.walkPhase)*0.6;
+    m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(m.walkPhase))*0.06;
+    m.arms.L.rotation.x=0.5+Math.sin(m.walkPhase)*0.3; m.arms.R.rotation.x=0.5-Math.sin(m.walkPhase)*0.3; };
+  const moveToward=(mult)=>{ const step=m.speed*mult*dt; p.x+=dx/d*step; p.z+=dz/d*step; };
+  const meleeAttack=(onHit)=>{ m.atkCd-=dt; m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,1.6,0.2); if(m.atkCd<=0){ if(player.pos.y-1.7 < p.y+1.9*m.scale){ onHit(); } else { m.atkCd=0.5; } m.arms.R.rotation.x=-0.4; } }; // függőleges hatótáv
+  switch(T.id){
+    case 'scout': {
+      m.dashCd-=dt;
+      if(m.dashTimer>0){ m.dashTimer-=dt; }
+      else if(d>2.2 && d<10 && m.dashCd<=0){ m.dashTimer=0.35; m.dashCd=rand(1.4,2.4); if(AUD.growl)AUD.growl(); }
+      if(d>1.7){ moveToward(m.dashTimer>0?2.6:1.0); walkAnim(); }
+      else meleeAttack(()=>{ m.atkCd=0.9; damagePlayer((10+wave*0.6)*m.dmgMul); });
+      break;
+    }
+    case 'brute': {
+      if(d>2.3){ moveToward(1.0); walkAnim(); }
+      else meleeAttack(()=>{ m.atkCd=2.2; damagePlayer((10+wave*0.6)*m.dmgMul);
+        const kb=3.2; player.pos.x+=dx/d*kb; player.pos.z+=dz/d*kb;
+        const rr=Math.hypot(player.pos.x,player.pos.z); if(rr>ARENA_R){ player.pos.x*=ARENA_R/rr; player.pos.z*=ARENA_R/rr; }
+        shake=Math.max(shake,0.5); m.rooted=0.5; gore.burst(p.x,p.y+m.bodyCY*0.5,p.z,10,0x6f7a72,4,0.3); });
+      break;
+    }
+    case 'shaman': {
+      if(d<5.5){ moveToward(-0.8); walkAnim(); }
+      else if(d>8){ moveToward(0.7); walkAnim(); }
+      else { m.arms.L.rotation.x=0.5+Math.sin(t*2)*0.15; m.arms.R.rotation.x=0.5+Math.cos(t*2)*0.15; }
+      m.healTimer-=dt;
+      if(m.healTimer<=0){ m.healTimer=T.healCd;
+        for(const o of monsters){ if(o===m || !o.alive || o.dying>0) continue;
+          const od=Math.hypot(o.g.position.x-p.x, o.g.position.z-p.z);
+          if(od<T.healRadius && o.hp<o.maxHp){ o.hp=Math.min(o.maxHp,o.hp+T.healAmt); o.hurtFlash=0.12;
+            sparks.burst(o.g.position.x,o.g.position.y+o.bodyCY,o.g.position.z,8,0x36c5ff,4,0.5); } }
+        sparks.burst(p.x,p.y+m.bodyCY,p.z,20,0x36c5ff,7,0.4); m.auraPulse=1; }
+      break;
+    }
+    case 'spitter': {
+      if(d<T.bandMin){ moveToward(-0.9); walkAnim(); }
+      else if(d>T.bandMax){ moveToward(0.8); walkAnim(); }
+      else { m.arms.L.rotation.x=0.3; m.arms.R.rotation.x=0.3; }
+      m.rangedTimer-=dt;
+      if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.6; spitterFire(m); }
+      break;
+    }
+    default: {
+      if(d>1.9){ moveToward(1.0); walkAnim(); }
+      else meleeAttack(()=>{ m.atkCd=1.3; damagePlayer((10+wave*0.6)*m.dmgMul); });
+    }
+  }
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  const t=clock.getElapsedTime(); const dt=Math.min(t-prevT,0.05); prevT=t;
+  update(dt,t);
+  renderer.render(scene,camera);
+}
+frame();
+
+/* ===================== CO-OP (OPT-IN: only active with ?room=CODE) =====================
+   Single-player is 100% unchanged when there is no ?room — `coop` stays null and every
+   hook below is gated. r128, reuses makeMonster/killMonster/addScore/arrows pool/HUD vars.
+   `coop` and the coopXxx() helpers are FUNCTION-DECLARATION / var hoisted to the IIFE top,
+   so the hook edits in update()/fireArrow()/collision can reference them regardless of the
+   fact that this block is textually inserted after frame(). ----------------------------- */
+var coop = null;                                  // the connectCoop handle (null offline)
+var coopMyId = null;                              // our server-assigned player id
+var coopDowned = false;                           // FIX: saját elesés egyszeri kapuzása (szerver-auth)
+var coopWelcomed = false;                          // v2: volt-e már welcome? (pid mellett a stabil id-vel detektáljuk az újracsatlakozást)
+var coopHost = null;                               // szerver LAN IP-je a meghívó-linkhez (welcome.host)
+var coopPeers = new Map();                        // peerId -> { g, buf, has, name } avatar
+var coopRemoteById = new Map();                   // server monster netId -> local monster obj (also in monsters[])
+var coopWaveNum = 0;                              // last server wave (for HUD)
+var coopPeerArrows = [];                          // tiny tracer pool for peer shots
+const _coopParams = new URLSearchParams(location.search);
+const _coopRoom   = _coopParams.get('room');      // null => single-player
+
+function coopActive(){ return !!coop; }
+
+/* ---- buffered entity interpolation (kills the 20Hz chase-latest jitter) ----
+   Each networked entity (peer + remote monster) keeps a tiny ring of timestamped
+   snapshots. We render it at (now - INTERP_DELAY_MS) by lerping between the two
+   bracketing snapshots, so motion is smooth even though authority arrives @20Hz. */
+const COOP_INTERP_DELAY_MS = 110;   // render ~2 ticks in the past (20Hz => 50ms/tick)
+const COOP_BUF_MAX = 24;            // ~1.2s of history @20Hz; plenty for trimming
+function coopNow(){ return performance.now(); }
+/* push a timestamped snapshot onto an entity buffer (monotonic, trimmed) */
+function coopPushSnap(buf, x, y, z, yaw){
+  const t = coopNow();
+  const last = buf.length ? buf[buf.length-1] : null;
+  if(last && t - last.t < 1) return;            // ignore duplicate same-frame stamps
+  buf.push({ t, x, y, z, yaw });
+  // trim by count and by age (keep a little past the render delay)
+  while(buf.length > COOP_BUF_MAX) buf.shift();
+  const cutoff = t - (COOP_INTERP_DELAY_MS + 400);
+  while(buf.length > 2 && buf[0].t < cutoff) buf.shift();
+}
+/* sample a buffer at renderTime; writes into out {x,y,z,yaw}. returns false if empty.
+   yaw is lerped along the shortest arc. Falls back to newest when the buffer is short
+   or the render time is outside the buffered window. */
+function coopSampleBuf(buf, renderTime, out){
+  const n = buf.length;
+  if(n === 0) return false;
+  if(n === 1){ const s=buf[0]; out.x=s.x; out.y=s.y; out.z=s.z; out.yaw=s.yaw; return true; }
+  const newest = buf[n-1];
+  if(renderTime >= newest.t){ out.x=newest.x; out.y=newest.y; out.z=newest.z; out.yaw=newest.yaw; return true; }
+  const oldest = buf[0];
+  if(renderTime <= oldest.t){ out.x=oldest.x; out.y=oldest.y; out.z=oldest.z; out.yaw=oldest.yaw; return true; }
+  // find bracketing pair a (<=renderTime) and b (>renderTime)
+  let a = buf[0], b = buf[1];
+  for(let i=1;i<n;i++){ if(buf[i].t >= renderTime){ b=buf[i]; a=buf[i-1]; break; } }
+  const span = b.t - a.t;
+  const f = span > 0 ? (renderTime - a.t)/span : 0;
+  out.x = a.x + (b.x-a.x)*f;
+  out.y = a.y + (b.y-a.y)*f;
+  out.z = a.z + (b.z-a.z)*f;
+  let dy = b.yaw - a.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+  out.yaw = a.yaw + dy*f;
+  return true;
+}
+const _coopSample = { x:0, y:0, z:0, yaw:0 };   // scratch, reused each sample
+
+/* ---- in-game co-op HUD state (room code, copy-link, players, status dot) ---- */
+var coopHudEl = null, coopHudRoomEl = null, coopHudPlayersEl = null, coopHudDotEl = null, coopHudCopyEl = null;
+var coopConnected = false;                        // drives the status dot (open/close)
+
+/* ---- peer archer avatar: capsule body + simple bow, built ONCE per peer ---- */
+function coopMakePeer(id, name){
+  if(coopPeers.has(id)) return coopPeers.get(id);
+  const g = new THREE.Group();
+  // body capsule (cylinder + 2 spheres) — reuse bellyMat/skinMat so no new materials leak
+  const body = mesh(new THREE.CylinderGeometry(0.28,0.30,1.05,10), skinMat, 0,1.05,0);
+  g.add(body);
+  g.add(mesh(new THREE.SphereGeometry(0.28,10,8), skinMat, 0,1.62,0)); // head
+  g.add(mesh(new THREE.SphereGeometry(0.30,10,8), skinMat, 0,0.55,0)); // hips
+  // a stylized bow held out front so peers read as archers
+  const bowG = mesh(new THREE.TorusGeometry(0.34,0.03,6,12,Math.PI*1.2), woodMat, 0.16,1.15,0.30);
+  bowG.rotation.y = Math.PI/2; g.add(bowG);
+  g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+  scene.add(g);
+  const peer = { g, name:name||'Archer',
+                 buf:[], has:false, lastX:0, lastZ:0 };  // buf: timestamped snapshots for interpolation
+  coopPeers.set(id, peer);
+  if(coopHudEl) coopUpdateHudPlayers();
+  return peer;
+}
+function coopRemovePeer(id){
+  const p = coopPeers.get(id); if(!p) return;
+  scene.remove(p.g);
+  p.g.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); });
+  coopPeers.delete(id);
+  if(coopHudEl) coopUpdateHudPlayers();
+}
+
+/* ---- server monster reconciliation: build a real troll, tag it, share monsters[] ---- */
+function coopTrollTypeId(t){ return (typeof t==='string' && TROLL_TYPES[t]) ? t : 'grunt'; }
+function coopEnsureMonster(sm){
+  if(!running) return null;            // FIX: ne hozz létre szerver-szörnyet a Start előtt (szellem-bug)
+  const netId = sm.id;
+  let m = coopRemoteById.get(netId);
+  if(!m){
+    const id = coopTrollTypeId(sm.type);
+    const sc = (TROLL_TYPES[id] && TROLL_TYPES[id].scaleMul) || 1.0; // FIX: típus-helyes méret (a szerver nem küld scale-t)
+    const hp = (typeof sm.hp==='number') ? sm.hp : (typeof sm.maxHp==='number'?sm.maxHp:40);
+    m = makeMonster(id, sc, hp, (typeof sm.speed==='number'?sm.speed:2));
+    m.coopRemote = true;            // <- collision loop reports this; AI/local-death gated by it
+    m.netId = netId;
+    if(typeof sm.maxHp==='number') m.maxHp = sm.maxHp;
+    const p = sm.pos||{x:0,y:GROUND_Y,z:0};
+    m.g.position.set(p.x, p.y!=null?p.y:GROUND_Y, p.z);
+    m.coopBuf = [];                 // timestamped authority snapshots for interpolation
+    m.coopYaw = m.g.rotation.y;     // smoothed facing
+    monsters.push(m);               // share the SAME array the renderer/collision/radar already use
+    coopRemoteById.set(netId, m);
+  }
+  // push the authority snapshot into the interpolation buffer + update hp
+  const p = sm.pos; if(p){
+    const yaw = (m.coopBuf.length ? m.coopBuf[m.coopBuf.length-1].yaw : m.g.rotation.y);
+    coopPushSnap(m.coopBuf, p.x, (p.y!=null?p.y:GROUND_Y), p.z, yaw);
+  }
+  if(typeof sm.hp==='number') m.hp = sm.hp;
+  return m;
+}
+function coopReconcileMonsters(serverMons){
+  if(!running) return;                 // FIX: csak futó játékban kezeljük a szerver-szörnyeket
+  const seen = new Set();
+  if(Array.isArray(serverMons)) for(const sm of serverMons){ if(sm && sm.id!=null){ coopEnsureMonster(sm); seen.add(sm.id); } }
+  // monsters the server dropped without an explicit kill (e.g. wave reset) -> remove quietly
+  for(const [netId, m] of coopRemoteById){
+    if(!seen.has(netId) && m.alive && m.dying<=0){
+      const idx = monsters.indexOf(m);
+      if(idx>=0){ scene.remove(m.g); disposeMonster(m); monsters.splice(idx,1); }
+      coopRemoteById.delete(netId);
+    }
+  }
+}
+/* server confirmed a kill -> play the existing death anim (it auto-removes from monsters[]) */
+function coopKillRemote(netId, headshot){
+  const m = coopRemoteById.get(netId);
+  coopRemoteById.delete(netId);
+  if(m && m.alive){ const _s=score; killMonster(m, !!headshot); score=_s; scoreN.textContent=_s; } // FIX: a pontot a szerver adja, ne dupláz
+}
+
+/* ---- per-frame interpolation of peers + remote monsters (called from coopTick) ---- */
+function coopInterp(dt){
+  const renderTime = coopNow() - COOP_INTERP_DELAY_MS;   // render everyone slightly in the past
+  // ---- peers: sample buffered transform, keep local walk-cycle facing ----
+  for(const p of coopPeers.values()){
+    if(!p.has || p.buf.length===0) continue;
+    if(coopSampleBuf(p.buf, renderTime, _coopSample)){
+      p.g.position.set(_coopSample.x, _coopSample.y, _coopSample.z);
+      p.g.rotation.y = _coopSample.yaw;   // yaw already interpolated along shortest arc
+    }
+  }
+  // ---- remote monsters: sample buffered position; face the interpolated travel dir ----
+  for(const m of coopRemoteById.values()){
+    if(!(m.alive && m.dying<=0 && m.coopBuf)) continue;
+    const px = m.g.position.x, pz = m.g.position.z;
+    if(coopSampleBuf(m.coopBuf, renderTime, _coopSample)){
+      m.g.position.set(_coopSample.x, _coopSample.y, _coopSample.z);
+      // face the direction we actually moved this frame (server owns motion; cosmetic)
+      const dx = m.g.position.x - px, dz = m.g.position.z - pz;
+      if(dx*dx+dz*dz > 1e-6){
+        const target = Math.atan2(dx, dz);
+        let dyaw = target - m.coopYaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+        m.coopYaw += dyaw*Math.min(1, dt*10);   // smooth the heading so it doesn't snap
+        m.g.rotation.y = m.coopYaw;
+      }
+    }
+    // gentle walk cycle so remote trolls aren't frozen statues
+    m.walkPhase += dt*Math.max(2, m.speed*2);
+    const sw = Math.sin(m.walkPhase)*0.5;
+    if(m.legs){ m.legs.L.rotation.x = sw; m.legs.R.rotation.x = -sw; }
+  }
+}
+
+/* HUD from server authority (score + wave) */
+function coopApplyHud(s){
+  if(typeof s.score==='number'){ score = s.score; scoreN.textContent = score; }
+  if(typeof s.wave==='number' && s.wave!==coopWaveNum){ coopWaveNum = s.wave; wave = s.wave; if(waveN) waveN.textContent = 'HULLÁM '+s.wave; }
+}
+
+/* peer arrow tracer (reuse a tiny pool, brief lifetime) */
+function coopShowPeerArrow(a){
+  if(!a || !a.from || !a.dir) return;
+  let tr = coopPeerArrows.find(x=>!x.active);
+  if(!tr){ const g = mesh(new THREE.CylinderGeometry(0.012,0.012,0.7,5), tuskMat, 0,0,0); g.rotation.x=Math.PI/2; const wrap=new THREE.Group(); wrap.add(g); scene.add(wrap); tr={wrap, active:false, life:0}; coopPeerArrows.push(tr); }
+  tr.wrap.position.set(a.from.x, a.from.y, a.from.z);
+  tr.wrap.lookAt(a.from.x+a.dir.x, a.from.y+a.dir.y, a.from.z+a.dir.z);
+  tr.wrap.visible=true; tr.active=true; tr.life=0;
+  tr.vx=a.dir.x; tr.vy=a.dir.y; tr.vz=a.dir.z; tr.sp=(22+ (a.power||0)*30);
+  sparks.burst(a.from.x,a.from.y,a.from.z,4,0xffd27a,4,0.25);
+}
+function coopUpdatePeerArrows(dt){
+  for(const tr of coopPeerArrows){ if(!tr.active) continue;
+    tr.life+=dt; const s=tr.sp*dt;
+    tr.wrap.position.x+=tr.vx*s; tr.wrap.position.y+=tr.vy*s; tr.wrap.position.z+=tr.vz*s;
+    if(tr.life>0.9){ tr.active=false; tr.wrap.visible=false; }
+  }
+}
+
+/* called once per frame from the loop (see hookEdit) */
+function coopTick(dt){
+  if(!coop) return;
+  coopInterp(dt);
+  coopUpdatePeerArrows(dt);
+  // throttled inside net-client (~20Hz)
+  coop.sendInput({ pos:{x:player.pos.x,y:player.pos.y,z:player.pos.z}, yaw:player.yaw, pitch:player.pitch }); // FIX: hp/alive-t a szerver vezeti (közelharc) -> nincs tug-of-war
+}
+
+/* --- hook helpers called from the gated edits in fireArrow / collision --- */
+function coopOnShot(start, fwd, charge){ if(coop) coop.sendShot({ from:{x:start.x,y:start.y,z:start.z}, dir:{x:fwd.x,y:fwd.y,z:fwd.z}, power:charge }); }
+function coopOnLocalHit(hit, head, dmg){ if(coop && hit && hit.coopRemote && hit.netId!=null) coop.sendHit({ monsterId:hit.netId, headshot:head, dmg:dmg }); }
+/* true when the LOCAL spawner / local kill / local AI must be suppressed for this monster */
+function coopShouldSuppressLocalSpawner(){ return !!coop; }
+function coopIsRemote(m){ return !!(coop && m && m.coopRemote); }
+
+/* --- reset hook: a resetGame() hívja új játék / újrakezdés előtt (szellem-bug + revive) --- */
+function coopOnReset(){
+  if(!coop) return;
+  coopRemoteById.clear();              // a meshek már törölve a resetGame ciklusban; csak a könyvelés ürül
+  coopDowned = false;
+  // jelezzük a szervernek, hogy újra élünk teli HP-val (a sendInput egyébként nem küld hp-t)
+  coop.send({ t:'player_state', pos:{x:player.pos.x,y:player.pos.y,z:player.pos.z}, yaw:player.yaw, pitch:player.pitch, hp:player.maxHp, alive:true });
+}
+
+/* ---- in-game co-op HUD: room code, copy-invite, players list, status dot ---- */
+function coopBuildHud(){
+  if(coopHudEl) return;                          // built once
+  const css = document.createElement('style');
+  css.textContent =
+    '#coopHud{position:fixed;top:14px;left:14px;z-index:50;min-width:184px;padding:10px 12px;border-radius:12px;'+
+    'background:rgba(10,16,30,.74);border:1px solid rgba(180,200,240,.22);box-shadow:0 8px 26px rgba(0,0,0,.45);'+
+    'font:600 12px/1.4 -apple-system,"Segoe UI",sans-serif;color:#e9f1ff;backdrop-filter:blur(6px);pointer-events:auto;}'+
+    '#coopHud .ch{display:flex;align-items:center;gap:7px;margin-bottom:7px;}'+
+    '#coopHud .dot{width:9px;height:9px;border-radius:50%;background:#ffce5a;box-shadow:0 0 8px rgba(255,206,90,.8);flex:none;}'+
+    '#coopHud .dot.on{background:#4be08a;box-shadow:0 0 8px rgba(75,224,138,.9);}'+
+    '#coopHud .code{font:900 16px/1 inherit;letter-spacing:.18em;color:#7fe2ff;}'+
+    '#coopHud .lbl{color:#8fa6c9;text-transform:uppercase;letter-spacing:.12em;font-size:10px;}'+
+    '#coopHud button{margin:2px 0 8px;width:100%;padding:7px 8px;border:none;border-radius:8px;cursor:pointer;'+
+    'font:800 11px/1 inherit;color:#061018;background:linear-gradient(90deg,#5fe0ff,#36c5ff);}'+
+    '#coopHud button:active{transform:scale(.97);}'+
+    '#coopHud ul{list-style:none;margin:0;padding:0;}'+
+    '#coopHud li{display:flex;align-items:center;gap:6px;padding:2px 0;color:#c3d4f0;}'+
+    '#coopHud li .pd{width:6px;height:6px;border-radius:50%;background:#5fe0ff;flex:none;}'+
+    '#coopHud li.me .pd{background:#ffd27a;} #coopHud li.me{color:#ffe9c0;}';
+  document.head.appendChild(css);
+  const el = document.createElement('div'); el.id='coopHud';
+  el.innerHTML =
+    '<div class="ch"><span class="dot" id="coopDot"></span><span class="code" id="coopCode">----</span></div>'+
+    '<button id="coopCopy">COPY INVITE LINK</button>'+
+    '<div class="lbl">Players</div><ul id="coopPlayers"></ul>';
+  document.body.appendChild(el);
+  coopHudEl = el;
+  coopHudDotEl = el.querySelector('#coopDot');
+  coopHudRoomEl = el.querySelector('#coopCode');
+  coopHudCopyEl = el.querySelector('#coopCopy');
+  coopHudPlayersEl = el.querySelector('#coopPlayers');
+  coopHudCopyEl.addEventListener('click', coopCopyInvite);
+}
+function coopInviteUrl(){
+  const code = (coop && coop.room) || _coopRoom || '';
+  const u = new URL('./mohas-roham.html', location.href);
+  if(coopHost) u.hostname=coopHost; // localhost -> LAN IP (a port marad)
+  if(code) u.searchParams.set('room', code);
+  return u.toString();
+}
+function coopCopyInvite(){
+  const url = coopInviteUrl();
+  const done = ()=>{ if(coopHudCopyEl){ const t=coopHudCopyEl.textContent; coopHudCopyEl.textContent='COPIED ✓'; setTimeout(()=>{ if(coopHudCopyEl) coopHudCopyEl.textContent=t; },1200); } };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done).catch(()=>coopCopyFallback(url, done));
+  } else coopCopyFallback(url, done);
+}
+function coopCopyFallback(url, done){
+  try{ const ta=document.createElement('textarea'); ta.value=url; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); }
+  catch{ toast('Invite: '+url); }
+}
+function coopSetStatus(connected){
+  coopConnected = !!connected;
+  if(coopHudDotEl){ coopHudDotEl.classList.toggle('on', coopConnected); coopHudDotEl.title = coopConnected ? 'connected' : 'reconnecting…'; }
+}
+function coopUpdateHudRoom(){
+  if(coopHudRoomEl) coopHudRoomEl.textContent = ((coop && coop.room) || _coopRoom || '----');
+}
+function coopUpdateHudPlayers(){
+  if(!coopHudPlayersEl) return;
+  const frag = document.createDocumentFragment();
+  const me = document.createElement('li'); me.className='me';
+  me.innerHTML = '<span class="pd"></span>'; me.appendChild(document.createTextNode('You'));
+  frag.appendChild(me);
+  for(const p of coopPeers.values()){
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="pd"></span>'; li.appendChild(document.createTextNode(p.name||'Archer'));
+    frag.appendChild(li);
+  }
+  coopHudPlayersEl.replaceChildren(frag);
+}
+/* ---- reconnect resync: rebuild peer/monster bookkeeping from a fresh welcome ----
+   Clears any avatar/monster the new snapshot doesn't mention so reconnects can't
+   leave stale duplicates, then recreates from the welcome's player list. */
+function coopResync(info){
+  const livePeerIds = new Set();
+  if(Array.isArray(info.players)) for(const p of info.players){ if(p.id!==coopMyId) livePeerIds.add(p.id); }
+  // drop peers no longer present (and any avatar that would otherwise duplicate)
+  for(const id of [...coopPeers.keys()]){ if(!livePeerIds.has(id)) coopRemovePeer(id); }
+  // drop all remote monsters; the next state frame re-creates the current ones
+  for(const [netId, m] of coopRemoteById){
+    const idx = monsters.indexOf(m);
+    if(idx>=0){ scene.remove(m.g); disposeMonster(m); monsters.splice(idx,1); }
+  }
+  coopRemoteById.clear();
+  // (re)create avatars for everyone still here (coopMakePeer is idempotent)
+  if(Array.isArray(info.players)) for(const p of info.players){ if(p.id!==coopMyId) coopMakePeer(p.id, p.name); }
+  coopUpdateHudRoom();
+  coopUpdateHudPlayers();
+}
+
+/* --- connect (only if ?room present) --- */
+function coopConnect(){
+  if(!_coopRoom || coop) return;
+  const connectCoop = window.__coopConnect;
+  if(!connectCoop){ console.warn('[coop] connectCoop unavailable; staying single-player'); return; }
+  coop = connectCoop({
+    room: _coopRoom==='NEW' ? undefined : _coopRoom,
+    name: 'Archer',
+    onWelcome: (info)=>{ const reconnected = coopWelcomed; coopWelcomed=true; coopMyId=info.id; coopHost=info.host||coopHost; coopResync(info); if(typeof info.wave==='number') coopWaveNum=info.wave; coopSetStatus(true); toast((reconnected?'CO-OP újracsatlakozva: ':'CO-OP: ')+info.room); }, // v2: pid -> stabil id, ezért coopWelcomed-del detektálunk
+    onState: (s)=>{
+      coopApplyHud(s);
+      if(Array.isArray(s.players)) for(const pv of s.players){
+        if(pv.id===coopMyId){ // FIX: a saját HP-t a szerver vezeti (közelharc-sebzés) -> HUD + elesés
+          if(typeof pv.hp==='number'){ player.hp=pv.hp; if(hpfill) hpfill.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
+            if(pv.hp<=0 && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }
+          continue; }
+        const peer = coopMakePeer(pv.id, pv.name);
+        if(pv.pos){
+          const yaw = (typeof pv.yaw==='number') ? pv.yaw + Math.PI : (peer.buf.length?peer.buf[peer.buf.length-1].yaw:0); // server yaw -> face roughly correct
+          coopPushSnap(peer.buf, pv.pos.x, (pv.pos.y!=null?pv.pos.y:1.7)-1.0, pv.pos.z, yaw);
+          peer.has=true;
+        }
+      }
+      coopReconcileMonsters(s.monsters);
+      if(coopHudEl) coopUpdateHudPlayers();
+    },
+    onPeerJoined: (p)=>{ if(p && p.id!==coopMyId){ coopMakePeer(p.id, p.name); coopUpdateHudPlayers(); } },
+    onPeerLeft:   (id)=>{ coopRemovePeer(id); coopUpdateHudPlayers(); },
+    onArrow:      (a)=>{ coopShowPeerArrow(a); },
+    onHit:        (h)=>{ if(typeof h.score==='number'){ score=h.score; scoreN.textContent=score; } if(h.killed && h.monsterId!=null) coopKillRemote(h.monsterId, h.headshot); },
+    onSpawnWave:  (w)=>{ if(typeof w.wave==='number'){ coopWaveNum=w.wave; wave=w.wave; if(waveN) waveN.textContent='HULLÁM '+w.wave; AUD.wave(); toast('HULLÁM '+w.wave); } },
+    onPlayerDown: (id)=>{ if(id===coopMyId && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }, // FIX: szerver-vezérelt elesés
+    onOpen:       ()=>{ /* socket up; "connected" is confirmed on welcome (re-join in flight) */ },
+    onClose:      ()=>{ coopSetStatus(false); /* net-client auto-reconnects; welcome re-greens the dot */ },
+  });
+  // Build the in-game co-op HUD once (room code + copy-invite + players + status dot).
+  coopBuildHud(); coopUpdateHudRoom(); coopUpdateHudPlayers(); coopSetStatus(false);
+  // In co-op the server owns spawns/waves; clear any local spawn intent so nothing local fires.
+  toSpawn = 0; spawnAngles = [];
+}
+// connect now if the module already resolved, else once it signals ready (module scripts defer)
+if(window.__coopConnect !== undefined) coopConnect();
+window.addEventListener('coop-net-ready', coopConnect, { once:true });
+/* ===================== /CO-OP ===================== */
+
+/* ===================== Állapot-vezérlés ===================== */
+function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; powwrap.classList.remove('on'); powfill.style.width='0%'; nockArrow.visible=false; nock.position.set(0,0,0); }
+function resetGame(){
+  for(const m of monsters){ scene.remove(m.g); disposeMonster(m); } monsters.length=0;
+  for(const a of arrows){ a.active=false; a.g.visible=false; }
+  resetBombs();
+  cancelDraw();
+  player.pos.set(0,1.7,0); player.yaw=0; player.pitch=0; player.hp=player.maxHp; player.alive=true; player.vy=0; player.feet=0; player.onGround=true; player.jumpReady=true;
+  hpfill.style.width='100%'; score=0; scoreN.textContent='0'; aliveCount=0; toSpawn=0; intermission=0;
+  if(coop) coopOnReset(); // FIX: co-op könyvelés ürítése + revive új játéknál
+}
+function beginPlay(){
+  AUD.unlock(); resetGame(); running=true;
+  startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
+  ensureLock(); startWave(1);
+}
+function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); showLockHint(false); pauseScreen.classList.remove('hide');
+  if(document.pointerLockElement) document.exitPointerLock(); }
+function resumeGame(){ if(player.hp<=0) return; running=true; pauseScreen.classList.add('hide'); ensureLock(); }
+function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.over();
+  document.getElementById('overStat').innerHTML='Elért hullám: <b>'+wave+'</b> &nbsp;·&nbsp; Pont: <b>'+score+'</b>';
+  overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
+
+document.getElementById('startBtn').addEventListener('click',beginPlay);
+document.getElementById('resumeBtn').addEventListener('click',resumeGame);
+document.getElementById('restartBtn').addEventListener('click',beginPlay);
+
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+})();
+</script>
+</body>
+</html>

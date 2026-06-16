@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mohás Roham — Co-op Lobby</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --cyan:#5fe0ff; --cyan-deep:#36c5ff; --gold:#ffd27a; --gold-deep:#ff9d4d;
+    --ink:#e9f1ff; --muted:#9db4d6; --panel:rgba(14,22,40,.6); --line:rgba(180,200,240,.18);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;
+    background:radial-gradient(ellipse at 50% 32%,#1a2c52,#080e18);
+    font-family:-apple-system,'Segoe UI',sans-serif;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;}
+  /* subtle mossy speckle layered over the dark gradient */
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;
+    background:
+      radial-gradient(2px 2px at 18% 28%,rgba(127,226,255,.20),transparent 60%),
+      radial-gradient(2px 2px at 72% 18%,rgba(255,210,122,.16),transparent 60%),
+      radial-gradient(1.5px 1.5px at 42% 78%,rgba(127,226,255,.14),transparent 60%),
+      radial-gradient(1.5px 1.5px at 88% 62%,rgba(255,210,122,.12),transparent 60%);}
+  .card{position:relative;max-width:520px;width:90%;padding:34px;border-radius:22px;text-align:center;
+    background:var(--panel);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.5);
+    backdrop-filter:blur(6px);}
+  .eyebrow{font:700 12px/1 inherit;letter-spacing:.42em;color:#8fa6c9;text-transform:uppercase;}
+  h1{font:900 clamp(34px,7vw,56px)/1 inherit;margin:10px 0 6px;
+    background:linear-gradient(90deg,var(--cyan),#fff,var(--gold));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  p{color:#c3d4f0;font:600 15px/1.6 inherit;margin:0 0 4px;}
+  .row{display:flex;gap:10px;margin:14px 0;}
+  input{flex:1;min-width:0;padding:14px;border-radius:12px;border:1px solid rgba(180,200,240,.25);
+    background:rgba(8,14,28,.7);color:var(--ink);font:700 18px/1 inherit;
+    text-align:center;letter-spacing:.2em;text-transform:uppercase;}
+  input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(95,224,255,.18);}
+  button{font:800 17px/1 inherit;color:#061018;padding:14px 22px;border:none;border-radius:12px;cursor:pointer;
+    background:linear-gradient(90deg,var(--cyan),var(--cyan-deep));box-shadow:0 8px 24px rgba(54,197,255,.4);
+    transition:filter .12s ease,transform .06s ease;white-space:nowrap;}
+  button.alt{background:linear-gradient(90deg,var(--gold),var(--gold-deep));box-shadow:0 8px 24px rgba(255,157,77,.4);}
+  button.quick{width:100%;background:linear-gradient(90deg,#9bff8f,#36c5ff);box-shadow:0 8px 24px rgba(95,224,255,.35);}
+  button.ghost{background:rgba(8,14,28,.55);color:var(--ink);border:1px solid var(--line);box-shadow:none;}
+  button:hover{filter:brightness(1.08);} button:active{transform:scale(.97);}
+  button[disabled]{opacity:.55;cursor:progress;filter:none;}
+  .or{display:flex;align-items:center;gap:12px;color:var(--muted);font:700 11px/1 inherit;
+    letter-spacing:.3em;text-transform:uppercase;margin:18px 0 6px;}
+  .or::before,.or::after{content:'';flex:1;height:1px;background:var(--line);}
+  .note{margin-top:18px;font:600 12px/1.6 inherit;color:var(--muted);}
+  .sp{margin-top:18px;}
+  .sp a{color:var(--cyan);text-decoration:none;font:700 13px/1.6 inherit;}
+  .sp a:hover{text-decoration:underline;}
+  code{background:rgba(8,14,28,.7);padding:2px 6px;border-radius:6px;color:var(--gold);}
+  .err{color:#ff9b9b;font:700 12px/1.5 inherit;min-height:16px;margin-top:6px;}
+
+  /* ---- "room created" reveal panel (hidden until CREATE / QUICK) ---- */
+  .reveal{display:none;margin-top:6px;}
+  .reveal.show{display:block;animation:rise .25s ease;}
+  @keyframes rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .codebox{font:900 clamp(40px,12vw,64px)/1 inherit;letter-spacing:.18em;margin:6px 0 2px;
+    background:linear-gradient(90deg,var(--cyan),#fff,var(--gold));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .reveal .sub{color:var(--muted);font:700 12px/1.4 inherit;letter-spacing:.06em;text-transform:uppercase;}
+  .linkrow{display:flex;gap:8px;margin:16px 0 6px;}
+  .linkrow input{font:600 13px/1 inherit;letter-spacing:.02em;text-transform:none;text-align:left;cursor:text;}
+  .copied{color:#9bff8f;font:800 12px/1.4 inherit;min-height:16px;margin-top:4px;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">Mossy world · co-op survival</div>
+    <h1>MOHÁS ROHAM</h1>
+
+    <!-- ============ DEFAULT VIEW: pick how to play ============ -->
+    <div id="home">
+      <p>2–4 archers, one arena, the same waves of mossy trolls.</p>
+
+      <button id="quick" class="quick" style="margin-top:18px">⚡ QUICK PLAY — auto-match me</button>
+
+      <div class="or">or</div>
+
+      <div class="row">
+        <input id="code" maxlength="4" placeholder="ROOM CODE" autocomplete="off"
+               autocapitalize="characters" spellcheck="false" inputmode="latin">
+        <button id="join">JOIN ▶</button>
+      </div>
+      <button id="create" class="alt" style="width:100%">CREATE A ROOM ✦</button>
+      <div id="homeErr" class="err"></div>
+
+      <div class="note">
+        Co-op is <b>opt-in</b>. Every room launches the game with <code>?room=CODE</code>.
+        Without a room, the original game stays 100% single-player and offline.
+      </div>
+
+      <div class="sp">
+        <a href="./mohas-roham.html">▶ Play single-player (offline, no room)</a>
+      </div>
+    </div>
+
+    <!-- ============ REVEAL VIEW: room created, share + enter ============ -->
+    <div id="reveal" class="reveal">
+      <div class="sub" id="revealTitle">Your room is ready — share the code</div>
+      <div class="codebox" id="revealCode">····</div>
+
+      <div class="linkrow">
+        <input id="inviteLink" readonly value="">
+        <button id="copyBtn" class="ghost">COPY</button>
+      </div>
+      <div class="copied" id="copied"></div>
+
+      <button id="enterBtn" style="width:100%;margin-top:10px">ENTER THE ARENA ▶</button>
+      <button id="backBtn" class="ghost" style="width:100%;margin-top:10px">← Back</button>
+
+      <div class="note">
+        Send the link (or just the 4-character code) to your friends. They open it,
+        you'll land in the <b>same arena</b> fighting the <b>same waves</b>.
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+  // =========================================================================
+  //  Mohás Roham — co-op LOBBY (pure static front door).
+  //  This file is convenience UI ONLY. It builds a URL into the existing game
+  //  with ?room=CODE and navigates there. It NEVER modifies or wraps the game,
+  //  and single-player (no ?room) is completely untouched.
+  // =========================================================================
+
+  // Unambiguous alphabet — MUST match the server's ROOM_ALPHABET so a
+  // client-minted code is indistinguishable from a server-minted one.
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  // Mint a fresh 4-char room code client-side (uses crypto when available).
+  function makeCode() {
+    let out = '';
+    const n = ALPHABET.length;
+    if (window.crypto && crypto.getRandomValues) {
+      const buf = new Uint32Array(4);
+      crypto.getRandomValues(buf);
+      for (let i = 0; i < 4; i++) out += ALPHABET[buf[i] % n];
+    } else {
+      for (let i = 0; i < 4; i++) out += ALPHABET[(Math.random() * n) | 0];
+    }
+    return out;
+  }
+
+  // Normalise typed input to the alphabet (drops ambiguous/invalid chars).
+  function cleanCode(raw) {
+    return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+      .split('').filter(ch => ALPHABET.includes(ch)).join('').slice(0, 4);
+  }
+
+  // LOCAL navigation URL for THIS device (relative -> always works here).
+  function gameUrl(room) {
+    const url = new URL('./mohas-roham.html', location.href);
+    url.searchParams.set('room', room);
+    return url.toString();
+  }
+  // SHAREABLE invite link: use the server LAN IP (localhost is not reachable
+  // from other devices). Host is fetched from the server on load.
+  let SERVER_HOST = '';
+  function inviteUrl(room) {
+    const url = new URL('./mohas-roham.html', location.href);
+    if (SERVER_HOST) url.hostname = SERVER_HOST;   // localhost -> LAN IP, keep the current port
+    url.searchParams.set('room', room);
+    return url.toString();
+  }
+  fetch('./api/host').then(r => r.ok ? r.json() : null).then(d => {
+    if (d && d.host) { SERVER_HOST = d.host;
+      const rv = document.getElementById('reveal'), inp = document.getElementById('inviteLink'), rc = document.getElementById('revealCode');
+      if (rv && rv.classList.contains('show') && inp && rc && rc.textContent.trim()) inp.value = inviteUrl(rc.textContent.trim());
+    }
+  }).catch(() => {});
+
+  // Navigate into the game for this room.
+  function launch(room) { location.href = gameUrl(room); }
+
+  const $ = (id) => document.getElementById(id);
+  const home = $('home'), reveal = $('reveal');
+
+  // ---- DEFAULT VIEW ↔ REVEAL VIEW ----------------------------------------
+  let currentCode = null;
+  function showReveal(code, title) {
+    currentCode = code;
+    $('revealCode').textContent = code;
+    $('revealTitle').textContent = title || 'Your room is ready — share the code';
+    $('inviteLink').value = inviteUrl(code);
+    $('copied').textContent = '';
+    home.style.display = 'none';
+    reveal.classList.add('show');
+  }
+  function showHome() {
+    reveal.classList.remove('show');
+    home.style.display = '';
+    $('homeErr').textContent = '';
+    $('code').focus();
+  }
+
+  // ---- CREATE: mint a code locally, reveal it instantly (creator SEES it) --
+  $('create').addEventListener('click', () => {
+    showReveal(makeCode(), 'Room created — share the code or link');
+  });
+
+  // ---- JOIN: type a code, validate, launch -------------------------------
+  $('join').addEventListener('click', () => {
+    const c = cleanCode($('code').value);
+    if (c.length === 4) { launch(c); }
+    else { $('homeErr').textContent = 'Enter a valid 4-character room code.'; $('code').focus(); }
+  });
+  $('code').addEventListener('input', (e) => {
+    const cleaned = cleanCode(e.target.value);
+    if (e.target.value !== cleaned) e.target.value = cleaned;
+    if (cleaned.length) $('homeErr').textContent = '';
+  });
+  $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('join').click(); });
+
+  // ---- QUICK PLAY: ask the server to match us; fall back to a local code --
+  // Server (when present) exposes GET /api/quickroom -> { room: "ABCD" }.
+  // If it's missing / errors / times out, we mint a code client-side so the
+  // button ALWAYS works and the player still lands in a co-op room.
+  $('quick').addEventListener('click', async () => {
+    const btn = $('quick');
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = '⚡ Matching…';
+    $('homeErr').textContent = '';
+
+    let room = null;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch('./api/quickroom', {
+        headers: { 'Accept': 'application/json' }, signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        const c = cleanCode(data && data.room);
+        if (c.length === 4) room = c;
+      }
+    } catch (_) { /* network / abort / bad JSON → fall back below */ }
+
+    // Graceful fallback: client-minted code (still a real, joinable room).
+    if (!room) room = makeCode();
+
+    launch(room);
+    // (If navigation is somehow blocked, restore the button.)
+    btn.disabled = false; btn.textContent = original;
+  });
+
+  // ---- REVEAL controls ----------------------------------------------------
+  $('enterBtn').addEventListener('click', () => { if (currentCode) launch(currentCode); });
+  $('backBtn').addEventListener('click', showHome);
+
+  $('copyBtn').addEventListener('click', async () => {
+    const link = $('inviteLink').value;
+    let ok = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(link); ok = true;
+      }
+    } catch (_) { /* fall through to execCommand */ }
+    if (!ok) {
+      // Fallback for non-secure-context / older browsers.
+      const el = $('inviteLink');
+      el.removeAttribute('readonly'); el.select(); el.setSelectionRange(0, 99999);
+      try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+      el.setAttribute('readonly', '');
+    }
+    $('copied').textContent = ok ? '✓ Invite link copied to clipboard' : 'Press Ctrl/Cmd-C to copy the selected link';
+    if (!ok) { const el = $('inviteLink'); el.focus(); el.select(); }
+  });
+
+  // ---- Deep-link convenience: ?room=CODE or ?join=CODE on the lobby -------
+  // (e.g. someone shares the lobby URL with a code). Pre-fill the join box.
+  try {
+    const q = new URLSearchParams(location.search);
+    const pre = cleanCode(q.get('room') || q.get('join'));
+    if (pre.length === 4) { $('code').value = pre; }
+  } catch (_) {}
+
+  $('code').focus();
+</script>
+</body>
+</html>
