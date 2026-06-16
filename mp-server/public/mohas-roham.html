@@ -56,9 +56,9 @@
   #toast.show{opacity:1;transform:translateX(-50%) scale(1);}
 
   /* képernyők */
-  .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:default;
+  .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:flex-start;justify-content:center;cursor:default;overflow-y:auto;padding:24px 16px;
     background:radial-gradient(ellipse at 50% 38%, rgba(26,44,82,.92), rgba(8,14,24,.97));backdrop-filter:blur(3px);}
-  .card{max-width:600px;text-align:center;padding:34px;border-radius:22px;
+  .card{max-width:600px;margin:auto;text-align:center;padding:34px;border-radius:22px;
     background:rgba(14,22,40,.6);border:1px solid rgba(180,200,240,.18);box-shadow:0 20px 60px rgba(0,0,0,.5);}
   .card .eyebrow{font:700 12px/1 inherit;letter-spacing:.42em;color:#8fa6c9;text-transform:uppercase;}
   .card h1{font:900 clamp(40px,8vw,72px)/1 inherit;margin:10px 0 8px;letter-spacing:.02em;
@@ -66,6 +66,12 @@
   .card p{font:600 16px/1.6 inherit;color:#c3d4f0;margin:6px 0;}
   .card .keys{font:600 14px/1.9 inherit;color:#a9bcdc;margin:16px 0 22px;}
   .card .keys b{color:#ffe7b8;}
+  .card .brief{margin:4px auto 20px;max-width:580px;border-top:1px solid rgba(180,200,240,.14);padding-top:14px;}
+  .card .brief-h{font:700 11px/1.4 inherit;letter-spacing:.14em;color:#8fa6c9;text-transform:uppercase;margin:14px 0 8px;}
+  .card .brief-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 22px;font:600 13px/1.35 inherit;color:#bccbe6;text-align:left;}
+  .card .brief-react{font:600 13px/1.7 inherit;color:#bccbe6;}
+  .card .brief-hint{font:600 12px/1.5 inherit;color:#8fa6c9;margin-top:12px;}
+  .card .brief b{font-weight:800;}
   .card button{font:800 22px/1 inherit;letter-spacing:.05em;color:#061018;padding:16px 40px;border:none;border-radius:14px;
     cursor:pointer;background:linear-gradient(90deg,#5fe0ff,#36c5ff);box-shadow:0 8px 28px rgba(54,197,255,.5);transition:transform .1s, filter .15s;}
   .card button:hover{filter:brightness(1.1);} .card button:active{transform:scale(.95);}
@@ -100,6 +106,22 @@
       <b>Egér</b> = célzás &nbsp;·&nbsp; <b>Tartsd a bal egért</b> = íj feszítése, <b>engedd el</b> = lövés<br>
       <b>WASD</b> = mozgás &nbsp;·&nbsp; <b>Szóköz</b> = ugrás &nbsp;·&nbsp; <b>Shift</b> = futás &nbsp;·&nbsp; <b>Esc</b> = szünet<br>
       Minél tovább feszíted, annál erősebb és gyorsabb a nyíl. Fejlövés = dupla sebzés!
+    </div>
+    <div class="brief">
+      <div class="brief-h">Elemi nyilak — válts az 1–5 gombokkal</div>
+      <div class="brief-grid">
+        <div><b style="color:#cfe0ff">1 · ALAP</b> — sima, gyors nyíl</div>
+        <div><b style="color:#ff7a3d">2 · TŰZ</b> — folyamatos égés, átterjed</div>
+        <div><b style="color:#7fd0ff">3 · JÉG</b> — lassít, 3× = teljes fagy</div>
+        <div><b style="color:#9fdc4a">4 · MÉREG</b> — mérgez + maradó gázfelhő</div>
+        <div><b style="color:#b48cff">5 · VILLÁM</b> — bénít + szomszédra láncol</div>
+        <div><b style="color:#cfe0ff">⛓ Töltés</b> — minél tovább húzod, annál erősebb</div>
+      </div>
+      <div class="brief-h">Reakciók — rakj egy elemet a trollra, robbantsd egy másikkal</div>
+      <div class="brief-react">
+        🧊+⚡ <b style="color:#9fd0ff">Fagytúltöltés</b> &nbsp;·&nbsp; 🔥+🧊 <b style="color:#e8f0ff">Gőzrobbanás</b> &nbsp;·&nbsp; 🔥+☠️ <b style="color:#ff9a3d">Mérges gyújtás</b> &nbsp;·&nbsp; ☠️+⚡ <b style="color:#c8e26a">Galván permet</b>
+      </div>
+      <div class="brief-hint">Minden troll más elemre gyenge — a <b>szürke sercegés</b> = ellenáll, az <b>erős felvillanás</b> = gyenge pont.</div>
     </div>
     <button id="startBtn">JÁTÉK ▶</button>
   </div>
