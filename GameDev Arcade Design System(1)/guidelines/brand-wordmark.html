@@ -1,0 +1,23 @@
+<!-- @dsCard group="Brand" viewport="700x230" name="Wordmark" subtitle="Title gradient + arrow motif" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); background: var(--bg-arena); display: flex; flex-direction: column; align-items: center; justify-content: center; height: 230px; gap: 10px; }
+  .eye { font-size: 12px; letter-spacing: .42em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; }
+  .title { font-family: var(--font-display); font-weight: 700; font-size: 60px; letter-spacing: .02em; line-height: 1; background: var(--grad-title); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .tag { font-size: 13px; color: var(--ink-sub); }
+  .arrow { display: flex; align-items: center; gap: 0; margin-top: 2px; }
+  .arrow .shaft { width: 120px; height: 3px; background: linear-gradient(90deg, transparent, #8a6a40 40%, #bfc6d2); border-radius: 2px; }
+  .arrow .head { width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 12px solid #e9f1ff; filter: drop-shadow(0 0 6px #7fe2ff); }
+</style>
+</head>
+<body>
+  <span class="eye">Mohás világ · íjász túlélő</span>
+  <span class="title">MOHÁS&nbsp;ROHAM</span>
+  <div class="arrow"><div class="shaft"></div><div class="head"></div></div>
+  <span class="tag">title gradient: cyan → white → amber</span>
+</body>
+</html>

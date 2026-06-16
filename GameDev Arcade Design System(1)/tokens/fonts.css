@@ -1,0 +1,12 @@
+/* ============================================================================
+   fonts.css — Webfont declarations.
+   The original games use system fonts only (-apple-system, Segoe UI, Georgia,
+   ui-monospace). For a portable, on-brand system we substitute Google Fonts
+   chosen to match that intent — SEE README "Visual Foundations → Type" for the
+   substitution flag:
+     · Chakra Petch  → angular arcade HUD display (was system-ui bold)
+     · Space Grotesk → clean geometric UI/body          (was system-ui)
+     · Gelasio       → Georgia-metric serif for cozy titles (was Georgia)
+     · JetBrains Mono→ debug / numeric HUD               (was ui-monospace)
+   ============================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Gelasio:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');

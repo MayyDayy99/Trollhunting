@@ -1,0 +1,67 @@
+<!-- @dsCard group="Characters" viewport="700x300" name="Troll — Brute (Zúzó)" subtitle="New: slow armored tank" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 16px;
+    background: radial-gradient(ellipse at 35% 40%, #16223c, #0a1018 75%); display: flex; gap: 18px; }
+  .stage { width: 220px; height: 200px; flex-shrink: 0; border-radius: 12px; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 64%, rgba(26,40,70,.5), rgba(8,14,28,.5)); border: 1px solid var(--line); }
+  canvas { width: 100%; height: 100%; display: block; }
+  .info { flex: 1; }
+  h3 { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 2px 0 4px; }
+  .role { font-size: 12px; color: var(--gold); font-weight: 600; margin-bottom: 10px; }
+  .sw { display: flex; gap: 6px; margin-bottom: 12px; }
+  .sw div { width: 30px; height: 22px; border-radius: 5px; }
+  .spec { font-size: 11.5px; line-height: 1.65; color: var(--ink-sub); }
+  .spec b { color: var(--cream); } .spec code { font-family: var(--font-mono); font-size: 10px; color: var(--cyan); }
+</style>
+</head>
+<body>
+  <div class="stage"><canvas id="cv"></canvas></div>
+  <div class="info">
+    <h3 style="color:#9fb59f">ZÚZÓ <span style="font-size:13px;color:var(--ink-muted)">· Brute</span></h3>
+    <div class="role">Lassú, páncélos tank — magas HP, csak megrebben kis találatra</div>
+    <div class="sw">
+      <div style="background:#5b8a68" title="skin"></div>
+      <div style="background:#41704e" title="deep moss"></div>
+      <div style="background:#9fb59f" title="lichen armor"></div>
+      <div style="background:#f2e9d8" title="bone"></div>
+      <div style="background:#ff5a2a" title="eye"></div>
+    </div>
+    <div class="spec">
+      <b>Build:</b> doubled body <code>SphereGeometry</code> (1.4× normal), boulder-fist spheres, bark-plated shoulder caps in lichen <code>#9fb59f</code>, deep <code>#41704e</code> moss patches, stub legs. Small head, heavy brow, two big tusks. Eyes emissive <code>#ff5a2a</code>.<br>
+      <b>Motion:</b> slow plod; on small hits only a brief <code>flinch</code> (no stagger). <b>Reads best on:</b> fire (charring across the plates) &amp; lightning (arcs jump plate-to-plate). Frozen = dramatic full-body encase. Drop ~2× score.
+    </div>
+  </div>
+  <script>
+    const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+    const dpr = Math.min(devicePixelRatio, 2), r = cv.getBoundingClientRect();
+    cv.width = r.width * dpr; cv.height = r.height * dpr; ctx.scale(dpr, dpr);
+    const cx = r.width / 2, cy = r.height * 0.54, s = 1.5;
+    // body (huge)
+    ctx.fillStyle = '#5b8a68'; ctx.beginPath(); ctx.ellipse(cx, cy + 10 * s, 40 * s, 40 * s, 0, 0, 6.28); ctx.fill();
+    // shoulders (bark plates, lichen)
+    ctx.fillStyle = '#9fb59f';
+    ctx.beginPath(); ctx.ellipse(cx - 40 * s, cy - 14 * s, 16 * s, 14 * s, 0.3, 0, 6.28); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 40 * s, cy - 14 * s, 16 * s, 14 * s, -0.3, 0, 6.28); ctx.fill();
+    // boulder fists
+    ctx.fillStyle = '#41704e';
+    ctx.beginPath(); ctx.ellipse(cx - 48 * s, cy + 28 * s, 13 * s, 13 * s, 0, 0, 6.28); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 48 * s, cy + 28 * s, 13 * s, 13 * s, 0, 0, 6.28); ctx.fill();
+    // head
+    ctx.fillStyle = '#5b8a68'; ctx.beginPath(); ctx.ellipse(cx, cy - 28 * s, 18 * s, 15 * s, 0, 0, 6.28); ctx.fill();
+    // moss patch
+    ctx.fillStyle = '#41704e'; ctx.beginPath(); ctx.ellipse(cx + 8 * s, cy + 16 * s, 12 * s, 9 * s, 0.4, 0, 6.28); ctx.fill();
+    // tusks
+    ctx.fillStyle = '#f2e9d8';
+    ctx.beginPath(); ctx.moveTo(cx - 8 * s, cy - 22 * s); ctx.lineTo(cx - 4 * s, cy - 12 * s); ctx.lineTo(cx - 12 * s, cy - 16 * s); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 8 * s, cy - 22 * s); ctx.lineTo(cx + 4 * s, cy - 12 * s); ctx.lineTo(cx + 12 * s, cy - 16 * s); ctx.fill();
+    // eyes
+    ctx.globalCompositeOperation = 'lighter';
+    [-7, 7].forEach((ex) => { const g = ctx.createRadialGradient(cx + ex * s, cy - 30 * s, 0, cx + ex * s, cy - 30 * s, 7 * s); g.addColorStop(0, '#ffd0a0'); g.addColorStop(.4, '#ff5a2a'); g.addColorStop(1, 'rgba(255,90,42,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + ex * s, cy - 30 * s, 7 * s, 0, 6.28); ctx.fill(); });
+  </script>
+</body>
+</html>

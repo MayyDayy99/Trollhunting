@@ -1,0 +1,26 @@
+<!-- @dsCard group="Spacing" viewport="700x170" name="Corner Radii" subtitle="8 → 22px, pill & round" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--bg-deep); color: var(--ink); padding: 20px; }
+  .row { display: flex; gap: 16px; align-items: center; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .box { width: 72px; height: 72px; background: var(--surface-raised); border: 1px solid var(--line-strong); }
+  .v { font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); }
+  .n { font-size: 11px; color: var(--ink-faint); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="border-radius:8px"></div><span class="n">radius-sm</span><span class="v">8px</span></div>
+    <div class="item"><div class="box" style="border-radius:12px"></div><span class="n">radius-md</span><span class="v">12px</span></div>
+    <div class="item"><div class="box" style="border-radius:14px"></div><span class="n">radius-lg</span><span class="v">14px</span></div>
+    <div class="item"><div class="box" style="border-radius:22px"></div><span class="n">radius-xl</span><span class="v">22px</span></div>
+    <div class="item"><div class="box" style="border-radius:999px;width:120px"></div><span class="n">radius-pill</span><span class="v">999px</span></div>
+    <div class="item"><div class="box" style="border-radius:50%"></div><span class="n">radius-round</span><span class="v">50%</span></div>
+  </div>
+</body>
+</html>

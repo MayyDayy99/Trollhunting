@@ -1,0 +1,51 @@
+/* ============================================================================
+   typography.css — type system
+   Display = Chakra Petch (arcade HUD), Body = Space Grotesk, Serif = Gelasio
+   (cozy game titles), Mono = JetBrains Mono (debug/numeric).
+   Arcade UI scales for very large displays (55–86" IdeaHub), so the display
+   sizes are fluid clamp() scales lifted from the real game HUD.
+   ============================================================================ */
+:root {
+  /* --- Families --- */
+  --font-display: 'Chakra Petch', system-ui, 'Segoe UI', sans-serif;
+  --font-body: 'Space Grotesk', system-ui, 'Segoe UI', sans-serif;
+  --font-serif: 'Gelasio', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  /* --- Weights --- */
+  --w-regular: 400; /* @kind font */
+  --w-medium: 500; /* @kind font */
+  --w-semibold: 600; /* @kind font */
+  --w-bold: 700; /* @kind font */
+
+  /* --- Fixed type scale (UI chrome) --- */
+  --text-eyebrow: 12px;     /* uppercase, letterspaced label */
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-md: 18px;
+  --text-lg: 22px;
+  --text-xl: 28px;
+  --text-2xl: 34px;
+
+  /* --- Fluid arcade-HUD scale (scales to giant displays) --- */
+  --hud-name: clamp(16px, 2.6vw, 34px); /* @kind font */
+  --hud-hp: clamp(14px, 2vw, 26px); /* @kind font */
+  --hud-timer: clamp(28px, 5vw, 64px); /* @kind font */
+  --hud-title: clamp(40px, 9vw, 130px); /* @kind font */
+  --hud-count: clamp(80px, 20vw, 280px); /* @kind font */
+  --hud-ko: clamp(60px, 14vw, 200px); /* @kind font */
+  --hud-win: clamp(36px, 7vw, 100px); /* @kind font */
+
+  /* --- Letter-spacing --- */
+  --track-eyebrow: 0.42em;   /* widest — eyebrows @kind font */
+  --track-label: 0.14em;     /* small caps labels @kind font */
+  --track-display: 0.04em;   /* big display headings @kind font */
+  --track-tight: 0.02em;     /* @kind font */
+
+  /* --- Line-height --- */
+  --leading-none: 1;       /* @kind font */
+  --leading-tight: 1.1;    /* @kind font */
+  --leading-snug: 1.4;     /* @kind font */
+  --leading-relaxed: 1.6;  /* @kind font */
+}

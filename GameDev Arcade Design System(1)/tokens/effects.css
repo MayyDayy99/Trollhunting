@@ -1,0 +1,48 @@
+/* ============================================================================
+   effects.css — shadows, glows, blur, motion
+   The arcade look leans on drop shadows + neon inset glows + light backdrop
+   blur on glass. Motion is snappy: quick scale on press, ease fades, pop-ins.
+   ============================================================================ */
+:root {
+  /* --- Drop shadows --- */
+  --shadow-glass: 0 4px 16px rgba(0, 0, 0, 0.35);   /* glass panels/pills */
+  --shadow-raised: 0 6px 22px rgba(0, 0, 0, 0.45);  /* floating controls */
+  --shadow-card: 0 20px 60px rgba(0, 0, 0, 0.50);   /* start card / modal */
+  --shadow-round: 0 5px 20px rgba(0, 0, 0, 0.40);   /* round game buttons */
+
+  /* --- Neon glows --- */
+  --glow-p1: 0 8px 28px rgba(54, 197, 255, 0.50);   /* cyan CTA glow */
+  --glow-p2: 0 8px 28px rgba(255, 122, 61, 0.45);   /* orange glow */
+  --glow-p1-inset: 0 0 22px #36c5ff inset;          /* health fill inner glow */
+  --glow-p2-inset: 0 0 22px #ff7a3d inset;
+  --text-shadow-hud: 0 2px 10px rgba(0, 0, 0, 0.70);/* HUD text legibility @kind shadow */
+  --text-shadow-big: 0 4px 24px rgba(0, 0, 0, 0.80); /* @kind shadow */
+
+  /* --- Blur (glass) --- */
+  --blur-glass: blur(8px);  /* @kind other */
+  --blur-scrim: blur(4px);  /* @kind other */
+
+  /* --- Motion --- */
+  --ease-snap: cubic-bezier(0.2, 0, 0.2, 1); /* @kind other */
+  --dur-press: 0.1s; /* @kind other */
+  --dur-fast: 0.15s; /* @kind other */
+  --dur-base: 0.2s; /* @kind other */
+  --dur-slow: 0.4s; /* @kind other */
+
+  /* press feedback: shrink + brighten (the brand's signature tactile cue) */
+  --press-scale: 0.92; /* @kind other */
+  --press-bright: 1.15; /* @kind other */
+}
+
+/* Reusable keyframes used across the HUD */
+@keyframes gd-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes gd-pulse {
+  50% { transform: scale(1.08); }
+}
+@keyframes gd-blink {
+  0% { filter: brightness(1.8); }
+  100% { filter: brightness(0.7); }
+}

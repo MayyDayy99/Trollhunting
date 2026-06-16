@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Mohás Roham — HUD" description="First-person bow-survival HUD: waves, charge, elemental arrows, co-op archers, troll status." -->
+<helmet>
+  <script src="./ds-base.js"></script>
+</helmet>
+<div style="position:relative;width:100%;height:100%;overflow:hidden;font-family:var(--font-body);color:var(--ink);background:radial-gradient(ellipse at 50% 42%, #16223c, #0a1018 72%);cursor:none" onPointerDown="{{ startDraw }}" onPointerUp="{{ endDraw }}" onPointerLeave="{{ cancelDraw }}">
+
+  <!-- forest-night backdrop -->
+  <div style="position:absolute;left:14%;top:12%;width:70px;height:70px;border-radius:50%;background:radial-gradient(circle at 40% 40%, #eaf2ff, #aebfe0);box-shadow:0 0 50px 18px rgba(157,184,232,.3)"></div>
+  <div style="position:absolute;left:0;right:0;bottom:24%;height:2px;background:rgba(40,70,60,.5);box-shadow:0 0 30px rgba(40,70,60,.5)"></div>
+
+  <!-- approaching trolls — live game sprites built in renderVals (status tint + HP are runtime state) -->
+  {{ trollsNode }}
+
+  <!-- vignette -->
+  <div style="position:absolute;inset:0;pointer-events:none;background:var(--bg-vignette)"></div>
+
+  <!-- HUD overlay (pointer-events off so the scene receives the bow draw) -->
+  <div style="position:absolute;inset:0;pointer-events:none">
+    <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%)">
+      <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.WaveBanner" wave="{{ wave }}" trolls-left="{{ trollsLeft }}" hint-size="170px,52px"></x-import>
+    </div>
+    <div style="position:absolute;top:16px;right:18px">
+      <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.ScorePill" value="{{ score }}" hint-size="80px,46px"></x-import>
+    </div>
+    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)">
+      <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.Crosshair" spread="{{ charge }}" element="{{ element }}" hint-size="66px,66px"></x-import>
+    </div>
+    <div style="position:absolute;left:50%;bottom:66px;transform:translateX(-50%)">
+      <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.ChargeMeter" value="{{ charge }}" show="{{ drawing }}" hint-size="170px,8px"></x-import>
+    </div>
+    <div style="position:absolute;left:18px;bottom:18px">
+      <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.HealthBar" value="{{ hp }}" label="Életerő" width="{{ hbWidth }}" hint-size="240px,48px"></x-import>
+    </div>
+    <div style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);pointer-events:auto">
+      <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.ElementSelector" current="{{ element }}" on-select="{{ setElement }}" hint-size="320px,56px"></x-import>
+    </div>
+    <div style="position:absolute;top:14px;left:16px;display:flex;flex-direction:column;gap:6px;width:180px">
+      <sc-for list="{{ players }}" as="p" hint-placeholder-count="4">
+        <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.PlayerCard" name="{{ p.name }}" color="{{ p.color }}" hp="{{ p.hp }}" you="{{ p.you }}" down="{{ p.down }}" hint-size="180px,44px"></x-import>
+      </sc-for>
+    </div>
+    <div style="position:absolute;left:50%;top:28%;transform:translateX(-50%)">
+      <x-import component-from-global-scope="GameDevArcadeDesignSystem_67abce.Toast" show="{{ toastShow }}" hint-size="300px,70px">{{ toastText }}</x-import>
+    </div>
+    <div style="position:absolute;right:18px;bottom:18px;font-size:11px;color:var(--ink-muted);text-align:right;text-shadow:var(--text-shadow-hud)">tartsd nyomva = feszítés · engedd el = lövés<br/>1–5 = elem</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:680},&quot;accentElement&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;base&quot;,&quot;fire&quot;,&quot;ice&quot;,&quot;poison&quot;,&quot;lightning&quot;],&quot;default&quot;:&quot;base&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;wave&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:3,&quot;min&quot;:1,&quot;max&quot;:20,&quot;tsType&quot;:&quot;number&quot;},&quot;playerHp&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:72,&quot;min&quot;:0,&quot;max&quot;:100,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  state = {
+    element: 'fire', charge: 0, drawing: false,
+    score: 1240, wave: 3, hp: 72, toast: null,
+    trolls: [
+      { id: 1, x: 32, y: 52, size: 96, hp: 100, status: null },
+      { id: 2, x: 52, y: 46, size: 124, hp: 100, status: null },
+      { id: 3, x: 72, y: 54, size: 88, hp: 100, status: null },
+    ],
+  };
+
+  componentDidMount() {
+    // seed from editable props (Tweaks) if provided
+    const patch = {};
+    if (this.props.accentElement) patch.element = this.props.accentElement;
+    if (this.props.wave != null) patch.wave = this.props.wave;
+    if (this.props.playerHp != null) patch.hp = this.props.playerHp;
+    if (Object.keys(patch).length) this.setState(patch);
+    // bow draw: charge ramps while the pointer is held
+    this._iv = setInterval(() => {
+      if (this.state.drawing) this.setState((s) => ({ charge: Math.min(1, s.charge + 0.05) }));
+    }, 50);
+    // 1–5 switch element
+    this._onKey = (e) => {
+      const m = { '1': 'base', '2': 'fire', '3': 'ice', '4': 'poison', '5': 'lightning' };
+      if (m[e.key]) this.setState({ element: m[e.key] });
+    };
+    window.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() { clearInterval(this._iv); clearTimeout(this._tt); window.removeEventListener('keydown', this._onKey); }
+
+  renderVals() {
+    const STATUS = { fire: { c: '#ff7a3d', l: 'ÉGŐ' }, ice: { c: '#7fd0ff', l: 'FAGYOTT' }, poison: { c: '#9fdc4a', l: 'MÉRGEZETT' }, lightning: { c: '#c8b4ff', l: 'SOKKOLT' } };
+    const BODY = { base: '#5b8a68', fire: '#a85a3a', ice: '#7fb6d8', poison: '#6f8a3a', lightning: '#8a7ac8' };
+
+    const setElement = (id) => this.setState({ element: id });
+    const startDraw = () => this.setState({ drawing: true, charge: 0 });
+    const cancelDraw = () => this.setState({ drawing: false, charge: 0 });
+    const endDraw = () => {
+      if (!this.state.drawing) return;
+      const el = this.state.element, charge = this.state.charge;
+      this.setState((s) => {
+        const target = s.trolls.reduce((a, b) => (b.size > a.size ? b : a), s.trolls[0]);
+        const trolls = s.trolls.map((t) => t.id === target.id
+          ? { ...t, status: el, hp: Math.max(0, t.hp - (40 + Math.round(charge * 40))) }
+          : t);
+        return { trolls, drawing: false, charge: 0, score: s.score + (el === 'base' ? 100 : 150), toast: charge > 0.85 ? 'FEJLÖVÉS!' : null };
+      });
+      clearTimeout(this._tt); this._tt = setTimeout(() => this.setState({ toast: null }), 1100);
+    };
+
+    // Trolls are live game sprites (body tint + HP width change at runtime), so
+    // they're built here rather than in the template — keeps the HUD markup free
+    // of style holes. The HUD chrome itself stays as editable template markup.
+    const R = React.createElement;
+    const eye = (side) => R('div', { key: side, style: { position: 'absolute', [side]: '27%', top: '30%', width: '15%', height: '15%', borderRadius: '50%', background: 'radial-gradient(circle,#ffd0a0,#ff5a2a 60%,transparent)' } });
+    const trollsNode = this.state.trolls.map((t) => {
+      const st = t.status && STATUS[t.status];
+      return R('div', { key: t.id, style: { position: 'absolute', left: t.x + '%', top: t.y + '%', transform: 'translate(-50%,-50%)', width: t.size + 'px', textAlign: 'center' } },
+        st ? R('div', { key: 'st', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginBottom: '3px' } },
+          R('span', { key: 'd', style: { display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: st.c, boxShadow: '0 0 8px ' + st.c } }),
+          R('span', { key: 'l', style: { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '10px', color: st.c } }, st.l)
+        ) : null,
+        R('div', { key: 'hp', style: { width: '62%', height: '5px', margin: '0 auto 5px', borderRadius: '3px', background: 'var(--surface-track)', overflow: 'hidden', border: '1px solid var(--line)' } },
+          R('div', { style: { width: t.hp + '%', height: '100%', background: 'var(--fill-hp)' } })
+        ),
+        R('div', { key: 'body', style: { position: 'relative', width: t.size + 'px', height: Math.round(t.size * 0.92) + 'px', margin: '0 auto', borderRadius: '46% 46% 42% 42%', background: BODY[t.status || 'base'], boxShadow: '0 8px 22px rgba(0,0,0,.55)' } }, eye('left'), eye('right'))
+      );
+    });
+
+    const players = [
+      { name: 'Áron', color: '#36c5ff', hp: 88, you: true, down: false },
+      { name: 'Bea', color: '#ffd27a', hp: 64, you: false, down: false },
+      { name: 'Csaba', color: '#9f6aff', hp: 0, you: false, down: true },
+      { name: 'Dóra', color: '#5fd08a', hp: 100, you: false, down: false },
+    ];
+
+    return {
+      element: this.state.element, charge: this.state.charge, drawing: this.state.drawing,
+      wave: this.state.wave, score: this.state.score, hp: this.state.hp,
+      trollsLeft: this.state.trolls.filter((t) => t.hp > 0).length,
+      toastShow: !!this.state.toast, toastText: this.state.toast || '',
+      setElement, startDraw, endDraw, cancelDraw, trollsNode, players, hbWidth: 240,
+    };
+  }
+}
+</script>
+</body>
+</html>

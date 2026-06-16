@@ -1,0 +1,65 @@
+<!-- @dsCard group="Characters" viewport="700x300" name="Troll — Wisp (Lidérc)" subtitle="New: small, fast, rune-lit sprite" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 16px;
+    background: radial-gradient(ellipse at 35% 40%, #16223c, #0a1018 75%); display: flex; gap: 18px; }
+  .stage { width: 220px; height: 200px; flex-shrink: 0; border-radius: 12px; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 60%, rgba(20,40,52,.55), rgba(8,14,28,.5)); border: 1px solid var(--line); }
+  canvas { width: 100%; height: 100%; display: block; }
+  .info { flex: 1; }
+  h3 { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 2px 0 4px; }
+  .role { font-size: 12px; color: var(--cyan); font-weight: 600; margin-bottom: 10px; }
+  .sw { display: flex; gap: 6px; margin-bottom: 12px; }
+  .sw div { width: 30px; height: 22px; border-radius: 5px; }
+  .spec { font-size: 11.5px; line-height: 1.65; color: var(--ink-sub); }
+  .spec b { color: var(--cream); } .spec code { font-family: var(--font-mono); font-size: 10px; color: var(--cyan); }
+</style>
+</head>
+<body>
+  <div class="stage"><canvas id="cv"></canvas></div>
+  <div class="info">
+    <h3 style="color:#7fe2ff">LIDÉRC <span style="font-size:13px;color:var(--ink-muted)">· Wisp</span></h3>
+    <div class="role">Apró, gyors, félig áttetsző — cikázva közelít</div>
+    <div class="sw">
+      <div style="background:#16414f" title="rune-deep body"></div>
+      <div style="background:#36c5ff" title="rune emissive"></div>
+      <div style="background:#7fe2ff" title="core glow"></div>
+      <div style="background:#9fb59f" title="lichen wisps"></div>
+    </div>
+    <div class="spec">
+      <b>Build:</b> small body sphere at low opacity (<code>transparent, opacity .55</code>), <code>rune-deep #16414f</code> material, lit from within by an emissive <code>#36c5ff</code> core + a bright glow sprite (same trick as the glow-mushrooms). Wispy trailing tail (a few shrinking spheres). Eyes/core cyan, not orange.<br>
+      <b>Motion:</b> fast zig-zag darts; bobs vertically. <b>Reads best on:</b> ice (freezes the wisp solid — opacity → 1) &amp; poison (the inner glow sickens cyan→green). Low HP, low score, comes in packs.
+    </div>
+  </div>
+  <script>
+    const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+    const dpr = Math.min(devicePixelRatio, 2), r = cv.getBoundingClientRect();
+    cv.width = r.width * dpr; cv.height = r.height * dpr; ctx.scale(dpr, dpr);
+    const cx = r.width / 2, cy = r.height * 0.5, s = 1.2;
+    // outer glow
+    ctx.globalCompositeOperation = 'lighter';
+    let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60 * s); g.addColorStop(0, 'rgba(54,197,255,.5)'); g.addColorStop(1, 'rgba(54,197,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 60 * s, 0, 6.28); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    // translucent body
+    ctx.fillStyle = 'rgba(22,65,79,.62)';
+    ctx.beginPath(); ctx.ellipse(cx, cy - 4 * s, 22 * s, 26 * s, 0, 0, 6.28); ctx.fill();
+    // wispy tail (shrinking spheres)
+    [[0, 26], [3, 36], [-2, 44]].forEach(([dx, dy], i) => { ctx.fillStyle = `rgba(22,65,79,${.5 - i * .14})`; ctx.beginPath(); ctx.ellipse(cx + dx * s, cy + dy * s, (14 - i * 4) * s, (12 - i * 3) * s, 0, 0, 6.28); ctx.fill(); });
+    // lichen wisp flecks
+    ctx.fillStyle = '#9fb59f'; ctx.globalAlpha = .5;
+    ctx.beginPath(); ctx.ellipse(cx - 10 * s, cy + 2 * s, 5 * s, 4 * s, 0, 0, 6.28); ctx.fill(); ctx.globalAlpha = 1;
+    // inner core glow
+    ctx.globalCompositeOperation = 'lighter';
+    g = ctx.createRadialGradient(cx, cy - 6 * s, 0, cx, cy - 6 * s, 16 * s); g.addColorStop(0, '#dffaff'); g.addColorStop(.4, '#36c5ff'); g.addColorStop(1, 'rgba(54,197,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy - 6 * s, 16 * s, 0, 6.28); ctx.fill();
+    // eyes (cyan)
+    [-6, 6].forEach((ex) => { const e = ctx.createRadialGradient(cx + ex * s, cy - 10 * s, 0, cx + ex * s, cy - 10 * s, 5 * s); e.addColorStop(0, '#eafaff'); e.addColorStop(.5, '#7fe2ff'); e.addColorStop(1, 'rgba(127,226,255,0)'); ctx.fillStyle = e; ctx.beginPath(); ctx.arc(cx + ex * s, cy - 10 * s, 5 * s, 0, 6.28); ctx.fill(); });
+    ctx.globalCompositeOperation = 'source-over';
+  </script>
+</body>
+</html>

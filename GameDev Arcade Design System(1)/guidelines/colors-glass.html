@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x190" name="Glass Surfaces & Borders" subtitle="Translucent panels that float over the 3D canvas" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 18px; background: var(--bg-arena); }
+  .row { display: flex; gap: 12px; }
+  .sw { flex: 1; height: 72px; border-radius: var(--radius-lg); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; backdrop-filter: var(--blur-glass); -webkit-backdrop-filter: var(--blur-glass); }
+  .nm { font-size: 12px; font-weight: 600; }
+  .hx { font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); }
+  .lab { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 0 0 8px; }
+</style>
+</head>
+<body>
+  <p class="lab">Surfaces (over 3D canvas) + hairline borders</p>
+  <div class="row">
+    <div class="sw" style="background:var(--surface-panel);border:1px solid var(--line)"><span class="nm">panel</span><span class="hx">rgba(14,22,40,.6)</span></div>
+    <div class="sw" style="background:var(--surface-raised);border:1px solid var(--line)"><span class="nm">raised</span><span class="hx">rgba(18,28,50,.6)</span></div>
+    <div class="sw" style="background:var(--surface-active);border:1px solid var(--line-bright)"><span class="nm">active</span><span class="hx">rgba(40,58,96,.8)</span></div>
+    <div class="sw" style="background:var(--surface-track);border:2px solid var(--line-strong)"><span class="nm">track</span><span class="hx">rgba(8,14,28,.7)</span></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!-- @dsCard group="Elements" viewport="700x280" name="Elemental Palettes" subtitle="Base · Fire · Ice · Poison · Lightning — core→glow ramps" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--bg-game); color: var(--ink); padding: 16px; }
+  .el { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; }
+  .name { width: 92px; font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: .04em; }
+  .ramp { flex: 1; display: flex; gap: 5px; }
+  .c { flex: 1; height: 38px; border-radius: 7px; position: relative; }
+  .c span { position: absolute; left: 5px; bottom: 4px; font-family: var(--font-mono); font-size: 8.5px; color: rgba(8,12,20,.78); font-weight: 600; }
+  .lt { color: rgba(255,255,255,.82) !important; }
+  .key { font-family: var(--font-mono); font-size: 8.5px; color: var(--ink-faint); margin: 2px 0 10px 104px; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+  <div class="key">core · mid · glow · spark · deep</div>
+  <div class="el"><div class="name" style="color:#cfe0ff">BASE</div><div class="ramp">
+    <div class="c" style="background:#bfc6d2"><span>core</span></div><div class="c" style="background:#8a6a40"><span class="lt">mid</span></div><div class="c" style="background:#e9f1ff"><span>glow</span></div><div class="c" style="background:#cfe0ff"><span>spark</span></div><div class="c" style="background:#5a5f6b"><span class="lt">deep</span></div></div></div>
+  <div class="el"><div class="name" style="color:#ff7a3d">FIRE</div><div class="ramp">
+    <div class="c" style="background:#ff5a2a"><span>core</span></div><div class="c" style="background:#ff9a3d"><span>mid</span></div><div class="c" style="background:#ffc24d"><span>glow</span></div><div class="c" style="background:#fff1c4"><span>spark</span></div><div class="c" style="background:#2a1c14"><span class="lt">deep</span></div></div></div>
+  <div class="el"><div class="name" style="color:#7fd0ff">ICE</div><div class="ramp">
+    <div class="c" style="background:#6fd8ff"><span>core</span></div><div class="c" style="background:#a9e8ff"><span>mid</span></div><div class="c" style="background:#e2f6ff"><span>glow</span></div><div class="c" style="background:#ffffff"><span>spark</span></div><div class="c" style="background:#2a6fd0"><span class="lt">deep</span></div></div></div>
+  <div class="el"><div class="name" style="color:#9fdc4a">POISON</div><div class="ramp">
+    <div class="c" style="background:#7e9a2e"><span>core</span></div><div class="c" style="background:#9fdc4a"><span>mid</span></div><div class="c" style="background:#c8e26a"><span>glow</span></div><div class="c" style="background:#d8ee8a"><span>spark</span></div><div class="c" style="background:#4d6b1e"><span class="lt">deep</span></div></div></div>
+  <div class="el"><div class="name" style="color:#b48cff">LIGHTNING</div><div class="ramp">
+    <div class="c" style="background:#b48cff"><span>core</span></div><div class="c" style="background:#a8c8ff"><span>mid</span></div><div class="c" style="background:#ffffff"><span>glow</span></div><div class="c" style="background:#d8e6ff"><span>spark</span></div><div class="c" style="background:#5a3fb0"><span class="lt">deep</span></div></div></div>
+</body>
+</html>

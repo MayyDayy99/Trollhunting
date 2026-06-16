@@ -1,0 +1,41 @@
+/* ============================================================================
+   spacing.css — spacing, radii, sizing
+   The games use ad-hoc px; this normalizes them into a usable scale while
+   keeping the radii and control sizes that actually appear in the HUD.
+   ============================================================================ */
+:root {
+  /* --- Spacing scale --- */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 14px;
+  --space-6: 18px;
+  --space-7: 22px;
+  --space-8: 32px;
+  --space-9: 38px;
+  --space-10: 48px;
+
+  /* --- Radii (from real HUD elements) --- */
+  --radius-sm: 8px;     /* health bar, error toast */
+  --radius-md: 12px;    /* camera preview */
+  --radius-lg: 14px;    /* buttons, score pill */
+  --radius-xl: 22px;    /* frosted cards */
+  --radius-pill: 999px; /* status pills, toasts */
+  --radius-round: 50%;  /* emote / action buttons */
+
+  /* --- Control sizing (touch targets, big-display safe) --- */
+  --hit-min: 44px;      /* minimum tap target */
+  --btn-emote: 42px;    /* round emote button */
+  --btn-roar: 62px;     /* secondary round action */
+  --btn-smash: 92px;    /* primary round action */
+  --joystick: 128px;    /* virtual joystick base */
+  --joystick-knob: 56px;
+
+  /* --- Layout --- */
+  --hud-pad: 14px;      /* HUD edge inset @kind spacing */
+  --hpbar-w: 40vw;      /* health-bar width @kind spacing */
+  --hpbar-max: 720px;   /* @kind spacing */
+  --hpbar-h: clamp(18px, 3.4vh, 34px); /* @kind spacing */
+  --card-max: 640px;    /* start card max width @kind spacing */
+}

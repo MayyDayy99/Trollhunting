@@ -685,19 +685,14 @@ function solidBox(cx, cz, halfX, halfZ, opts){
                top:(opts&&opts.top)||0, climb:!!(opts&&opts.climb)});
 }
 // igaz, ha a játékos a tetején/fölötte áll -> nem blokkol oldalról (átléphet/ráállhat)
-function _onTopOf(s, x, z, feet){
+function _onTopOf(s, feet){
   if(s.top<=0) return false;
-  // csak akkor "tető", ha a játékos VÍZSZINTESEN a lábnyom FÖLÖTT van -> különben oldalról blokkol (nem lehet magas falon átmenni)
-  let over;
-  if(s.kind==='box') over = (x>=s.minX && x<=s.maxX && z>=s.minZ && z<=s.maxZ);
-  else over = ((x-s.x)*(x-s.x)+(z-s.z)*(z-s.z)) <= s.r*s.r;
-  if(!over) return false;
   return s.climb ? (feet >= s.top - STEP) : (feet >= s.top);
 }
 // egy feloldó-passz: kitolja a pontot minden testből PLAYER_R-rel
 function _resolvePass(x, z, feet){
   for(const s of SOLIDS){
-    if(_onTopOf(s, x, z, feet)) continue;
+    if(_onTopOf(s, feet)) continue;
     if(s.kind==='cyl'){
       const dx=x-s.x, dz=z-s.z; let d=Math.hypot(dx,dz); const R=s.r+PLAYER_R;
       if(d<R){ if(d<1e-4){ x=s.x+R; z=s.z; } else { const k=R/d; x=s.x+dx*k; z=s.z+dz*k; } }
@@ -912,14 +907,11 @@ const arrows=[];
 function makeArrow(){
   const g=new THREE.Group();
   const shaft=mesh(new THREE.CylinderGeometry(0.018,0.018,0.82,6), arrowWood,0,0,0); shaft.rotation.x=Math.PI/2; g.add(shaft);
-  const tip=mesh(new THREE.ConeGeometry(0.045,0.13,6), metalMat.clone(),0,0,-0.46); tip.rotation.x=-Math.PI/2; g.add(tip);  // ELEM: own material clone so the head can be tinted per element
+  const tip=mesh(new THREE.ConeGeometry(0.045,0.13,6), metalMat,0,0,-0.46); tip.rotation.x=-Math.PI/2; g.add(tip);
   [0,1,2].forEach(i=>{ const f=mesh(new THREE.BoxGeometry(0.005,0.12,0.1), featherMat,0,0,0.36); f.rotation.z=i*Math.PI/1.5; g.add(f); });
-  // ELEM: per-arrow additive glow sprite (color/opacity set by applyArrowVisual)
-  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
-  glow.scale.setScalar(0.55); glow.position.set(0,0,-0.42); g.add(glow);
   g.visible=false; g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   scene.add(g);
-  return { g, tip, glow, el:'base', vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, stuck:false, dmg:25 };
+  return { g, vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, stuck:false, dmg:25 };
 }
 for(let i=0;i<30;i++) arrows.push(makeArrow());
 function fireArrow(charge){
@@ -931,7 +923,6 @@ function fireArrow(charge){
   a.vel.copy(fwd).multiplyScalar(speed);
   a.dmg=18+charge*30;
   a.life=0; a.active=true; a.stuck=false; a.g.visible=true;
-  a.el=currentElement; applyArrowVisual(a);   // ELEM: stamp the equipped element + tint head/glow
   orientArrow(a);
   AUD.twang(charge);
   coopOnShot(start, fwd, charge); // CO-OP: relay this shot to peers (no-op offline)
@@ -941,148 +932,10 @@ function orientArrow(a){
   a.g.lookAt(look);
 }
 
-/* ===================== ELEMI NYÍLRENDSZER (Tűz / Jég / Méreg / Villám) =====================
-   Mohás Roham Design System integráció. Forrás: tokens/elements.css (színek 0xRRGGBB),
-   guidelines/elemental-combat-spec.md (hookok), guidelines/fx/element-fx.js (viselkedés).
-   Minden elem 4 helyen jelenik meg: (1) NYÍL fej-szín + glow + nyom, (2) BECSAPÓDÁS burst,
-   (3) ENEMY STATUS (DoT/lassítás/stun) + aura, (4) ELEMI HALÁL-overlay.
-   A részecskéket a meglévő additív `sparks`/`gore` poolon szórjuk (= THREE.Points, AdditiveBlending). */
-const EL = {
-  base:      { name:'ALAP',   ui:'#cfe0ff', head:0x000000, glow:0xe9f1ff, trail:0xcfe0ff },
-  fire:      { name:'TŰZ',    ui:'#ff7a3d', head:0xff5a2a, glow:0xffc24d, trail:0xff7a3d, status:'fire' },
-  ice:       { name:'JÉG',    ui:'#7fd0ff', head:0x6fd8ff, glow:0xe2f6ff, trail:0x9fe3ff, status:'ice' },
-  poison:    { name:'MÉREG',  ui:'#9fdc4a', head:0x7e9a2e, glow:0xc8e26a, trail:0x9fdc4a, status:'poison' },
-  lightning: { name:'VILLÁM', ui:'#b48cff', head:0xb48cff, glow:0xffffff, trail:0xa8c8ff, status:'lightning' },
-};
-const EL_ORDER=['base','fire','ice','poison','lightning'];
-let currentElement='base';
-
-/* JÓZAN ALAP gameplay-számok — ITT HANGOLHATÓ:
-     dur=státusz hossz (mp), dps=sebzés/mp (DoT), slow=mozgásszorzó (1=nincs),
-     stun=bénítás (mp, a meglévő m.rooted mezőt használja), tint=szem-emissive státusz-szín */
-const STATUS_CFG = {
-  fire:      { dur:4.0, dps:7, slow:1.0,  stun:0,   tint:0xff6a2a },  // ÉG:    7 dmg/mp, 4 mp
-  ice:       { dur:3.0, dps:0, slow:0.45, stun:0,   tint:0x9fd2ff },  // FAGY:  55% lassítás, 3 mp
-  poison:    { dur:6.0, dps:4, slow:0.85, stun:0,   tint:0x9fd24a },  // MÉREG: 4 dmg/mp + enyhe lassítás, 6 mp
-  lightning: { dur:1.2, dps:0, slow:1.0,  stun:1.2, tint:0xc8b4ff },  // SOKK:  1.2 mp bénítás
-};
-
-function applyArrowVisual(a){
-  const def=EL[a.el]||EL.base;
-  if(a.tip&&a.tip.material){ a.tip.material.emissive.setHex(def.head); a.tip.material.emissiveIntensity=(a.el==='base')?0:1.5; }
-  if(a.glow){ a.glow.material.color.setHex(def.glow); a.glow.material.opacity=(a.el==='base')?0:0.65; }
-}
-function emitArrowTrail(a){
-  const def=EL[a.el]||EL.base, p=a.g.position;
-  if(a.el==='base'){ if(Math.random()<0.4) sparks.burst(p.x,p.y,p.z,1,def.trail,0.6,0.2); return; }
-  sparks.burst(p.x,p.y,p.z,1,def.trail,0.8,0.3);                                  // fő nyom
-  if(a.el==='fire'&&Math.random()<0.5) sparks.burst(p.x,p.y,p.z,1,0xffc24d,1.2,1.0); // felszálló parázs
-  if(a.el==='lightning') sparks.burst(p.x,p.y,p.z,1,0xffffff,2.0,0.3);             // sziporka
-}
-function elementalImpact(pos, elKey, head){
-  const def=EL[elKey]||EL.base, n=head?28:18;
-  sparks.burst(pos.x,pos.y,pos.z, n, def.trail, 6, 0.3);
-  sparks.burst(pos.x,pos.y,pos.z, head?14:8, def.glow, 7, 0.4);
-  if(elKey==='ice') sparks.burst(pos.x,pos.y,pos.z, head?16:10, 0xffffff, 9, 0.3);  // jég-szilánkok
-  if(elKey==='lightning') sparks.burst(pos.x,pos.y,pos.z, 10, 0xffffff, 10, 0.2);    // villám-szikra
-}
-function applyStatus(m, elKey){
-  const def=EL[elKey]; if(!def||!def.status) return;          // ALAP = nincs státusz
-  const s=STATUS_CFG[def.status];
-  m.statusEl=def.status; m.statusT=s.dur; m.burnAcc=0;
-  if(s.slow<1) m.slowMul=s.slow;
-  if(s.stun>0) m.rooted=Math.max(m.rooted||0, s.stun);         // VILLÁM bénítás a meglévő root-tal
-  if(m._eyeBase==null && m.eyes&&m.eyes[0]) m._eyeBase=m.eyes[0].material.emissive.getHex();
-  if(m.eyes) m.eyes.forEach(e=>e.material.emissive.setHex(s.tint));  // szem-tint a státusz színére
-}
-function clearStatus(m){
-  m.statusEl=null; m.statusT=0; m.slowMul=1;
-  if(m._eyeBase!=null && m.eyes) m.eyes.forEach(e=>e.material.emissive.setHex(m._eyeBase));
-}
-function tickStatus(m, dt){
-  if(!m.statusEl) return;
-  const s=STATUS_CFG[m.statusEl]; m.statusT-=dt;
-  if(s.dps>0){ m.burnAcc=(m.burnAcc||0)+s.dps*dt;            // DoT egész sebzésre kvantálva
-    if(m.burnAcc>=1){ const d=Math.floor(m.burnAcc); m.burnAcc-=d; m.hp-=d; m.hurtFlash=Math.max(m.hurtFlash,0.08);
-      if(m.hp<=0 && m.alive){ killMonster(m,false); return; } } }
-  if(s.slow<1) m.slowMul=s.slow;                              // lassítás frissítése (AI olvassa)
-  statusAura(m, m.statusEl);
-  if(m.statusT<=0) clearStatus(m);
-}
-function statusAura(m, key){
-  const p=m.g.position, cy=p.y+(m.bodyCY||1);
-  if(key==='fire'){ if(Math.random()<0.9) sparks.burst(p.x+rand(-0.3,0.3),cy+rand(-0.2,0.4),p.z+rand(-0.3,0.3),1,pick([0xff5a2a,0xff9a3d,0xffc24d]),3,1.7); }
-  else if(key==='ice'){ if(Math.random()<0.5) sparks.burst(p.x+rand(-0.4,0.4),cy+rand(-0.4,0.4),p.z+rand(-0.4,0.4),1,0xbfe6ff,1.2,0.2); }
-  else if(key==='poison'){ if(Math.random()<0.7) sparks.burst(p.x+rand(-0.3,0.3),cy+rand(-0.3,0.3),p.z+rand(-0.3,0.3),1,pick([0x7e9a2e,0x9fdc4a]),2,0.9); }
-  else if(key==='lightning'){ if(Math.random()<0.8) sparks.burst(p.x+rand(-0.4,0.4),cy+rand(-0.4,0.4),p.z+rand(-0.4,0.4),1,0xffffff,5,0.3); }
-}
-function elementalDeath(m){
-  if(!m.statusEl) return;                                     // csak ha elemi státusszal halt
-  const p=m.g.position, bx=p.x, by=p.y+(m.bodyCY||1), bz=p.z, k=m.statusEl;
-  if(k==='fire'){ gore.burst(bx,by,bz,26,0xff5a2a,9,0.9); gore.burst(bx,by,bz,14,0xffc24d,7,1.1); sparks.burst(bx,by,bz,10,0x2a1c14,4,0.6); }       // elhamvad
-  else if(k==='ice'){ gore.burst(bx,by,bz,34,0xe2f6ff,12,0.4); sparks.burst(bx,by,bz,16,0x6fd8ff,10,0.3); }                                          // szétfagy/szilánk
-  else if(k==='poison'){ gore.burst(bx,p.y+0.2,bz,24,0x9fdc4a,4,0.2); sparks.burst(bx,p.y+0.3,bz,12,0xc8e26a,3,0.5); }                                // elolvad
-  else if(k==='lightning'){ sparks.burst(bx,by,bz,22,0xffffff,11,0.4); gore.burst(bx,by,bz,12,0xb48cff,8,0.5); }                                     // elszenesedik
-  shake=Math.max(shake,0.2);
-}
-
-/* --- elem-választó HUD (a HUD aljára, középre; a menük z-index 10 eltakarják) --- */
-let _elHud=null;
-function buildElementHUD(){
-  const wrap=document.createElement('div'); wrap.id='elhud';
-  wrap.style.cssText='position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:6;display:flex;gap:6px;pointer-events:none;font-family:-apple-system,\'Segoe UI\',sans-serif';
-  EL_ORDER.forEach((id,i)=>{ const def=EL[id];
-    const chip=document.createElement('div'); chip.dataset.el=id;
-    chip.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 9px;border-radius:10px;background:rgba(14,22,40,.6);border:1px solid rgba(180,200,240,.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:all .12s';
-    const sw=document.createElement('div'); sw.style.cssText='width:22px;height:5px;border-radius:3px;background:'+def.ui;
-    const lab=document.createElement('div'); lab.textContent=(i+1)+' '+def.name; lab.style.cssText='font:700 9px/1 inherit;letter-spacing:.04em;color:#9db4d6';
-    chip.appendChild(sw); chip.appendChild(lab); wrap.appendChild(chip); });
-  document.body.appendChild(wrap); _elHud=wrap; updateElementHUD();
-}
-function updateElementHUD(){
-  if(!_elHud) return;
-  _elHud.querySelectorAll('[data-el]').forEach(chip=>{ const id=chip.dataset.el, on=(id===currentElement), def=EL[id];
-    chip.style.background=on?'rgba(40,58,96,.8)':'rgba(14,22,40,.6)';
-    chip.style.borderColor=on?def.ui:'rgba(180,200,240,.18)';
-    chip.style.boxShadow=on?('0 0 14px '+def.ui+'66'):'none';
-    chip.querySelector('div:last-child').style.color=on?def.ui:'#9db4d6'; });
-}
-function setElement(id){ if(!EL[id]) return; currentElement=id; updateElementHUD(); }
-
-/* ===================== TROLL REDESIGN (részlet-pass) =====================
-   Egy közös díszítő-lépés MINDEN trollra (a meglévő rigged handle-eket használva:
-   m.g / m.head / m.arms). Gerinc-tüskék, zuzmó-csomók, szőrcsomók, szemölcsök,
-   halvány világító spórák — hogy a sziluett gazdagabb, kevésbé "fapados" legyen.
-   Megosztott anyagokat használ (nincs per-troll material-leak a mesh-eken). */
-const lichenMat = std({color:0x9fb59f, roughness:1});
-function embellishTroll(m){
-  if(m.typeId==='wisp') return;                 // a Lidércnek saját, áttetsző arculata van
-  const g=m.g, head=m.head;
-  const ns=3+((Math.random()*3)|0);             // gerinc-tüskék a háton (csont)
-  for(let i=0;i<ns;i++){ const sp=mesh(new THREE.ConeGeometry(0.05,0.15+Math.random()*0.07,5), tuskMat, rand(-0.05,0.05), 0.95+i*0.18, -0.32-Math.random()*0.04); sp.rotation.x=-0.5; g.add(sp); }
-  for(let i=0;i<4;i++){ const a=rand(0,6.28); g.add(mesh(new THREE.DodecahedronGeometry(0.07+Math.random()*0.06,0), lichenMat, Math.cos(a)*0.42, 1.0+Math.random()*0.7, Math.sin(a)*0.28-0.18, 1,0.6,1)); } // zuzmó
-  [m.arms.L,m.arms.R].forEach(arm=>{ if(!arm) return; for(let i=0;i<3;i++){ const f=mesh(new THREE.ConeGeometry(0.028,0.13,4), mossMat, rand(-0.08,0.08),-0.42-Math.random()*0.18,rand(-0.05,0.05)); f.rotation.set(rand(-0.6,0.6),Math.random()*3,rand(-0.6,0.6)); arm.add(f);} }); // alkar-szőr
-  for(let i=0;i<3;i++) head.add(mesh(new THREE.SphereGeometry(0.028+Math.random()*0.02,6,5), skinDark, rand(-0.16,0.16), rand(-0.08,0.08), 0.3+Math.random()*0.16)); // szemölcs
-  head.add(mesh(new THREE.DodecahedronGeometry(0.09,0), lichenMat, rand(-0.12,0.12),0.22,-0.04, 1,0.6,1));
-  for(let i=0;i<2;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:pick([0x7fb8d8,0xffd27a,0x9fe0c8]),transparent:true,opacity:0.45,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.16+Math.random()*0.08); s.position.set(rand(-0.4,0.4),1.0+Math.random()*0.7,rand(-0.3,0.3)); g.add(s); } // világító spóra
-}
-
-buildElementHUD();
-
 /* ===================== Szörnyek (mohás trollok) ===================== */
 const monsters=[];
 /* ---- 5 troll-típus (art-direkciós újratervezés, erős sziluett-különbség) ---- */
 const TROLL_TYPES = {
-  wisp: { id:'wisp', name:'Lidérc', threat:0x7fe2ff, scaleMul:0.7, hpMul:0.4, speedMul:1.8, dmgMul:0.5, speedCap:7.0,
-    skin:0x16414f, eyeColor:0x7fe2ff, club:false, noTusks:true, earLen:0.52, deathSpin:1.4, postureLean:0.05,
-    build(m){
-      // áttetsző, rúna-fényű test (a megosztott bodySkin-t CSAK ezen a trollon módosítjuk)
-      if(m.bodySkin){ m.bodySkin.transparent=true; m.bodySkin.opacity=0.6; m.bodySkin.emissive=new THREE.Color(0x36c5ff); m.bodySkin.emissiveIntensity=0.75; }
-      // belső mag-ragyogás + lebegő wisp-szikrák (additív sprite-ok; disposeMonster takarítja)
-      const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x7fe2ff,transparent:true,opacity:0.85,depthWrite:false,blending:THREE.AdditiveBlending}));
-      core.scale.setScalar(1.2); core.position.set(0,1.1,0); m.g.add(core);
-      for(let i=0;i<5;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.45-i*0.06); s.position.set(rand(-0.25,0.25),0.55-i*0.1,rand(-0.25,0.25)); m.g.add(s); }
-    } },
   grunt: { id:'grunt', name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:4.5, skin:0x5f9168, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.05, shoulderW:1.0, torsoW:1.0, neckLen:0.0, tuskScale:1.0, earLen:0.34, noTusks:false,
     build(m){
 const g=m.g;
@@ -1426,13 +1279,11 @@ function makeMonster(type, scale, hp, speed){
   scene.add(g);
 
   const m={ g, legs, arms, head, eyes, eyeMat:myEye, bodySkin, hp, maxHp:hp, speed, walkPhase:Math.random()*6.28,
-    alive:true, dying:0, atkCd:0.6, hurtFlash:0, scale,
+    alive:true, dying:0, atkCd:0, hurtFlash:0, scale,
     bodyR:0.85*scale, bodyCY:1.1*scale, headCY:1.95*scale, headR:0.42*scale,
     type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
-    dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0,
-    statusEl:null, statusT:0, slowMul:1, burnAcc:0, _eyeBase:null };   // ELEM: status fields
+    dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0 };
   if(T.build) T.build(m);
-  embellishTroll(m);   // REDESIGN: gazdagabb részlet-pass (moha/zuzmó/tüskék/spórák/szőr) minden trollon
   m.headCY=m.head.position.y*scale; m.headR=0.42*scale*(m.head.scale.x||1); // fejlövés-gömb a valós fejhez
   return m;
 }
@@ -1531,7 +1382,6 @@ const LOOK_S=0.0022;
 function applyLook(dx,dy){ player.yaw-=dx*LOOK_S; player.pitch=clamp(player.pitch-dy*LOOK_S,-1.45,1.45); }
 
 addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
-  if('12345'.includes(k)) setElement(EL_ORDER[+k-1]);   // ELEM: 1–5 switch arrow element
   if(k==='escape'&&running) pauseGame();
   else if(k==='b'){ bowTune=!bowTune; bowTuneEl.style.display=bowTune?'block':'none'; if(bowTune) applyBowAdj(); }
   else if(bowTune){ const A=bowAdj;
@@ -1544,7 +1394,6 @@ addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
     applyBowAdj(); }
 });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
-function clearKeys(){ for(const k in keys) keys[k]=false; } // FIX: minden lenyomott billentyű elengedése (blur/pause -> nincs beragadt mozgás)
 
 document.addEventListener('pointerlockchange',()=>{ locked=(document.pointerLockElement===cv); showLockHint(running&&!locked&&!dragLook); });
 document.addEventListener('pointerlockerror',()=>{ locked=false; showLockHint(running&&!dragLook); });
@@ -1571,7 +1420,7 @@ addEventListener('mouseup',e=>{
   if(e.button!==0) return;
   if(drawing){ if(charge>0.12) fireArrow(charge); drawing=false; charge=0; powwrap.classList.remove('on'); }
 });
-addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
+addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; if(running) pauseGame(); });
 cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
 
 /* ===================== HUD ===================== */
@@ -1653,7 +1502,6 @@ function pickTrollType(){
     ['brute',   w>=3 ? clamp((w-2)*0.55, 0, 4) : 0],
     ['shaman',  w>=4 ? (haveShaman?0.15:clamp((w-3)*0.3,0,1.6)) : 0],
     ['spitter', w>=2 ? clamp((w-1)*0.45, 0, 4) : 0],
-    ['wisp',    w>=2 ? clamp((w-1)*0.50, 0, 5) : 0],
   ];
   let total=0; for(const e of table) total+=e[1];
   if(total<=0) return 'grunt';
@@ -1703,7 +1551,6 @@ function killMonster(m, headshot){
     case 'sink': gore.burst(bx,p.y+0.1,bz,18,0x3c5a3e,4,0.25); shake=Math.max(shake,0.16); break;
     default: gore.burst(bx,by,bz,24,0x5f9168,6,0.4); gore.burst(bx,by,bz,10,0x2c4636,5,0.3); shake=Math.max(shake,0.18); break;
   }
-  elementalDeath(m);   // ELEM: element-keyed death flourish (ash / shatter / melt / char)
   if(m.typeId==='shaman'){ addScore(60); toast('SÁMÁN LETERÍTVE!'); }
   addScore(headshot?150:100);
 }
@@ -1787,7 +1634,6 @@ function update(dt,t){
     a.g.position.addScaledVector(a.vel,dt);
     orientArrow(a);
     a.life+=dt;
-    emitArrowTrail(a);   // ELEM: element-colored flight trail
     // talaj
     if(a.g.position.y<=GROUND_Y+0.02){ a.g.position.y=GROUND_Y+0.02; a.stuck=true; a.life=0;
       sparks.burst(a.g.position.x,0.1,a.g.position.z,8,0x8b7355,3,0.4); continue; }
@@ -1801,9 +1647,9 @@ function update(dt,t){
     }
     if(hit){ const dmg=a.dmg*(head?2:1);
       if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg); } // CO-OP: server applies dmg/kill/score
-      else { hit.hp-=dmg; hit.hurtFlash=0.15; applyStatus(hit, a.el); }   // ELEM: apply the arrow's status on a local hit
+      else { hit.hp-=dmg; hit.hurtFlash=0.15; }
       const hp=a.g.position;
-      elementalImpact(hp, a.el, head);   // ELEM: element-colored impact burst (replaces the generic spark)
+      sparks.burst(hp.x,hp.y,hp.z, head?22:14, head?0xffd27a:0xff6a4a, 6, 0.3);
       if(head) AUD.head(); else AUD.hit();
       if(head) toast('FEJLÖVÉS!');
       a.active=false; a.g.visible=false;
@@ -1876,8 +1722,6 @@ function update(dt,t){
     }
     if(!m.alive) continue;
     aliveCount++;
-    if(!coopIsRemote(m)) tickStatus(m, dt);    // ELEM: burn/poison DoT, freeze slow, shock stun, aura
-    if(!m.alive){ aliveCount--; continue; }    // ELEM: a DoT just killed it → hand over to the dying animation
     if(coopIsRemote(m)){ /* CO-OP: server owns this monster's movement/attacks; skip local AI (interpolated in coopTick) */ }
     else trollAI(m, dt, t); // típus-függő mozgás/támadás (belül running&&alive gate)
     // sérülés-villanás a szemeken
@@ -1892,8 +1736,7 @@ function update(dt,t){
     if(intermission>0){ intermission-=dt; if(intermission<=0) startWave(wave+1); }
     waveLeft.textContent='trollok: '+(aliveCount+toSpawn);
   }
-  else if(running && coop){ waveLeft.textContent='trollok: '+aliveCount; }
-  if(coop) coopTick(dt); // FIX: peer-szinkron + interpoláció + sendInput szünetben/menüben/halál után is fusson
+  else if(running && coop){ coopTick(dt); waveLeft.textContent='trollok: '+aliveCount; }
 
   /* --- effektek --- */
   sparks.update(dt); gore.update(dt);
@@ -1943,7 +1786,7 @@ function trollAI(m, dt, t){
   const walkAnim=()=>{ m.walkPhase+=dt*(4+m.speed); const sw=Math.sin(m.walkPhase)*0.6;
     m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(m.walkPhase))*0.06;
     m.arms.L.rotation.x=0.5+Math.sin(m.walkPhase)*0.3; m.arms.R.rotation.x=0.5-Math.sin(m.walkPhase)*0.3; };
-  const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; p.x+=dx/d*step; p.z+=dz/d*step; };   // ELEM: slowMul<1 while frozen/poisoned
+  const moveToward=(mult)=>{ const step=m.speed*mult*dt; p.x+=dx/d*step; p.z+=dz/d*step; };
   const meleeAttack=(onHit)=>{ m.atkCd-=dt; m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,1.6,0.2); if(m.atkCd<=0){ if(player.pos.y-1.7 < p.y+1.9*m.scale){ onHit(); } else { m.atkCd=0.5; } m.arms.R.rotation.x=-0.4; } }; // függőleges hatótáv
   switch(T.id){
     case 'scout': {
@@ -2008,8 +1851,6 @@ frame();
 var coop = null;                                  // the connectCoop handle (null offline)
 var coopMyId = null;                              // our server-assigned player id
 var coopDowned = false;                           // FIX: saját elesés egyszeri kapuzása (szerver-auth)
-var coopStarted = false;                          // FIX: volt-e már Start? (Start előtt nincs szerver-szörny; szünetben viszont reconcile fut)
-var coopReviveAt = 0;                             // FIX: revive türelmi idő (elavult hp=0 state ne triggereljen gameOver-t)
 var coopWelcomed = false;                          // v2: volt-e már welcome? (pid mellett a stabil id-vel detektáljuk az újracsatlakozást)
 var coopHost = null;                               // szerver LAN IP-je a meghívó-linkhez (welcome.host)
 var coopPeers = new Map();                        // peerId -> { g, buf, has, name } avatar
@@ -2073,9 +1914,6 @@ var coopConnected = false;                        // drives the status dot (open
 function coopMakePeer(id, name){
   if(coopPeers.has(id)) return coopPeers.get(id);
   const g = new THREE.Group();
-  // COOP-COLOR: minden játékos kap egy megkülönböztető színt (csatlakozási sorrend szerint)
-  const PCOL=[0x36c5ff,0xffd27a,0x9f6aff,0x5fd08a]; const colHex=PCOL[coopPeers.size % PCOL.length];
-  const trimMat=new THREE.MeshStandardMaterial({color:colHex, emissive:colHex, emissiveIntensity:0.35, roughness:0.6});
 
   // --- legs: two tapered cloth shanks + boot toes, planted at y=0, hips at ~0.90 ---
   [-1,1].forEach(s=>{
@@ -2126,15 +1964,9 @@ function coopMakePeer(id, name){
   const strg = mesh(new THREE.CylinderGeometry(0.008,0.008,1.06,4), tuskMat, 0,0,-0.30); // bowstring (pale)
   bow.add(strg);
 
-  // --- COOP-COLOR: per-player cloak trim + sash + glózó háti tegez-toll a játékos színében ---
-  g.add(mesh(new THREE.CylinderGeometry(0.235,0.235,0.05,9), trimMat, 0,1.66,0));                 // színes gallér-szegély
-  const sash=mesh(new THREE.BoxGeometry(0.07,0.5,0.04), trimMat, 0,1.28,0.2); sash.rotation.z=0.5; g.add(sash); // mell-sash
-  g.add(mesh(new THREE.CylinderGeometry(0.05,0.06,0.42,7), woodDark, -0.14,1.5,-0.22));            // háti tegez
-  for(let i=0;i<3;i++){ const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:colHex,transparent:true,opacity:0.85,depthWrite:false,blending:THREE.AdditiveBlending})); fl.scale.setScalar(0.12); fl.position.set(-0.14+(i-1)*0.04,1.74,-0.22); g.add(fl); }
-
   g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
   scene.add(g);
-  const peer = { g, name:name||'Archer', color:colHex,
+  const peer = { g, name:name||'Archer',
                  buf:[], has:false, lastX:0, lastZ:0 };  // buf: timestamped snapshots for interpolation
   coopPeers.set(id, peer);
   if(coopHudEl) coopUpdateHudPlayers();
@@ -2151,7 +1983,7 @@ function coopRemovePeer(id){
 /* ---- server monster reconciliation: build a real troll, tag it, share monsters[] ---- */
 function coopTrollTypeId(t){ return (typeof t==='string' && TROLL_TYPES[t]) ? t : 'grunt'; }
 function coopEnsureMonster(sm){
-  if(!coopStarted) return null;        // FIX: Start előtt ne hozz létre szerver-szörnyet; szünetben igen
+  if(!running) return null;            // FIX: ne hozz létre szerver-szörnyet a Start előtt (szellem-bug)
   const netId = sm.id;
   let m = coopRemoteById.get(netId);
   if(!m){
@@ -2178,7 +2010,7 @@ function coopEnsureMonster(sm){
   return m;
 }
 function coopReconcileMonsters(serverMons){
-  if(!coopStarted) return;             // FIX: Start után mindig (szünetben is) reconcile
+  if(!running) return;                 // FIX: csak futó játékban kezeljük a szerver-szörnyeket
   const seen = new Set();
   if(Array.isArray(serverMons)) for(const sm of serverMons){ if(sm && sm.id!=null){ coopEnsureMonster(sm); seen.add(sm.id); } }
   // monsters the server dropped without an explicit kill (e.g. wave reset) -> remove quietly
@@ -2276,9 +2108,8 @@ function coopOnReset(){
   if(!coop) return;
   coopRemoteById.clear();              // a meshek már törölve a resetGame ciklusban; csak a könyvelés ürül
   coopDowned = false;
-  coopReviveAt = coopNow();            // FIX: türelmi idő egy elavult hp=0 state ellen
-  // a szerver-autoritatív liveness miatt külön 'respawn' üzenettel élesztünk újra
-  coop.send({ t:'respawn' });
+  // jelezzük a szervernek, hogy újra élünk teli HP-val (a sendInput egyébként nem küld hp-t)
+  coop.send({ t:'player_state', pos:{x:player.pos.x,y:player.pos.y,z:player.pos.z}, yaw:player.yaw, pitch:player.pitch, hp:player.maxHp, alive:true });
 }
 
 /* ---- in-game co-op HUD: room code, copy-invite, players list, status dot ---- */
@@ -2386,7 +2217,7 @@ function coopConnect(){
       coopApplyHud(s);
       if(Array.isArray(s.players)) for(const pv of s.players){
         if(pv.id===coopMyId){ // FIX: a saját HP-t a szerver vezeti (közelharc-sebzés) -> HUD + elesés
-          if(typeof pv.hp==='number' && coopNow()-coopReviveAt>1500){ player.hp=pv.hp; if(hpfill) hpfill.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
+          if(typeof pv.hp==='number'){ player.hp=pv.hp; if(hpfill) hpfill.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
             if(pv.hp<=0 && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }
           continue; }
         const peer = coopMakePeer(pv.id, pv.name);
@@ -2430,16 +2261,16 @@ function resetGame(){
   if(coop) coopOnReset(); // FIX: co-op könyvelés ürítése + revive új játéknál
 }
 function beginPlay(){
-  AUD.unlock(); resetGame(); running=true; coopStarted=true;
+  AUD.unlock(); resetGame(); running=true;
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
 }
-function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
+function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); showLockHint(false); pauseScreen.classList.remove('hide');
   if(document.pointerLockElement) document.exitPointerLock(); }
-function resumeGame(){ if(player.hp<=0) return; AUD.unlock(); running=true; pauseScreen.classList.add('hide'); ensureLock(); }
+function resumeGame(){ if(player.hp<=0) return; running=true; pauseScreen.classList.add('hide'); ensureLock(); }
 function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.over();
   document.getElementById('overStat').innerHTML='Elért hullám: <b>'+wave+'</b> &nbsp;·&nbsp; Pont: <b>'+score+'</b>';
-  pauseScreen.classList.add('hide'); startScreen.classList.add('hide'); overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
+  overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
 
 document.getElementById('startBtn').addEventListener('click',beginPlay);
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);

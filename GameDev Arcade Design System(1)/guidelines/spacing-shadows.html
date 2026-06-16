@@ -1,0 +1,24 @@
+<!-- @dsCard group="Spacing" viewport="700x200" name="Shadows & Neon Glows" subtitle="Drop shadows + signature inset/CTA glows" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 24px; background: var(--bg-arena); }
+  .row { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+  .box { width: 92px; height: 56px; border-radius: var(--radius-lg); background: var(--surface-panel); border: 1px solid var(--line); }
+  .cta { width: 130px; height: 48px; border-radius: var(--radius-lg); background: var(--grad-cta); color: #061018; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .n { font-size: 11px; color: var(--ink-faint); font-weight: 600; font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-glass)"></div><span class="n">shadow-glass</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-raised)"></div><span class="n">shadow-raised</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-card)"></div><span class="n">shadow-card</span></div>
+    <div class="item"><div class="cta" style="box-shadow:var(--glow-p1)">PLAY ▶</div><span class="n">glow-p1</span></div>
+  </div>
+</body>
+</html>

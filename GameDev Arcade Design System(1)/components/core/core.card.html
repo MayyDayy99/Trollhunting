@@ -1,0 +1,67 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Core — Buttons, Glass, Badges" subtitle="Button · IconButton · GlassPanel · Badge · Eyebrow" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 22px; background: var(--bg-arena); }
+  .grid { display: flex; flex-direction: column; gap: 20px; }
+  .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .cap { font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin: 0 0 9px; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel">
+    const { Button, IconButton, GlassPanel, Badge, Eyebrow } = window.GameDevArcadeDesignSystem_67abce;
+    function Demo() {
+      return (
+        <div className="grid">
+          <div>
+            <p className="cap">Button — variants &amp; sizes</p>
+            <div className="row">
+              <Button variant="primary">BELÉPÉS ▶</Button>
+              <Button variant="p2">PLAYER 2</Button>
+              <Button variant="glass">GLASS</Button>
+              <Button variant="ghost">GHOST</Button>
+              <Button variant="primary" disabled>DISABLED</Button>
+            </div>
+            <div className="row" style={{ marginTop: 12 }}>
+              <Button size="sm">SMALL</Button>
+              <Button size="md">MEDIUM</Button>
+              <Button size="lg">LARGE</Button>
+            </div>
+          </div>
+          <div>
+            <p className="cap">IconButton — emote / action</p>
+            <div className="row">
+              <IconButton tone="glass">👋</IconButton>
+              <IconButton tone="glass">🕺</IconButton>
+              <IconButton tone="glass">😂</IconButton>
+              <IconButton tone="roar" size="md" label="Üvölt">🗯️</IconButton>
+              <IconButton tone="smash" size="lg" label="Zúz">💥</IconButton>
+            </div>
+          </div>
+          <div className="row" style={{ alignItems: 'stretch', gap: 16 }}>
+            <GlassPanel tone="panel" padding={18} style={{ flex: 1 }}>
+              <Eyebrow tone="p1">Motion Arcade</Eyebrow>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, marginTop: 4 }}>Frosted Panel</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <Badge tone="p1">Player 1</Badge>
+                <Badge tone="lost">✋ no hand</Badge>
+                <Badge tone="grace">grace</Badge>
+              </div>
+            </GlassPanel>
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+  </script>
+</body>
+</html>

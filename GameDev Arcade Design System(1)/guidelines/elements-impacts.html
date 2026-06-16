@@ -1,0 +1,30 @@
+<!-- @dsCard group="Effects" viewport="700x200" name="Impact Bursts" subtitle="Live: on-hit spark burst per element" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 14px 16px;
+    background: radial-gradient(ellipse at 50% 45%, #16223c, #0a1018 72%); }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .stage { width: 100%; height: 120px; border-radius: 10px; overflow: hidden; background: rgba(8,14,28,.5); border: 1px solid var(--line); }
+  canvas { display: block; width: 100%; height: 100%; }
+  .lab { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell"><div class="stage"><canvas data-el="base"></canvas></div><span class="lab" style="color:#cfe0ff">BASE</span></div>
+    <div class="cell"><div class="stage"><canvas data-el="fire"></canvas></div><span class="lab" style="color:#ff7a3d">TŰZ</span></div>
+    <div class="cell"><div class="stage"><canvas data-el="ice"></canvas></div><span class="lab" style="color:#7fd0ff">JÉG</span></div>
+    <div class="cell"><div class="stage"><canvas data-el="poison"></canvas></div><span class="lab" style="color:#9fdc4a">MÉREG</span></div>
+    <div class="cell"><div class="stage"><canvas data-el="lightning"></canvas></div><span class="lab" style="color:#b48cff">VILLÁM</span></div>
+  </div>
+  <script src="./fx/element-fx.js"></script>
+  <script>
+    document.querySelectorAll('canvas[data-el]').forEach((cv) => ElementFX.create(cv, { element: cv.dataset.el, mode: 'impact' }));
+  </script>
+</body>
+</html>

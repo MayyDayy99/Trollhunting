@@ -1,0 +1,22 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Semantic Status" subtitle="Danger, warn, success cues" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--bg-deep); color: var(--ink); padding: 18px; }
+  .row { display: flex; gap: 12px; }
+  .pill { flex: 1; height: 64px; border-radius: var(--radius-pill); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-weight: 700; }
+  .nm { font-size: 12px; }
+  .hx { font-family: var(--font-mono); font-size: 10px; font-weight: 500; opacity: .85; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="pill" style="background:rgba(60,14,14,.7);color:#ffb3b3;border:1px solid #ff6b6b"><span class="nm">danger</span><span class="hx">#ff5b5b</span></div>
+    <div class="pill" style="background:rgba(60,50,14,.6);color:#ffe7b8;border:1px solid rgba(255,210,122,.4)"><span class="nm">warn</span><span class="hx">#ffd27a</span></div>
+    <div class="pill" style="background:rgba(14,40,30,.6);color:#9fe0c8;border:1px solid rgba(120,200,170,.35)"><span class="nm">success</span><span class="hx">#9fe0c8</span></div>
+  </div>
+</body>
+</html>

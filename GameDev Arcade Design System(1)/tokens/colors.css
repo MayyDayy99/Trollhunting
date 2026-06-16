@@ -1,0 +1,110 @@
+/* ============================================================================
+   colors.css — Mohás Roham color system
+   ----------------------------------------------------------------------------
+   Reverse-engineered from the shipped game (mp-server/public/mohas-roham.html):
+   a first-person archery survival game set in a forest-night glade, flat-shaded
+   Three.js r128, lit by an emissive CYAN "rune/beacon" language and warm AMBER
+   torch/firefly light, with mossy-green trolls whose eyes glow ORANGE.
+
+   NOTE FOR CLAUDE CODE: every hex here is a real value from the game source.
+   Three.js wants 0xRRGGBB ints — drop the `#` (e.g. --rune `#36c5ff` → 0x36c5ff).
+   Emissive materials in-game use `emissiveIntensity` 0.7–2.0 + `flatShading:true`.
+   ============================================================================ */
+:root {
+  /* --- Backgrounds: forest-night, near-black navy --- */
+  --bg-game: #0a1018;       /* the game canvas clear color (html/body bg) */
+  --bg-top: #1a2c52;        /* radial glade center / lightest */
+  --bg-mid: #141f36;        /* mid night navy */
+  --bg-deep: #0a1120;       /* radial edge */
+  --bg-abyss: #060a16;      /* vignette / fog core */
+
+  /* --- Ink / text on dark (cool blue-white ramp, straight from the HUD) --- */
+  --ink: #e9f1ff;           /* primary HUD text */
+  --ink-bright: #cfe0ff;    /* labels (Életerő) */
+  --ink-soft: #c3d4f0;      /* card body */
+  --ink-sub: #b9c8e6;       /* "trollok: N" / hints */
+  --ink-muted: #9db4d6;     /* muted captions / "pont" */
+  --ink-faint: #8fa6c9;     /* eyebrows */
+
+  /* --- Cyan — the rune / beacon / UI-accent language ---------------------
+     Used for runes, altar, glow-mushrooms, monster staff-crystals, the score
+     number, charge meter, and CTA buttons. Aliased to --p1* (legacy names the
+     core components still read). */
+  --rune: #36c5ff;          /* emissive rune cyan (0x36c5ff) */
+  --rune-deep: #16414f;     /* rune base/stone color (0x16414f) */
+  --cyan: #7fe2ff;          /* bright UI cyan (score, charge tip) */
+  --cyan-soft: #5fe0ff;     /* charge-meter start */
+  --p1: #36c5ff;            /* alias → --rune */
+  --p1-bright: #5fe0ff;
+  --p1-deep: #1a8fd0;
+  --p1-glow: #7fe2ff;
+
+  /* --- Orange/red — danger, hurt, the trolls' glowing eyes ---------------
+     Troll eyes are emissive #ff5a2a; HP bar runs orange→amber; hurt flash red. */
+  --troll-eye: #ff5a2a;     /* emissive eye (0xff5a2a) */
+  --troll-eye-glow: #ff7a3d;/* eye glow sprite / default */
+  --ember-orange: #ff7a3d;
+  --rust: #c9521f;          /* HP bar low end / deep orange */
+  --p2: #ff7a3d;            /* alias → --ember-orange */
+  --p2-bright: #ffa15f;
+  --p2-deep: #c9521f;
+
+  /* --- Warm — amber torch, fireflies, gold beacons, wave counter --------- */
+  --gold: #ffd27a;          /* wave number, toast, firefly, amber petals */
+  --cream: #ffe7b8;         /* warm highlight text */
+  --ember: #ffb347;         /* glow / ember */
+  --parchment: #e9d9ae;     /* aged serif accents */
+  --gold-metal: #c9a14e;
+
+  /* --- Mossy-troll & flora greens ---------------------------------------- */
+  --troll-skin: #6fa07a;    /* skinMat */
+  --troll-skin-deep: #5b8a68;
+  --moss: #6fa07a;
+  --moss-deep: #41704e;
+  --grass: #4f9d5c;
+  --fern: #3f6e3a;          /* dark fern/reed (fernMat) */
+  --lichen: #9fb59f;
+  --bone: #f2e9d8;          /* tusks, horns, bone ferrules (tuskMat) */
+  --litter: #8a5a3a;        /* leaf litter */
+  --mint: #9fe0c8;          /* debug / positive */
+
+  /* --- Arrow materials (the default wooden broadhead) -------------------- */
+  --arrow-wood: #8a6a40;    /* shaft (arrowWood) */
+  --arrow-feather: #d64b3a; /* red fletching (featherMat) */
+  --arrow-steel: #bfc6d2;   /* forged head (metalMat, metalness .7) */
+
+  /* --- Semantic status --- */
+  --danger: #ff5b5b;
+  --danger-soft: #ffb3b3;
+  --danger-line: #ff6b6b;
+  --warn: #ffd27a;
+  --success: #9fe0c8;
+
+  /* --- Glass surfaces (HUD chrome floating over the 3D scene) ------------ */
+  --surface-panel: rgba(14, 22, 40, 0.60);   /* frosted card / panel */
+  --surface-raised: rgba(18, 28, 50, 0.60);  /* glass button */
+  --surface-active: rgba(40, 58, 96, 0.80);  /* pressed glass */
+  --surface-track: rgba(8, 14, 28, 0.70);    /* HP / meter track */
+  --surface-radar: rgba(12, 20, 36, 0.72);   /* radar disc */
+  --surface-scrim: rgba(10, 17, 32, 0.97);   /* full-screen overlay */
+
+  /* --- Borders / hairlines (cool blue-white) --- */
+  --line: rgba(180, 200, 240, 0.18);
+  --line-strong: rgba(180, 200, 240, 0.25);
+  --line-bright: rgba(210, 225, 255, 0.42);
+  --line-oncolor: rgba(255, 255, 255, 0.18);
+
+  /* --- Functional gradients (lifted verbatim from the game CSS) ---------- */
+  --fill-hp: linear-gradient(90deg, #c9521f, #ff7a3d, #ffd27a);   /* #hpfill @kind color */
+  --fill-charge: linear-gradient(90deg, #5fe0ff, #7fe2ff, #fff);  /* #powfill @kind color */
+  --grad-title: linear-gradient(90deg, #7fe2ff, #fff, #ffd27a);   /* @kind color */
+  --grad-cta: linear-gradient(90deg, #5fe0ff, #36c5ff);           /* @kind color */
+  --fill-p1: linear-gradient(90deg, #1a8fd0, #5fe0ff);            /* legacy alias @kind color */
+  --fill-p2: linear-gradient(270deg, #c9521f, #ffa15f);           /* legacy alias @kind color */
+
+  /* --- Scene background gradients --- */
+  --bg-arena: radial-gradient(ellipse at 50% 38%, #1a2c52 0%, #141f36 45%, #0a1018 100%); /* @kind color */
+  --bg-overlay: radial-gradient(ellipse at 50% 38%, rgba(26, 44, 82, 0.92), rgba(8, 14, 24, 0.97)); /* start/pause/over screens @kind color */
+  --bg-vignette: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(4, 8, 16, 0.70) 100%); /* @kind color */
+  --bg-hurt: radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(180, 20, 20, 0.55) 100%);   /* hurt flash @kind color */
+}

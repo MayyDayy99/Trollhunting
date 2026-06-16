@@ -1,0 +1,76 @@
+<!-- @dsCard group="Characters" viewport="700x300" name="Trolls — Existing Trio" subtitle="Melee · Spitter (méregbéka) · Mystic (mágus)" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 16px;
+    background: radial-gradient(ellipse at 50% 35%, #16223c, #0a1018 75%); }
+  .row { display: flex; gap: 14px; }
+  .cell { flex: 1; text-align: center; }
+  .stage { height: 150px; border-radius: 12px; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 64%, rgba(26,40,70,.5), rgba(8,14,28,.5)); border: 1px solid var(--line); }
+  canvas { width: 100%; height: 100%; display: block; }
+  .nm { font-family: var(--font-display); font-weight: 700; font-size: 13px; margin-top: 7px; }
+  .sub { font-size: 10.5px; color: var(--ink-sub); line-height: 1.5; margin-top: 3px; }
+  .sub code { font-family: var(--font-mono); font-size: 9px; color: var(--cyan); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="cell"><div class="stage"><canvas data-t="melee"></canvas></div>
+      <div class="nm" style="color:#6fa07a">KÖZELHARCOS</div>
+      <div class="sub">Alap troll, bunkóval rohan. Bőr <code>#6fa07a</code>, szem <code>#ff5a2a</code>.</div></div>
+    <div class="cell"><div class="stage"><canvas data-t="spitter"></canvas></div>
+      <div class="nm" style="color:#b6c95a">KÖPKÖDŐ <span style="color:var(--ink-muted)">· béka</span></div>
+      <div class="sub">Zömök varangy, méreggömböt köp. Epe <code>#b6c95a</code> / <code>#7e9a2e</code>.</div></div>
+    <div class="cell"><div class="stage"><canvas data-t="mystic"></canvas></div>
+      <div class="nm" style="color:#7fe2ff">MÁGUS</div>
+      <div class="sub">Botos varázsló, rúna-kristállyal. Kristály <code>#36c5ff</code> emissive.</div></div>
+  </div>
+  <script>
+    function setup(cv) { const ctx = cv.getContext('2d'); const dpr = Math.min(devicePixelRatio, 2), r = cv.getBoundingClientRect(); cv.width = r.width * dpr; cv.height = r.height * dpr; ctx.scale(dpr, dpr); return { ctx, W: r.width, H: r.height }; }
+    function eyes(ctx, cx, cy, col, sp) { ctx.globalCompositeOperation = 'lighter'; [-sp, sp].forEach((ex) => { const g = ctx.createRadialGradient(cx + ex, cy, 0, cx + ex, cy, 6); g.addColorStop(0, '#fff'); g.addColorStop(.4, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + ex, cy, 6, 0, 6.28); ctx.fill(); }); ctx.globalCompositeOperation = 'source-over'; }
+    function tusks(ctx, cx, cy) { ctx.fillStyle = '#f2e9d8'; ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx - 3, cy + 8); ctx.lineTo(cx - 10, cy + 4); ctx.fill(); ctx.beginPath(); ctx.moveTo(cx + 6, cy); ctx.lineTo(cx + 3, cy + 8); ctx.lineTo(cx + 10, cy + 4); ctx.fill(); }
+    document.querySelectorAll('canvas[data-t]').forEach((cv) => {
+      const { ctx, W, H } = setup(cv); const cx = W / 2, cy = H * 0.54, t = cv.dataset.t;
+      if (t === 'melee') {
+        ctx.fillStyle = '#6fa07a'; ctx.beginPath(); ctx.ellipse(cx, cy + 8, 26, 30, 0, 0, 6.28); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(cx, cy - 24, 17, 15, 0, 0, 6.28); ctx.fill();
+        ctx.fillStyle = '#41704e'; ctx.beginPath(); ctx.ellipse(cx + 8, cy + 12, 9, 7, .4, 0, 6.28); ctx.fill();
+        // club
+        ctx.strokeStyle = '#8a6240'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(cx + 26, cy + 20); ctx.lineTo(cx + 40, cy - 14); ctx.stroke();
+        ctx.fillStyle = '#8a6240'; ctx.beginPath(); ctx.arc(cx + 42, cy - 18, 8, 0, 6.28); ctx.fill();
+        tusks(ctx, cx, cy - 18); eyes(ctx, cx, cy - 26, '#ff5a2a', 7);
+      } else if (t === 'spitter') {
+        // squat toad body (wide, low)
+        ctx.fillStyle = '#7e9a2e'; ctx.beginPath(); ctx.ellipse(cx, cy + 16, 38, 24, 0, 0, 6.28); ctx.fill();
+        ctx.fillStyle = '#b6c95a'; ctx.beginPath(); ctx.ellipse(cx, cy + 22, 30, 14, 0, 0, 6.28); ctx.fill();
+        // head fused
+        ctx.fillStyle = '#7e9a2e'; ctx.beginPath(); ctx.ellipse(cx, cy - 6, 24, 18, 0, 0, 6.28); ctx.fill();
+        // wide mouth
+        ctx.fillStyle = '#3a1f1f'; ctx.beginPath(); ctx.ellipse(cx, cy + 2, 16, 6, 0, 0, 6.28); ctx.fill();
+        // bile spit
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(cx, cy - 26, 0, cx, cy - 26, 12); g.addColorStop(0, '#d8ee8a'); g.addColorStop(.5, '#9fdc4a'); g.addColorStop(1, 'rgba(159,220,74,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy - 26, 12, 0, 6.28); ctx.fill(); ctx.globalCompositeOperation = 'source-over';
+        eyes(ctx, cx, cy - 12, '#ff5a2a', 9);
+      } else {
+        // mystic: robed body
+        ctx.fillStyle = '#4a5d52'; ctx.beginPath(); ctx.moveTo(cx, cy - 18); ctx.lineTo(cx - 24, cy + 40); ctx.lineTo(cx + 24, cy + 40); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#6fa07a'; ctx.beginPath(); ctx.ellipse(cx, cy - 24, 15, 14, 0, 0, 6.28); ctx.fill();
+        tusks(ctx, cx, cy - 18);
+        // staff + crystal
+        ctx.strokeStyle = '#8a6240'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(cx + 26, cy + 38); ctx.lineTo(cx + 26, cy - 30); ctx.stroke();
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(cx + 26, cy - 36, 0, cx + 26, cy - 36, 16); g.addColorStop(0, '#fff'); g.addColorStop(.4, '#36c5ff'); g.addColorStop(1, 'rgba(54,197,255,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + 26, cy - 36, 16, 0, 6.28); ctx.fill();
+        ctx.fillStyle = '#7fe2ff'; ctx.beginPath(); ctx.moveTo(cx + 26, cy - 44); ctx.lineTo(cx + 32, cy - 36); ctx.lineTo(cx + 26, cy - 28); ctx.lineTo(cx + 20, cy - 36); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        eyes(ctx, cx, cy - 26, '#36c5ff', 6);
+      }
+    });
+  </script>
+</body>
+</html>

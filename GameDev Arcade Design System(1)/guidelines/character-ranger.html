@@ -1,0 +1,61 @@
+<!-- @dsCard group="Characters" viewport="700x360" name="Ranger — Player & Co-op Colors" subtitle="Hooded forest archer · 4 co-op tints · build recipe" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 16px;
+    background: radial-gradient(ellipse at 50% 30%, #16223c, #0a1018 75%); }
+  .row { display: flex; gap: 10px; margin-bottom: 14px; }
+  .cell { flex: 1; text-align: center; }
+  .stage { height: 150px; border-radius: 12px; background: radial-gradient(ellipse at 50% 64%, rgba(26,40,70,.5), rgba(8,14,28,.5)); border: 1px solid var(--line); overflow: hidden; }
+  canvas { width: 100%; height: 100%; display: block; }
+  .nm { font-family: var(--font-display); font-weight: 700; font-size: 12px; margin-top: 6px; }
+  .hx { font-family: var(--font-mono); font-size: 9px; color: var(--ink-muted); }
+  .spec { font-size: 11px; line-height: 1.6; color: var(--ink-sub); border-top: 1px solid var(--line); padding-top: 10px; }
+  .spec b { color: var(--cream); }
+  .spec code { font-family: var(--font-mono); font-size: 10px; color: var(--cyan); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="cell"><div class="stage"><canvas data-c="#36c5ff"></canvas></div><div class="nm" style="color:#36c5ff">J1 · CIÁN</div><div class="hx">#36c5ff</div></div>
+    <div class="cell"><div class="stage"><canvas data-c="#ffd27a"></canvas></div><div class="nm" style="color:#ffd27a">J2 · AMBER</div><div class="hx">#ffd27a</div></div>
+    <div class="cell"><div class="stage"><canvas data-c="#9f6aff"></canvas></div><div class="nm" style="color:#9f6aff">J3 · VIOLA</div><div class="hx">#9f6aff</div></div>
+    <div class="cell"><div class="stage"><canvas data-c="#5fd08a"></canvas></div><div class="nm" style="color:#5fd08a">J4 · ZÖLD</div><div class="hx">#5fd08a</div></div>
+  </div>
+  <div class="spec">
+    <b>Silhouette:</b> hooded cloak ranger, light leather, a longbow matching the in-hand <code>staveWood</code>, back quiver whose fletching glows the player's color. <b>Build (flat-shaded primitives, like the trolls):</b> capsule torso + cloak <code>ConeGeometry</code> + hood cone + simple limb cylinders; bow = thin torus arc. <b>Per-player tint</b> applies to cloak trim, quiver-fletching glow &amp; nameplate only — cloak/leather stay neutral so all four read against forest-night. Peer avatars interpolate from <code>player_state</code>; show a draw-back pose on <code>arrow_fired</code>.
+  </div>
+  <script>
+    document.querySelectorAll('canvas[data-c]').forEach((cv) => {
+      const col = cv.dataset.c, ctx = cv.getContext('2d');
+      const dpr = Math.min(devicePixelRatio, 2), r = cv.getBoundingClientRect();
+      cv.width = r.width * dpr; cv.height = r.height * dpr; ctx.scale(dpr, dpr);
+      const W = r.width, H = r.height, cx = W / 2, cy = H * 0.52;
+      // cloak (cone)
+      ctx.fillStyle = '#3a4a3a';
+      ctx.beginPath(); ctx.moveTo(cx, cy - 28); ctx.lineTo(cx - 26, cy + 46); ctx.lineTo(cx + 26, cy + 46); ctx.closePath(); ctx.fill();
+      // cloak trim (player color)
+      ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(cx - 26, cy + 46); ctx.lineTo(cx + 26, cy + 46); ctx.stroke();
+      // hood
+      ctx.fillStyle = '#2f3d30';
+      ctx.beginPath(); ctx.moveTo(cx, cy - 44); ctx.quadraticCurveTo(cx - 18, cy - 30, cx - 12, cy - 12); ctx.quadraticCurveTo(cx, cy - 18, cx + 12, cy - 12); ctx.quadraticCurveTo(cx + 18, cy - 30, cx, cy - 44); ctx.fill();
+      // face shadow
+      ctx.fillStyle = '#0c1018'; ctx.beginPath(); ctx.ellipse(cx, cy - 22, 7, 9, 0, 0, 6.28); ctx.fill();
+      // bow (arc)
+      ctx.strokeStyle = '#8a6a40'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx - 30, cy + 2, 34, -0.9, 0.9); ctx.stroke();
+      ctx.strokeStyle = 'rgba(220,230,255,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 30 + Math.cos(-0.9) * 34, cy + 2 + Math.sin(-0.9) * 34); ctx.lineTo(cx - 30 + Math.cos(0.9) * 34, cy + 2 + Math.sin(0.9) * 34); ctx.stroke();
+      // quiver fletching glow (player color)
+      ctx.globalCompositeOperation = 'lighter';
+      [[18, -20], [22, -14], [14, -16]].forEach(([dx, dy]) => {
+        const g = ctx.createRadialGradient(cx + dx, cy + dy, 0, cx + dx, cy + dy, 7);
+        g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + dx, cy + dy, 7, 0, 6.28); ctx.fill();
+      });
+      ctx.globalCompositeOperation = 'source-over';
+    });
+  </script>
+</body>
+</html>

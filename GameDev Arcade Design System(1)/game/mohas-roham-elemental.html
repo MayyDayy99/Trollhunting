@@ -685,19 +685,14 @@ function solidBox(cx, cz, halfX, halfZ, opts){
                top:(opts&&opts.top)||0, climb:!!(opts&&opts.climb)});
 }
 // igaz, ha a játékos a tetején/fölötte áll -> nem blokkol oldalról (átléphet/ráállhat)
-function _onTopOf(s, x, z, feet){
+function _onTopOf(s, feet){
   if(s.top<=0) return false;
-  // csak akkor "tető", ha a játékos VÍZSZINTESEN a lábnyom FÖLÖTT van -> különben oldalról blokkol (nem lehet magas falon átmenni)
-  let over;
-  if(s.kind==='box') over = (x>=s.minX && x<=s.maxX && z>=s.minZ && z<=s.maxZ);
-  else over = ((x-s.x)*(x-s.x)+(z-s.z)*(z-s.z)) <= s.r*s.r;
-  if(!over) return false;
   return s.climb ? (feet >= s.top - STEP) : (feet >= s.top);
 }
 // egy feloldó-passz: kitolja a pontot minden testből PLAYER_R-rel
 function _resolvePass(x, z, feet){
   for(const s of SOLIDS){
-    if(_onTopOf(s, x, z, feet)) continue;
+    if(_onTopOf(s, feet)) continue;
     if(s.kind==='cyl'){
       const dx=x-s.x, dz=z-s.z; let d=Math.hypot(dx,dz); const R=s.r+PLAYER_R;
       if(d<R){ if(d<1e-4){ x=s.x+R; z=s.z; } else { const k=R/d; x=s.x+dx*k; z=s.z+dz*k; } }
@@ -1426,7 +1421,7 @@ function makeMonster(type, scale, hp, speed){
   scene.add(g);
 
   const m={ g, legs, arms, head, eyes, eyeMat:myEye, bodySkin, hp, maxHp:hp, speed, walkPhase:Math.random()*6.28,
-    alive:true, dying:0, atkCd:0.6, hurtFlash:0, scale,
+    alive:true, dying:0, atkCd:0, hurtFlash:0, scale,
     bodyR:0.85*scale, bodyCY:1.1*scale, headCY:1.95*scale, headR:0.42*scale,
     type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
     dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0,
@@ -1544,7 +1539,6 @@ addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
     applyBowAdj(); }
 });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
-function clearKeys(){ for(const k in keys) keys[k]=false; } // FIX: minden lenyomott billentyű elengedése (blur/pause -> nincs beragadt mozgás)
 
 document.addEventListener('pointerlockchange',()=>{ locked=(document.pointerLockElement===cv); showLockHint(running&&!locked&&!dragLook); });
 document.addEventListener('pointerlockerror',()=>{ locked=false; showLockHint(running&&!dragLook); });
@@ -1571,7 +1565,7 @@ addEventListener('mouseup',e=>{
   if(e.button!==0) return;
   if(drawing){ if(charge>0.12) fireArrow(charge); drawing=false; charge=0; powwrap.classList.remove('on'); }
 });
-addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
+addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; if(running) pauseGame(); });
 cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
 
 /* ===================== HUD ===================== */
@@ -1892,8 +1886,7 @@ function update(dt,t){
     if(intermission>0){ intermission-=dt; if(intermission<=0) startWave(wave+1); }
     waveLeft.textContent='trollok: '+(aliveCount+toSpawn);
   }
-  else if(running && coop){ waveLeft.textContent='trollok: '+aliveCount; }
-  if(coop) coopTick(dt); // FIX: peer-szinkron + interpoláció + sendInput szünetben/menüben/halál után is fusson
+  else if(running && coop){ coopTick(dt); waveLeft.textContent='trollok: '+aliveCount; }
 
   /* --- effektek --- */
   sparks.update(dt); gore.update(dt);
@@ -2008,8 +2001,6 @@ frame();
 var coop = null;                                  // the connectCoop handle (null offline)
 var coopMyId = null;                              // our server-assigned player id
 var coopDowned = false;                           // FIX: saját elesés egyszeri kapuzása (szerver-auth)
-var coopStarted = false;                          // FIX: volt-e már Start? (Start előtt nincs szerver-szörny; szünetben viszont reconcile fut)
-var coopReviveAt = 0;                             // FIX: revive türelmi idő (elavult hp=0 state ne triggereljen gameOver-t)
 var coopWelcomed = false;                          // v2: volt-e már welcome? (pid mellett a stabil id-vel detektáljuk az újracsatlakozást)
 var coopHost = null;                               // szerver LAN IP-je a meghívó-linkhez (welcome.host)
 var coopPeers = new Map();                        // peerId -> { g, buf, has, name } avatar
@@ -2151,7 +2142,7 @@ function coopRemovePeer(id){
 /* ---- server monster reconciliation: build a real troll, tag it, share monsters[] ---- */
 function coopTrollTypeId(t){ return (typeof t==='string' && TROLL_TYPES[t]) ? t : 'grunt'; }
 function coopEnsureMonster(sm){
-  if(!coopStarted) return null;        // FIX: Start előtt ne hozz létre szerver-szörnyet; szünetben igen
+  if(!running) return null;            // FIX: ne hozz létre szerver-szörnyet a Start előtt (szellem-bug)
   const netId = sm.id;
   let m = coopRemoteById.get(netId);
   if(!m){
@@ -2178,7 +2169,7 @@ function coopEnsureMonster(sm){
   return m;
 }
 function coopReconcileMonsters(serverMons){
-  if(!coopStarted) return;             // FIX: Start után mindig (szünetben is) reconcile
+  if(!running) return;                 // FIX: csak futó játékban kezeljük a szerver-szörnyeket
   const seen = new Set();
   if(Array.isArray(serverMons)) for(const sm of serverMons){ if(sm && sm.id!=null){ coopEnsureMonster(sm); seen.add(sm.id); } }
   // monsters the server dropped without an explicit kill (e.g. wave reset) -> remove quietly
@@ -2276,9 +2267,8 @@ function coopOnReset(){
   if(!coop) return;
   coopRemoteById.clear();              // a meshek már törölve a resetGame ciklusban; csak a könyvelés ürül
   coopDowned = false;
-  coopReviveAt = coopNow();            // FIX: türelmi idő egy elavult hp=0 state ellen
-  // a szerver-autoritatív liveness miatt külön 'respawn' üzenettel élesztünk újra
-  coop.send({ t:'respawn' });
+  // jelezzük a szervernek, hogy újra élünk teli HP-val (a sendInput egyébként nem küld hp-t)
+  coop.send({ t:'player_state', pos:{x:player.pos.x,y:player.pos.y,z:player.pos.z}, yaw:player.yaw, pitch:player.pitch, hp:player.maxHp, alive:true });
 }
 
 /* ---- in-game co-op HUD: room code, copy-invite, players list, status dot ---- */
@@ -2386,7 +2376,7 @@ function coopConnect(){
       coopApplyHud(s);
       if(Array.isArray(s.players)) for(const pv of s.players){
         if(pv.id===coopMyId){ // FIX: a saját HP-t a szerver vezeti (közelharc-sebzés) -> HUD + elesés
-          if(typeof pv.hp==='number' && coopNow()-coopReviveAt>1500){ player.hp=pv.hp; if(hpfill) hpfill.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
+          if(typeof pv.hp==='number'){ player.hp=pv.hp; if(hpfill) hpfill.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
             if(pv.hp<=0 && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }
           continue; }
         const peer = coopMakePeer(pv.id, pv.name);
@@ -2430,16 +2420,16 @@ function resetGame(){
   if(coop) coopOnReset(); // FIX: co-op könyvelés ürítése + revive új játéknál
 }
 function beginPlay(){
-  AUD.unlock(); resetGame(); running=true; coopStarted=true;
+  AUD.unlock(); resetGame(); running=true;
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
 }
-function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
+function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); showLockHint(false); pauseScreen.classList.remove('hide');
   if(document.pointerLockElement) document.exitPointerLock(); }
-function resumeGame(){ if(player.hp<=0) return; AUD.unlock(); running=true; pauseScreen.classList.add('hide'); ensureLock(); }
+function resumeGame(){ if(player.hp<=0) return; running=true; pauseScreen.classList.add('hide'); ensureLock(); }
 function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.over();
   document.getElementById('overStat').innerHTML='Elért hullám: <b>'+wave+'</b> &nbsp;·&nbsp; Pont: <b>'+score+'</b>';
-  pauseScreen.classList.add('hide'); startScreen.classList.add('hide'); overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
+  overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
 
 document.getElementById('startBtn').addEventListener('click',beginPlay);
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);

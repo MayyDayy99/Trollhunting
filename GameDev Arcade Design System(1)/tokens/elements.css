@@ -1,0 +1,100 @@
+/* ============================================================================
+   elements.css — Mohás Roham elemental arrow system
+   ----------------------------------------------------------------------------
+   FIVE arrow types: BASE (plain steel), FIRE, ICE, POISON, LIGHTNING.
+   Each element owns a small, consistent palette used in THREE places:
+     1. the ARROW  — head/core color + glowing trail (in flight)
+     2. the IMPACT — burst particles on hit
+     3. the STATUS — the aura/encasement painted on an afflicted troll
+   plus the POINT-LIGHT color the projectile/impact casts into the scene.
+
+   ── HOW TO READ A TOKEN SET (per element <e>) ──────────────────────────────
+     --el-<e>-core   solid: arrowhead emissive + projectile core      (0xRRGGBB)
+     --el-<e>-mid    solid: main body / flame / fluid                  (0xRRGGBB)
+     --el-<e>-glow   solid: outer halo, brightest highlight, hot core  (0xRRGGBB)
+     --el-<e>-spark  solid: fastest impact sparks (near-white accent)  (0xRRGGBB)
+     --el-<e>-deep   solid: darkest shade / smoke / char / shadow      (0xRRGGBB)
+     --el-<e>-light  solid: THREE.PointLight color the FX emits        (0xRRGGBB)
+     --el-<e>-trail  rgba : additive trail ribbon / sprite tint (alpha set live)
+     --status-<e>    solid: tint multiplied onto the troll while afflicted
+
+   ── CLAUDE CODE NOTES ──────────────────────────────────────────────────────
+   • The game already pools 30 arrows (`makeArrow`) and bursts particles via
+     THREE.Points with AdditiveBlending — reuse that pipeline per element, only
+     swapping the color set below + the per-element behavior in element-fx.js.
+   • Trails: additive THREE.Points or a tapered ribbon, color = --el-<e>-glow→
+     --el-<e>-trail, length ~16 samples (the sword-duel TRAIL_LEN convention).
+   • Impact: 18–40 sparks, color ramp core→glow→spark, gravity like dust burst.
+   • Status tint: multiply troll material color by --status-<e>; emissive parts
+     keep their own glow. Keep flatShading:true to match the world.
+   • These are VISUAL specs. Per the brief, gameplay numbers (DoT/slow/stun) are
+     intentionally NOT prescribed here — tune in game; see element-fx.js comments
+     for where a hook would live.
+   ============================================================================ */
+:root {
+  /* ── BASE — plain forged broadhead. No element; a clean white-cyan streak.
+     Use when no elemental mod is equipped. Matches the stock arrow materials. */
+  --el-base-core: #bfc6d2;   /* forged steel head (metalMat) */
+  --el-base-mid: #8a6a40;    /* wooden shaft (arrowWood) */
+  --el-base-glow: #e9f1ff;   /* bright streak */
+  --el-base-spark: #cfe0ff;  /* impact sparks (cool white) */
+  --el-base-deep: #5a5f6b;   /* steel shadow */
+  --el-base-light: #cfe0ff;  /* faint cool light (low intensity) */
+  --el-base-trail: rgba(207, 224, 255, 1); /* @kind color */
+  --status-base: #ffffff;    /* no tint (identity) */
+
+  /* ── FIRE (Tűz) — hot orange→white core, ember sparks, dark smoke.
+     Grounded in the troll-eye emissive (#ff5a2a). Burning status = orange
+     flame licks + charred skin. */
+  --el-fire-core: #ff5a2a;   /* arrowhead emissive (hottest base) */
+  --el-fire-mid: #ff9a3d;    /* flame body */
+  --el-fire-glow: #ffc24d;   /* inner white-gold heat */
+  --el-fire-spark: #fff1c4;  /* white-hot embers */
+  --el-fire-deep: #2a1c14;   /* smoke / char */
+  --el-fire-light: #ff7a3d;  /* warm point-light */
+  --el-fire-trail: rgba(255, 120, 40, 1); /* @kind color */
+  --status-fire: #ff6a2a;    /* burning skin tint */
+
+  /* ── ICE (Jég) — pale cyan crystal, white frost sparks, deep blue shadow.
+     Frozen status = translucent blue encasement + slow. */
+  --el-ice-core: #6fd8ff;    /* crystal head emissive */
+  --el-ice-mid: #a9e8ff;     /* ice body */
+  --el-ice-glow: #e2f6ff;    /* frost highlight */
+  --el-ice-spark: #ffffff;   /* shattering frost */
+  --el-ice-deep: #2a6fd0;    /* deep blue core/shadow */
+  --el-ice-light: #7fd0ff;   /* cold point-light */
+  --el-ice-trail: rgba(150, 225, 255, 1); /* @kind color */
+  --status-ice: #bfe6ff;     /* frozen encasement tint */
+
+  /* ── POISON (Méreg) — toxic green, bubbling bile, sickly glow.
+     Reuses the existing SPITTER troll's bile palette (#b6c95a / #7e9a2e) so the
+     element reads as the same toxin the toad-trolls spit. Poisoned status =
+     green drip + rising bubbles. */
+  --el-poison-core: #7e9a2e; /* dark toxin core (spit emissive) */
+  --el-poison-mid: #9fdc4a;  /* bright venom */
+  --el-poison-glow: #c8e26a; /* sickly highlight */
+  --el-poison-spark: #d8ee8a;/* splatter droplets */
+  --el-poison-deep: #4d6b1e; /* deep bile shadow */
+  --el-poison-light: #9fdc4a;/* green point-light */
+  --el-poison-trail: rgba(159, 220, 74, 1); /* @kind color */
+  --status-poison: #9fd24a;  /* poisoned skin tint */
+
+  /* ── LIGHTNING (Villám / áram) — violet→white arcs, blue-white crackle.
+     Adds a new VIOLET accent to the palette. Shocked status = jittering white
+     arcs + brief stun-twitch. */
+  --el-lightning-core: #b48cff; /* violet bolt core */
+  --el-lightning-mid: #a8c8ff;  /* blue-white body */
+  --el-lightning-glow: #ffffff; /* arc highlight (pure white) */
+  --el-lightning-spark: #d8e6ff;/* crackle motes */
+  --el-lightning-deep: #5a3fb0; /* deep violet shadow */
+  --el-lightning-light: #b48cff;/* violet point-light (flickers) */
+  --el-lightning-trail: rgba(168, 200, 255, 1); /* @kind color */
+  --status-lightning: #c8b4ff;  /* shocked skin tint */
+
+  /* ── Element-keyed gradients (HUD selector chips, arrow-streak previews) ── */
+  --grad-base: linear-gradient(90deg, #8a6a40, #bfc6d2, #e9f1ff);     /* @kind color */
+  --grad-fire: linear-gradient(90deg, #2a1c14, #ff5a2a, #ffc24d);     /* @kind color */
+  --grad-ice: linear-gradient(90deg, #2a6fd0, #6fd8ff, #e2f6ff);      /* @kind color */
+  --grad-poison: linear-gradient(90deg, #4d6b1e, #7e9a2e, #c8e26a);   /* @kind color */
+  --grad-lightning: linear-gradient(90deg, #5a3fb0, #b48cff, #ffffff);/* @kind color */
+}

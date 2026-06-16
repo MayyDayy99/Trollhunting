@@ -1,0 +1,30 @@
+<!-- @dsCard group="Effects" viewport="700x240" name="Enemy Status Auras" subtitle="Live: burning / frozen / poisoned / shocked troll" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); padding: 14px 16px;
+    background: radial-gradient(ellipse at 50% 45%, #16223c, #0a1018 72%); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .stage { width: 100%; height: 160px; border-radius: 12px; overflow: hidden; background: radial-gradient(ellipse at 50% 60%, rgba(22,34,60,.6), rgba(8,14,28,.5)); border: 1px solid var(--line); }
+  canvas { display: block; width: 100%; height: 100%; }
+  .lab { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: .04em; }
+  .sub { font-size: 9px; color: var(--ink-muted); margin-top: -4px; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell"><div class="stage"><canvas data-el="fire"></canvas></div><span class="lab" style="color:#ff7a3d">ÉGŐ</span><span class="sub">burning</span></div>
+    <div class="cell"><div class="stage"><canvas data-el="ice"></canvas></div><span class="lab" style="color:#7fd0ff">FAGYOTT</span><span class="sub">frozen · slow</span></div>
+    <div class="cell"><div class="stage"><canvas data-el="poison"></canvas></div><span class="lab" style="color:#9fdc4a">MÉRGEZETT</span><span class="sub">poisoned</span></div>
+    <div class="cell"><div class="stage"><canvas data-el="lightning"></canvas></div><span class="lab" style="color:#b48cff">SOKKOLT</span><span class="sub">shocked · stun</span></div>
+  </div>
+  <script src="./fx/element-fx.js"></script>
+  <script>
+    document.querySelectorAll('canvas[data-el]').forEach((cv) => ElementFX.create(cv, { element: cv.dataset.el, mode: 'aura' }));
+  </script>
+</body>
+</html>

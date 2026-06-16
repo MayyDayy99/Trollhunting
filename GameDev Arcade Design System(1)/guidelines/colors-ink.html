@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Ink — Text on Dark" subtitle="Cool blue-white text ramp" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--bg-deep); padding: 18px; }
+  .stack { display: flex; flex-direction: column; gap: 9px; }
+  .ln { display: flex; align-items: baseline; gap: 14px; }
+  .txt { font-size: 19px; font-weight: 600; min-width: 320px; }
+  .meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+</style>
+</head>
+<body>
+  <div class="stack">
+    <div class="ln"><span class="txt" style="color:#e9f1ff">Primary HUD text</span><span class="meta">--ink · #e9f1ff</span></div>
+    <div class="ln"><span class="txt" style="color:#cfe0ff">Bright secondary / lead</span><span class="meta">--ink-bright · #cfe0ff</span></div>
+    <div class="ln"><span class="txt" style="color:#acbfdc">Sub-copy &amp; hints</span><span class="meta">--ink-sub · #acbfdc</span></div>
+    <div class="ln"><span class="txt" style="color:#9db4d6">Muted captions / stats</span><span class="meta">--ink-muted · #9db4d6</span></div>
+    <div class="ln"><span class="txt" style="color:#8fa6c9">Faint eyebrows</span><span class="meta">--ink-faint · #8fa6c9</span></div>
+  </div>
+</body>
+</html>
