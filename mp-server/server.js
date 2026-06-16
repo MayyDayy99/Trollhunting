@@ -385,9 +385,12 @@ function handleMessage(ws, msg) {
       break;
     }
 
-    // ---- RESPAWN: explicit revive after a co-op death/restart (server owns liveness) ----
+    // ---- RESPAWN: client clicked Start/Restart -> become an ACTIVE player (server owns liveness) ----
     case 'respawn': {
-      player.hp = 100; player.alive = true;
+      const othersActive = [...room.players.values()].some(p => p !== player && p.playing && p.alive && p.hp > 0);
+      player.playing = true; player.hp = 100; player.alive = true;
+      // Starting/restarting while nobody else is mid-game => fresh session from wave 1.
+      if (!othersActive) { room.wave = 0; room.monsters = []; room.waveToSpawn = 0; room.spawnTimer = 0; room.intermission = false; room.waveTimer = 0; }
       break;
     }
 
@@ -461,6 +464,7 @@ function handleJoin(ws, msg) {
       pos: { x: 0, y: 1.7, z: 0 },
       yaw: 0, pitch: 0,
       hp: 100, alive: true,
+      playing: false,          // false until the client clicks Start/Restart (sends 'respawn'); pre-start/dead players draw no aggro & don't run the wave sim
       token: makeId(),         // private reclaim secret (sent only in this player's welcome)
       lastSeen: Date.now(),
     };
@@ -570,7 +574,7 @@ function startWave(room, n) {
 function nearestLivingPlayer(room, x, z) {
   let best = null, bestD = Infinity;
   for (const p of room.players.values()) {
-    if (!p.alive || p.hp <= 0) continue;
+    if (!p.playing || !p.alive || p.hp <= 0) continue;
     const dx = p.pos.x - x, dz = p.pos.z - z;
     const d = dx * dx + dz * dz;
     if (d < bestD) { bestD = d; best = p; }
@@ -582,6 +586,15 @@ function nearestLivingPlayer(room, x, z) {
 function stepWaves(room, dt) {
   // Nothing to simulate until someone is in the room.
   if (room.players.size === 0) return;
+
+  // Idle the arena unless >=1 player is actually PLAYING (Started & alive):
+  // stops monsters gathering on the pre-Start screen and clears the field after a wipe,
+  // so the next Start begins fresh at wave 1.
+  const activeCount = [...room.players.values()].filter(p => p.playing && p.alive && p.hp > 0).length;
+  if (activeCount === 0) {
+    if (room.wave !== 0 || room.monsters.length) { room.wave = 0; room.monsters = []; room.waveToSpawn = 0; room.spawnTimer = 0; room.intermission = false; room.waveTimer = 0; }
+    return;
+  }
 
   // ---- Wave lifecycle ----------------------------------------------------
   if (room.wave === 0) {
