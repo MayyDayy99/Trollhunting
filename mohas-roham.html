@@ -305,6 +305,7 @@ for(let p=0;p<4;p++){ const ang=p*Math.PI/2 + Math.PI/4;
     fs.rotation.x=-Math.PI/2; fs.rotation.z=rand(0,6.28); fs.castShadow=false; fs.receiveShadow=true; scene.add(fs); }
 }
 
+let flammables=[];   // ELEM-ENV: gyúlékony fák (tűz-zóna gyújtja/terjed); korán deklarálva, mert a tree() a világ-építésnél hívódik
 function tree(x,z,s){
   s=s||1;
   const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(s);
@@ -319,6 +320,7 @@ function tree(x,z,s){
   scene.add(g);
   // ÜTKÖZŐ: a törzs alja a CylinderGeometry(0.3,0.6,...) miatt ~0.6 sugarú -> tömör henger a tövénél
   solidCyl(x, z, 0.55*s, {mob:true});
+  flammables.push({x:x, z:z, r:0.55*s, g:g, onFire:false, zone:null});   // ELEM-ENV: a tűz felgyújthatja
   return g;
 }
 function rock(x,z,r){ const m=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(r,0), r*0.25, r*0.25), rockMat);
@@ -1151,7 +1153,8 @@ function tickStatus(m, dt){
   if(m.wet>0) m.wet-=dt;                                      // független flag-időzítők lecsengése
   if(m.charged>0) m.charged-=dt;
   if(m.frozenSolid>0) m.frozenSolid-=dt;
-  if(!m.statusEl) return;
+  if(m.chill>0) m.chill-=dt;                                  // fagy-zóna lassítás (ideiglenes)
+  if(!m.statusEl){ m.slowMul=(m.chill>0?0.55:1); return; }    // státusz nélkül: csak a fagy-zóna lassít, különben reset 1-re
   const s=STATUS_CFG[m.statusEl]; m.statusT-=dt;
   let dps=s.dps + (s.dpsRamp||0)*((m.statusStacks||1)-1);     // stack-skálázott DoT (tűz 7/10/13, méreg 4/6/8)
   if(m.resist && m.resist[m.statusEl]) dps*=m.resist[m.statusEl];   // per-troll ellenállás/sebezhetőség
@@ -1159,7 +1162,10 @@ function tickStatus(m, dt){
     m.burnAcc=(m.burnAcc||0)+dps*dt;                          // DoT egész sebzésre kvantálva
     if(m.burnAcc>=1){ const d=Math.floor(m.burnAcc); m.burnAcc-=d; m.hp-=d; m.hurtFlash=Math.max(m.hurtFlash,0.08);
       if(m.hp<=0 && m.alive){ killMonster(m,false); return; } } }
-  if(m.statusEl!=='ice' && s.slow<1) m.slowMul=s.slow;        // lassítás frissítése (jég a saját mélyülő értékét tartja)
+  let slow=(m.chill>0?0.55:1);                                // a státusz- és a fagy-zóna lassítás közül az erősebb
+  if(m.statusEl==='ice') slow=Math.min(slow, Math.max(0.25, s.slow+(s.slowRamp||0)*((m.statusStacks||1)-1)));
+  else if(s.slow<1) slow=Math.min(slow, s.slow);
+  m.slowMul=slow;
   if(m.statusEl==='fire' && (m.statusStacks||1)>=2){ m._fireSpreadT=(m._fireSpreadT||0)-dt;   // TŰZ TERJEDÉS 2+ stacknél: ~1/mp átragad a legközelebbi trollra
     if(m._fireSpreadT<=0){ m._fireSpreadT=1.0; const sp=nearestTrolls(m.g.position.x,m.g.position.z,m,3.0,1);
       for(const tg of sp){ if(tg.statusEl!=='fire'){ const a=m.g.position, b=tg.g.position; EFX.bolt(a.x,a.y+(m.bodyCY||1),a.z,b.x,b.y+(tg.bodyCY||1),b.z,0xff9a3d,0.1,0.2); } applyStatus(tg,'fire',null,1); } } }
@@ -1231,7 +1237,14 @@ function setElement(id){ if(!EL[id]) return; currentElement=id; updateElementHUD
 /* ===================== ELEM-PRO: látható nyilak + elem-logika =====================
    Minden elem saját mechanikát kap (nem csak szín): tűz=DoT+terjedés, jég=fagy/szilánk,
    méreg=megmaradó gázfelhő, villám=lánc. A nyil hegyén látható az elem (buildElemHead). */
-let gasClouds=[];
+let zones=[], burningCount=0;   // ELEM-ENV: egységes zóna-registry (gáz/tűz/fagy/tócsa/gőz), max 10
+const ZONE_CFG={
+  gas:    { color:0x9fdc4a, opacity:0.24, additive:false, rMax:2.2, max:4.5, dps:3, el:'poison' },
+  fire:   { color:0xff7a3d, opacity:0.34, additive:true,  rMax:2.5, max:5.0, dps:5, el:'fire'   },
+  frost:  { color:0xbfe6ff, opacity:0.30, additive:false, rMax:2.4, max:6.0, dps:0, el:'ice'    },
+  puddle: { color:0x3a6a9a, opacity:0.32, additive:false, rMax:2.5, max:6.0, dps:0, el:null     },
+  steam:  { color:0xdfeaf2, opacity:0.22, additive:true,  rMax:3.5, max:1.5, dps:0, el:null     }
+};
 function buildElemHead(a){
   const h=a.elemHolder; if(!h) return;
   while(h.children.length){ const c=h.children.pop(); if(c.geometry)c.geometry.dispose(); if(c.material&&c.material.dispose)c.material.dispose(); h.remove(c); }
@@ -1243,9 +1256,38 @@ function buildElemHead(a){
 }
 function arcSpark(from,to,color,n){ const k=n*5; for(let i=0;i<k;i++){ const t=i/k; sparks.burst(from.x+(to.x-from.x)*t+rand(-0.15,0.15), from.y+(to.y-from.y)*t+rand(-0.15,0.15), from.z+(to.z-from.z)*t+rand(-0.15,0.15), 1, color, 0.2, 0); } }
 function nearestTrolls(x,z,exclude,radius,max){ const out=[]; for(const o of monsters){ if(!o.alive||o.dying>0||o===exclude||coopIsRemote(o)) continue; const d=Math.hypot(o.g.position.x-x,o.g.position.z-z); if(d<radius) out.push([d,o]); } out.sort((a,b)=>a[0]-b[0]); return out.slice(0,max).map(e=>e[1]); }
-function chainLightning(hit,dmg){ const targets=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,7,2); let prev=hit; for(const tg of targets){ const a=prev.g.position.clone(); a.y+=prev.bodyCY||1; const b=tg.g.position.clone(); b.y+=tg.bodyCY||1; EFX.bolt(a.x,a.y,a.z,b.x,b.y,b.z,0xffffff,0.16,0.3); EFX.bolt(a.x,a.y,a.z,b.x,b.y,b.z,0xb48cff,0.16,0.5); EFX.flash(b.x,b.y,b.z,0xc8e6ff,0.4,1.8,0.2); EFX.light(b.x,b.y,b.z,0xc8b4ff,2.4,0.18); for(let i=0;i<8;i++) RP.spawn(b.x,b.y,b.z,rand(-3,3),rand(-2,3),rand(-3,3),0xffffff,0.4,0.02,0.3,2,1.5); tg.hp-=dmg*0.5; tg.hurtFlash=0.15; applyStatus(tg,'lightning'); if(tg.hp<=0&&tg.alive) killMonster(tg,false); prev=tg; } shake=Math.max(shake,0.12); }
+function chainLightning(hit,dmg){   // ELEM-ENV: nedves/tócsa-trollok vezetik → nagyobb hatótáv + több csomópont + erősebb ív
+  const hx=hit.g.position.x, hz=hit.g.position.z;
+  const anyWet=monsters.some(o=>o.alive&&o.dying<=0&&!coopIsRemote(o)&&o.wet>0&&Math.hypot(o.g.position.x-hx,o.g.position.z-hz)<10);
+  const radius=anyWet?10:7, maxNodes=anyWet?5:3;
+  const cand=nearestTrolls(hx,hz,hit,radius,5); cand.sort((a,b)=>((b.wet>0)-(a.wet>0)));   // nedves trollok előnyben
+  let prev=hit, nodes=1;
+  for(const tg of cand){ if(nodes>=maxNodes) break;
+    const a=prev.g.position.clone(); a.y+=prev.bodyCY||1; const b=tg.g.position.clone(); b.y+=tg.bodyCY||1;
+    EFX.bolt(a.x,a.y,a.z,b.x,b.y,b.z,0xffffff,0.16,0.3); EFX.bolt(a.x,a.y,a.z,b.x,b.y,b.z,0xb48cff,0.16,0.5); EFX.flash(b.x,b.y,b.z,0xc8e6ff,0.4,1.8,0.2); EFX.light(b.x,b.y,b.z,0xc8b4ff,2.4,0.18);
+    for(let i=0;i<8;i++) RP.spawn(b.x,b.y,b.z,rand(-3,3),rand(-2,3),rand(-3,3),0xffffff,0.4,0.02,0.3,2,1.5);
+    tg.hp-=dmg*(tg.wet>0?0.9:0.5); tg.hurtFlash=0.15; applyStatus(tg,'lightning'); if(tg.hp<=0&&tg.alive) killMonster(tg,false); prev=tg; nodes++; }
+  shake=Math.max(shake,0.12);
+}
 function freezeEncase(m){ if(m.iceShell) return; const r=(m.bodyR/m.scale)*1.25; const sh=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0), new THREE.MeshStandardMaterial({color:0xbfe6ff,emissive:0x6fd8ff,emissiveIntensity:0.5,transparent:true,opacity:0.42,flatShading:true,roughness:0.2})); sh.position.y=m.bodyCY/m.scale; sh.scale.set(1,1.35,1); m.g.add(sh); m.iceShell=sh; }
-function spawnGasCloud(x,y,z){ const mat=new THREE.MeshBasicMaterial({color:0x9fdc4a,transparent:true,opacity:0.24,depthWrite:false}); const mm=new THREE.Mesh(new THREE.SphereGeometry(1,12,10),mat); const yy=Math.max(GROUND_Y+0.5,y); mm.position.set(x,yy,z); mm.scale.setScalar(0.4); scene.add(mm); gasClouds.push({m:mm,x,y:yy,z,r:0.4,life:0,max:4.5,tick:0}); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,3.0,0.5,0.7); for(let i=0;i<14;i++){ const a=rand(0,6.28),s=rand(1,4); RP.spawn(x,yy,z,Math.cos(a)*s,rand(0.5,2),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a]),rand(0.5,0.8),0.05,rand(0.5,0.9),3,1); } }
+function spawnZone(kind, x, z, opts){
+  opts=opts||{}; const cfg=ZONE_CFG[kind]; if(!cfg) return null;
+  while(zones.length>=10){ const old=zones.shift(); if(old){ if(old.tree){ old.tree.onFire=false; burningCount=Math.max(0,burningCount-1); } scene.remove(old.m); old.m.geometry.dispose(); old.m.material.dispose(); } }   // cap 10
+  let m;
+  if(kind==='gas'){ m=new THREE.Mesh(new THREE.SphereGeometry(1,12,10), new THREE.MeshBasicMaterial({color:cfg.color,transparent:true,opacity:cfg.opacity,depthWrite:false})); }
+  else { m=new THREE.Mesh(new THREE.CircleGeometry(1,28), new THREE.MeshBasicMaterial({color:cfg.color,transparent:true,opacity:cfg.opacity,depthWrite:false,side:THREE.DoubleSide,blending:cfg.additive?THREE.AdditiveBlending:THREE.NormalBlending})); m.rotation.x=-Math.PI/2; }
+  const yy=(kind==='gas')?Math.max(GROUND_Y+0.5,opts.y||GROUND_Y+1):GROUND_Y+0.04;
+  m.position.set(x,yy,z); const r0=opts.r0||(kind==='gas'?0.4:1.0); m.scale.setScalar(r0); scene.add(m);
+  const zo={ kind, m, x, y:yy, z, r:r0, rMax:cfg.rMax, life:0, max:(opts.max||cfg.max), tick:0, dps:(opts.dps!=null?opts.dps:cfg.dps), el:cfg.el, baseOp:cfg.opacity, tree:(opts.tree||null) };
+  zones.push(zo); return zo;
+}
+function igniteTree(f){
+  if(f.onFire || burningCount>=6) return;            // max 6 égő fa egyszerre
+  f.onFire=true; burningCount++; f.zone=spawnZone('fire', f.x, f.z, {max:8, dps:6, tree:f});
+  const cy=GROUND_Y+4.2*((f.r/0.55)||1); EFX.light(f.x,cy,f.z,0xff7a3d,4,0.5);
+  for(let i=0;i<22;i++) RP.spawn(f.x+rand(-0.5,0.5),GROUND_Y+rand(0.6,cy),f.z+rand(-0.5,0.5),rand(-0.8,0.8),rand(1,3),rand(-0.8,0.8),pick([0xff5a2a,0xff8a3a,0xffc24d]),rand(0.5,0.9),0.05,rand(0.6,1.2),-1.5,1.2);
+}
+function spawnGasCloud(x,y,z){ spawnZone('gas', x, z, {y:y}); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,3.0,0.5,0.7); for(let i=0;i<14;i++){ const a=rand(0,6.28),s=rand(1,4); RP.spawn(x,Math.max(GROUND_Y+0.5,y),z,Math.cos(a)*s,rand(0.5,2),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a]),rand(0.5,0.8),0.05,rand(0.5,0.9),3,1); } }
 function freezeFull(m){ m.frozenSolid=Math.max(m.frozenSolid||0, 2.0); if(!m.iceShell) freezeEncase(m); if(m.iceShell){ m.iceShell.material.opacity=0.7; m.iceShell.scale.set(1.15,1.5,1.15); } }
 function shatterShell(m){ if(m.iceShell){ m.g.remove(m.iceShell); m.iceShell.geometry.dispose(); m.iceShell.material.dispose(); m.iceShell=null; } m.frozenSolid=0; }
 /* ELEM-REACT: melyik reakció sül el, ha `el` nyíl csapódik a `m` állapotú trollba (pre-hit állapot) */
@@ -1272,7 +1314,7 @@ function applyReaction(id, pos, hit, dmg, charge){
       if(tg.hp<=0&&tg.alive) killMonster(tg,false); }
     shake=Math.max(shake,0.5); toast('FAGYTÚLTÖLTÉS!'); if(AUD.head)AUD.head();
   } else if(id==='steam'){                                    // GŐZROBBANÁS — tűz+jég
-    hit.hp-=dmg*0.9; hit.hurtFlash=0.18; if(hit.statusEl==='fire'||hit.statusEl==='ice') clearStatus(hit); hit.frozenSolid=0; hit.wet=Math.max(hit.wet||0,2.5);
+    hit.hp-=dmg*0.9; hit.hurtFlash=0.18; if(hit.statusEl==='fire'||hit.statusEl==='ice') clearStatus(hit); hit.frozenSolid=0; hit.wet=Math.max(hit.wet||0,2.5); spawnZone('steam', hit.g.position.x, hit.g.position.z); spawnZone('puddle', hit.g.position.x, hit.g.position.z);
     EFX.flash(px,py,pz,0xffffff,0.5,3.2,0.26); EFX.ring(px,GROUND_Y+0.05,pz,0xe8f0ff,0.4,3.4,0.4,0.8);
     for(let i=0;i<18;i++) SMK.spawn(px+rand(-0.3,0.3),py+rand(0,0.5),pz+rand(-0.3,0.3),rand(-1,1),rand(0.5,1.6),rand(-1,1),0xdfeaf2,0.8,2.2,rand(0.7,1.2),-0.5,0.8,0.7);
     const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,3.5,3); for(const tg of near) tg.rooted=Math.max(tg.rooted||0,0.3);
@@ -1283,7 +1325,7 @@ function applyReaction(id, pos, hit, dmg, charge){
     for(let i=0;i<34;i++){ const a=rand(0,6.28),pp=Math.acos(rand(-1,1)),sp=rand(2,8); RP.spawn(px,py,pz,Math.sin(pp)*Math.cos(a)*sp,Math.abs(Math.cos(pp)*sp)+rand(0,2),Math.sin(pp)*Math.sin(a)*sp,pick([0xff5a2a,0xff8a3a,0xffc24d,0x9fdc4a]),rand(0.5,1),0.04,rand(0.5,0.9),-1.5,1.3); }
     for(let i=0;i<6;i++) SMK.spawn(px+rand(-0.3,0.3),py,pz+rand(-0.3,0.3),rand(-0.6,0.6),rand(1,2),rand(-0.6,0.6),0x281a10,0.7,2,rand(0.8,1.3),-1,0.8,0.5);
     const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,R,6); for(const tg of near){ tg.hp-=dmg*0.5; tg.hurtFlash=0.15; applyStatus(tg,'fire',null,1); if(tg.hp<=0&&tg.alive) killMonster(tg,false); }
-    shake=Math.max(shake,0.45); toast('MÉRGES GYÚJTÁS!'); if(AUD.head)AUD.head();
+    spawnZone('fire', hit.g.position.x, hit.g.position.z); shake=Math.max(shake,0.45); toast('MÉRGES GYÚJTÁS!'); if(AUD.head)AUD.head();
   } else if(id==='galvanic'){                                 // GALVÁN PERMET — méreg+villám
     hit.hp-=dmg*0.5; hit.hurtFlash=0.15; const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,8,3); let prev=hit;
     for(const tg of near){ const a=prev.g.position, ay=a.y+(prev.bodyCY||1), b=tg.g.position, by=b.y+(tg.bodyCY||1);
@@ -1310,11 +1352,24 @@ function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant){
   else if(el==='lightning'){ chainLightning(hit,dmg); }
   return false;
 }
-function updateElemFx(dt){
-  for(let i=gasClouds.length-1;i>=0;i--){ const c=gasClouds[i]; c.life+=dt; c.tick-=dt; c.r=Math.min(2.2,c.r+dt*0.9); c.m.scale.setScalar(c.r); c.m.material.opacity=0.26*(1-c.life/c.max);
-    if(Math.random()<0.5) sparks.burst(c.x+rand(-c.r,c.r),c.y+rand(-0.2,0.6),c.z+rand(-c.r,c.r),1,pick([0x7e9a2e,0x9fdc4a]),0.5,0.6);
-    if(c.tick<=0){ c.tick=0.5; for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; if(Math.hypot(o.g.position.x-c.x,o.g.position.z-c.z)<c.r){ o.hp-=3; o.hurtFlash=0.1; applyStatus(o,'poison'); if(o.hp<=0&&o.alive) killMonster(o,false); } } }
-    if(c.life>=c.max){ scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); gasClouds.splice(i,1); } }
+function updateElemFx(dt){   // ELEM-ENV: zóna-léptetés (gáz/tűz/fagy/tócsa/gőz) + tűz-terjedés a fákra
+  for(let i=zones.length-1;i>=0;i--){ const c=zones[i]; c.life+=dt; c.tick-=dt; c.r=Math.min(c.rMax, c.r+dt*0.9); c.m.scale.setScalar(c.r); c.m.material.opacity=c.baseOp*(1-c.life/c.max);
+    if(c.kind==='gas'){ if(Math.random()<0.5) sparks.burst(c.x+rand(-c.r,c.r),c.y+rand(-0.2,0.6),c.z+rand(-c.r,c.r),1,pick([0x7e9a2e,0x9fdc4a]),0.5,0.6); }
+    else if(c.kind==='fire'){ if(Math.random()<0.7) RP.spawn(c.x+rand(-c.r,c.r),c.y+0.1,c.z+rand(-c.r,c.r),rand(-0.3,0.3),rand(1,2.5),rand(-0.3,0.3),pick([0xff5a2a,0xff8a3a,0xffc24d]),rand(0.4,0.7),0.04,rand(0.4,0.7),-2,1.2);
+      if(c.tree && Math.random()<0.5){ const cy=GROUND_Y+rand(2,4.5); RP.spawn(c.x+rand(-0.6,0.6),cy,c.z+rand(-0.6,0.6),rand(-0.5,0.5),rand(0.5,2),rand(-0.5,0.5),pick([0xff7a3d,0xffc24d]),rand(0.4,0.8),0.05,rand(0.5,1),-1,1.1); } }   // korona-lángok
+    else if(c.kind==='frost'){ if(Math.random()<0.3) RP.spawn(c.x+rand(-c.r,c.r),c.y+rand(0,0.4),c.z+rand(-c.r,c.r),rand(-0.2,0.2),rand(-0.2,0.3),rand(-0.2,0.2),0xbfe6ff,0.3,0.02,0.5,1,0.6); }
+    else if(c.kind==='steam'){ if(Math.random()<0.6) SMK.spawn(c.x+rand(-c.r,c.r),c.y+rand(0,0.6),c.z+rand(-c.r,c.r),rand(-0.4,0.4),rand(0.4,1.2),rand(-0.4,0.4),0xdfeaf2,0.6,1.4,0.7,-0.4,0.8,0.5); }
+    if(c.tick<=0){ c.tick=0.5;
+      for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; if(Math.hypot(o.g.position.x-c.x,o.g.position.z-c.z)>=c.r) continue;
+        if(c.kind==='gas'){ o.hp-=c.dps; o.hurtFlash=0.1; applyStatus(o,'poison',null,1); }
+        else if(c.kind==='fire'){ o.hp-=c.dps; o.hurtFlash=0.1; applyStatus(o,'fire',null,1); }
+        else if(c.kind==='frost'){ o.chill=Math.max(o.chill||0,0.7); o.wet=Math.max(o.wet||0,1.0); }
+        else if(c.kind==='puddle'){ o.wet=Math.max(o.wet||0,2.0); }
+        else if(c.kind==='steam'){ o.rooted=Math.max(o.rooted||0,0.3); }
+        if(o.hp<=0&&o.alive) killMonster(o,false); }
+      if(c.kind==='fire'){ for(const f of flammables){ if(!f.onFire && Math.hypot(f.x-c.x,f.z-c.z)<c.r+0.8) igniteTree(f); } }   // tűz átterjed a közeli fákra
+    }
+    if(c.life>=c.max){ if(c.tree){ c.tree.onFire=false; burningCount=Math.max(0,burningCount-1); } scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); zones.splice(i,1); } }
 }
 
 /* ===================== TROLL REDESIGN (részlet-pass) =====================
@@ -1715,7 +1770,7 @@ function makeMonster(type, scale, hp, speed){
     type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
     dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0,
     statusEl:null, statusT:0, slowMul:1, burnAcc:0, _eyeBase:null,
-    statusStacks:1, wet:0, charged:0, frozenSolid:0, lastReactT:-999, _fireSpreadT:0, resist:(T.resist||null) };   // ELEM: status + reaction fields
+    statusStacks:1, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, _fireSpreadT:0, resist:(T.resist||null) };   // ELEM: status + reaction fields
   if(T.build) T.build(m);
   embellishTroll(m);   // REDESIGN: gazdagabb részlet-pass (moha/zuzmó/tüskék/spórák/szőr) minden trollon
   m.headCY=m.head.position.y*scale; m.headR=0.42*scale*(m.head.scale.x||1); // fejlövés-gömb a valós fejhez
