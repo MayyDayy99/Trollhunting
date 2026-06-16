@@ -30,14 +30,8 @@
   #hpwrap{position:fixed;left:18px;bottom:18px;z-index:6;width:280px;}
   #hpwrap .lab{font:700 12px/1 inherit;letter-spacing:.1em;text-transform:uppercase;color:#cfe0ff;margin-bottom:6px;
     text-shadow:0 2px 8px rgba(0,0,0,.8);}
-  #hpbar{height:20px;border-radius:8px;background:rgba(8,14,28,.7);border:2px solid rgba(180,200,240,.25);overflow:hidden;position:relative;}
-  #hpghost{position:absolute;left:0;top:0;height:100%;width:100%;z-index:0;background:linear-gradient(90deg,#fff,#ffd0d0);opacity:.9;transition:width .5s ease .18s;}
-  #hpfill{position:relative;z-index:1;height:100%;width:100%;background:linear-gradient(90deg,#c9521f,#ff7a3d,#ffd27a);transition:width .12s;}
-  @keyframes hpHit{0%{box-shadow:0 0 0 0 rgba(255,70,40,0);}12%{box-shadow:0 0 26px 5px rgba(255,70,40,.95);border-color:#ff5a2a;}100%{box-shadow:0 0 0 0 rgba(255,70,40,0);border-color:rgba(180,200,240,.25);}}
-  #hpbar.hit{animation:hpHit .4s ease-out;}
-  #dmgpop{position:absolute;right:6px;bottom:30px;font:900 24px/1 -apple-system,'Segoe UI',sans-serif;color:#ff6a3d;text-shadow:0 2px 10px rgba(0,0,0,.9),0 0 16px rgba(255,70,40,.8);opacity:0;pointer-events:none;}
-  @keyframes dmgPop{0%{opacity:0;transform:translateY(10px) scale(.6);}18%{opacity:1;transform:translateY(-2px) scale(1.18);}100%{opacity:0;transform:translateY(-26px) scale(1);}}
-  #dmgpop.show{animation:dmgPop .85s ease-out;}
+  #hpbar{height:20px;border-radius:8px;background:rgba(8,14,28,.7);border:2px solid rgba(180,200,240,.25);overflow:hidden;}
+  #hpfill{height:100%;width:100%;background:linear-gradient(90deg,#c9521f,#ff7a3d,#ffd27a);transition:width .2s;}
 
   /* feszítés-erő */
   #powwrap{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:6;width:170px;height:8px;
@@ -47,8 +41,8 @@
 
   #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
     background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(4,8,16,.7) 100%);}
-  #hurt{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity .05s;
-    background:radial-gradient(ellipse at 50% 50%, transparent 18%, rgba(210,16,16,.82) 100%);}
+  #hurt{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;
+    background:radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(180,20,20,.55) 100%);}
 
   #toast{position:fixed;left:50%;top:30%;transform:translateX(-50%) scale(.6);opacity:0;z-index:7;
     font:900 64px/1 inherit;color:#ffd27a;text-shadow:0 4px 24px rgba(0,0,0,.8);text-align:center;pointer-events:none;
@@ -83,7 +77,7 @@
   </div>
   <div id="wave"><div class="n">HULLÁM 1</div><div class="left">trollok: 0</div></div>
   <div id="score"><div class="n">0</div><small>pont</small></div>
-  <div id="hpwrap"><div class="lab">Életerő</div><div id="hpbar"><div id="hpghost"></div><div id="hpfill"></div></div><div id="dmgpop"></div></div>
+  <div id="hpwrap"><div class="lab">Életerő</div><div id="hpbar"><div id="hpfill"></div></div></div>
   <div id="powwrap"><div id="powfill"></div></div>
   <canvas id="radar" width="160" height="160"></canvas>
 </div>
@@ -691,19 +685,14 @@ function solidBox(cx, cz, halfX, halfZ, opts){
                top:(opts&&opts.top)||0, climb:!!(opts&&opts.climb)});
 }
 // igaz, ha a játékos a tetején/fölötte áll -> nem blokkol oldalról (átléphet/ráállhat)
-function _onTopOf(s, x, z, feet){
+function _onTopOf(s, feet){
   if(s.top<=0) return false;
-  // csak akkor "tető", ha a játékos VÍZSZINTESEN a lábnyom FÖLÖTT van -> különben oldalról blokkol (nem lehet magas falon átmenni)
-  let over;
-  if(s.kind==='box') over = (x>=s.minX && x<=s.maxX && z>=s.minZ && z<=s.maxZ);
-  else over = ((x-s.x)*(x-s.x)+(z-s.z)*(z-s.z)) <= s.r*s.r;
-  if(!over) return false;
   return s.climb ? (feet >= s.top - STEP) : (feet >= s.top);
 }
 // egy feloldó-passz: kitolja a pontot minden testből PLAYER_R-rel
 function _resolvePass(x, z, feet){
   for(const s of SOLIDS){
-    if(_onTopOf(s, x, z, feet)) continue;
+    if(_onTopOf(s, feet)) continue;
     if(s.kind==='cyl'){
       const dx=x-s.x, dz=z-s.z; let d=Math.hypot(dx,dz); const R=s.r+PLAYER_R;
       if(d<R){ if(d<1e-4){ x=s.x+R; z=s.z; } else { const k=R/d; x=s.x+dx*k; z=s.z+dz*k; } }
@@ -1485,7 +1474,7 @@ function makeMonster(type, scale, hp, speed){
   scene.add(g);
 
   const m={ g, legs, arms, head, eyes, eyeMat:myEye, bodySkin, hp, maxHp:hp, speed, walkPhase:Math.random()*6.28,
-    alive:true, dying:0, atkCd:0.6, hurtFlash:0, scale,
+    alive:true, dying:0, atkCd:0, hurtFlash:0, scale,
     bodyR:0.85*scale, bodyCY:1.1*scale, headCY:1.95*scale, headR:0.42*scale,
     type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
     dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0,
@@ -1603,7 +1592,6 @@ addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
     applyBowAdj(); }
 });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
-function clearKeys(){ for(const k in keys) keys[k]=false; } // FIX: minden lenyomott billentyű elengedése (blur/pause -> nincs beragadt mozgás)
 
 document.addEventListener('pointerlockchange',()=>{ locked=(document.pointerLockElement===cv); showLockHint(running&&!locked&&!dragLook); });
 document.addEventListener('pointerlockerror',()=>{ locked=false; showLockHint(running&&!dragLook); });
@@ -1630,11 +1618,11 @@ addEventListener('mouseup',e=>{
   if(e.button!==0) return;
   if(drawing){ if(charge>0.12) fireArrow(charge); drawing=false; charge=0; powwrap.classList.remove('on'); }
 });
-addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
+addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; if(running) pauseGame(); });
 cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
 
 /* ===================== HUD ===================== */
-const hpfill=document.getElementById('hpfill'), hpghost=document.getElementById('hpghost'), hpbarEl=document.getElementById('hpbar'), dmgpop=document.getElementById('dmgpop'), waveN=document.querySelector('#wave .n'),
+const hpfill=document.getElementById('hpfill'), waveN=document.querySelector('#wave .n'),
   waveLeft=document.querySelector('#wave .left'), scoreN=document.querySelector('#score .n'),
   powwrap=document.getElementById('powwrap'), powfill=document.getElementById('powfill'),
   hurtEl=document.getElementById('hurt'), toastEl=document.getElementById('toast'),
@@ -1730,25 +1718,9 @@ function spawnMonster(){
   monsters.push(m); aliveCount++;
   if(Math.random()<0.5 && AUD.growl) AUD.growl();
 }
-// HP-csík + "kárnyom" szellem-csík: a fehér sáv az ELŐZŐ értéken marad, majd lassan lecsorog az újra -> a veszteség jól látszik
-function setHp(n){
-  n=Math.max(0, Math.min(player.maxHp, n)); const prev=player.hp; player.hp=n;
-  const pct=(n/player.maxHp*100)+'%';
-  if(hpfill) hpfill.style.width=pct;
-  if(hpghost){ if(n>=prev){ hpghost.style.transition='none'; hpghost.style.width=pct; void hpghost.offsetWidth; hpghost.style.transition=''; } else { hpghost.style.width=pct; } }
-}
-// LÁTVÁNYOS sérülés-visszajelzés: erős vörös flash + kamera-rázás + HP-csík villanás + lebegő kár-szám + hang
-function playerHurtFX(amount){
-  const a=Math.max(1, Math.round(amount));
-  if(hurtEl) hurtEl.style.opacity=Math.min(0.96, 0.5 + a*0.045);
-  shake=Math.max(shake, 0.55 + Math.min(a,40)*0.012);
-  if(hpbarEl){ hpbarEl.classList.remove('hit'); void hpbarEl.offsetWidth; hpbarEl.classList.add('hit'); }
-  if(dmgpop){ dmgpop.textContent='-'+a; dmgpop.classList.remove('show'); void dmgpop.offsetWidth; dmgpop.classList.add('show'); }
-  if(AUD.hurt) AUD.hurt();
-}
 function damagePlayer(d){
-  const before=player.hp; setHp(player.hp-d);
-  if(player.hp<before) playerHurtFX(before-player.hp);
+  player.hp=Math.max(0,player.hp-d); hpfill.style.width=(player.hp/player.maxHp*100)+'%';
+  hurtEl.style.opacity=Math.min(0.9,0.4+d*0.03); shake=Math.max(shake,0.25); AUD.hurt();
   if(player.hp<=0 && player.alive){ player.alive=false; gameOver(); }
 }
 function addScore(n){ score+=n; scoreN.textContent=score; }
@@ -1967,8 +1939,7 @@ function update(dt,t){
     if(intermission>0){ intermission-=dt; if(intermission<=0) startWave(wave+1); }
     waveLeft.textContent='trollok: '+(aliveCount+toSpawn);
   }
-  else if(running && coop){ waveLeft.textContent='trollok: '+aliveCount; }
-  if(coop) coopTick(dt); // FIX: peer-szinkron + interpoláció + sendInput szünetben/menüben/halál után is fusson
+  else if(running && coop){ coopTick(dt); waveLeft.textContent='trollok: '+aliveCount; }
 
   /* --- effektek --- */
   sparks.update(dt); gore.update(dt); updateElemFx(dt);
@@ -2083,8 +2054,6 @@ frame();
 var coop = null;                                  // the connectCoop handle (null offline)
 var coopMyId = null;                              // our server-assigned player id
 var coopDowned = false;                           // FIX: saját elesés egyszeri kapuzása (szerver-auth)
-var coopStarted = false;                          // FIX: volt-e már Start? (Start előtt nincs szerver-szörny; szünetben viszont reconcile fut)
-var coopReviveAt = 0;                             // FIX: revive türelmi idő (elavult hp=0 state ne triggereljen gameOver-t)
 var coopWelcomed = false;                          // v2: volt-e már welcome? (pid mellett a stabil id-vel detektáljuk az újracsatlakozást)
 var coopHost = null;                               // szerver LAN IP-je a meghívó-linkhez (welcome.host)
 var coopPeers = new Map();                        // peerId -> { g, buf, has, name } avatar
@@ -2226,7 +2195,7 @@ function coopRemovePeer(id){
 /* ---- server monster reconciliation: build a real troll, tag it, share monsters[] ---- */
 function coopTrollTypeId(t){ return (typeof t==='string' && TROLL_TYPES[t]) ? t : 'grunt'; }
 function coopEnsureMonster(sm){
-  if(!coopStarted) return null;        // FIX: Start előtt ne hozz létre szerver-szörnyet; szünetben igen
+  if(!running) return null;            // FIX: ne hozz létre szerver-szörnyet a Start előtt (szellem-bug)
   const netId = sm.id;
   let m = coopRemoteById.get(netId);
   if(!m){
@@ -2253,7 +2222,7 @@ function coopEnsureMonster(sm){
   return m;
 }
 function coopReconcileMonsters(serverMons){
-  if(!coopStarted) return;             // FIX: Start után mindig (szünetben is) reconcile
+  if(!running) return;                 // FIX: csak futó játékban kezeljük a szerver-szörnyeket
   const seen = new Set();
   if(Array.isArray(serverMons)) for(const sm of serverMons){ if(sm && sm.id!=null){ coopEnsureMonster(sm); seen.add(sm.id); } }
   // monsters the server dropped without an explicit kill (e.g. wave reset) -> remove quietly
@@ -2351,9 +2320,8 @@ function coopOnReset(){
   if(!coop) return;
   coopRemoteById.clear();              // a meshek már törölve a resetGame ciklusban; csak a könyvelés ürül
   coopDowned = false;
-  coopReviveAt = coopNow();            // FIX: türelmi idő egy elavult hp=0 state ellen
-  // a szerver-autoritatív liveness miatt külön 'respawn' üzenettel élesztünk újra
-  coop.send({ t:'respawn' });
+  // jelezzük a szervernek, hogy újra élünk teli HP-val (a sendInput egyébként nem küld hp-t)
+  coop.send({ t:'player_state', pos:{x:player.pos.x,y:player.pos.y,z:player.pos.z}, yaw:player.yaw, pitch:player.pitch, hp:player.maxHp, alive:true });
 }
 
 /* ---- in-game co-op HUD: room code, copy-invite, players list, status dot ---- */
@@ -2461,8 +2429,7 @@ function coopConnect(){
       coopApplyHud(s);
       if(Array.isArray(s.players)) for(const pv of s.players){
         if(pv.id===coopMyId){ // FIX: a saját HP-t a szerver vezeti (közelharc-sebzés) -> HUD + elesés
-          if(typeof pv.hp==='number' && coopNow()-coopReviveAt>1500){ const before=player.hp; setHp(pv.hp);
-            if(pv.hp<before) playerHurtFX(before-pv.hp); // co-op: a szerver-vezérelt sérülés is látványos
+          if(typeof pv.hp==='number'){ player.hp=pv.hp; if(hpfill) hpfill.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
             if(pv.hp<=0 && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }
           continue; }
         const peer = coopMakePeer(pv.id, pv.name);
@@ -2502,20 +2469,20 @@ function resetGame(){
   resetBombs();
   cancelDraw();
   player.pos.set(0,1.7,0); player.yaw=0; player.pitch=0; player.hp=player.maxHp; player.alive=true; player.vy=0; player.feet=0; player.onGround=true; player.jumpReady=true;
-  setHp(player.maxHp); score=0; scoreN.textContent='0'; aliveCount=0; toSpawn=0; intermission=0;
+  hpfill.style.width='100%'; score=0; scoreN.textContent='0'; aliveCount=0; toSpawn=0; intermission=0;
   if(coop) coopOnReset(); // FIX: co-op könyvelés ürítése + revive új játéknál
 }
 function beginPlay(){
-  AUD.unlock(); resetGame(); running=true; coopStarted=true;
+  AUD.unlock(); resetGame(); running=true;
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
 }
-function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
+function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); showLockHint(false); pauseScreen.classList.remove('hide');
   if(document.pointerLockElement) document.exitPointerLock(); }
-function resumeGame(){ if(player.hp<=0) return; AUD.unlock(); running=true; pauseScreen.classList.add('hide'); ensureLock(); }
+function resumeGame(){ if(player.hp<=0) return; running=true; pauseScreen.classList.add('hide'); ensureLock(); }
 function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.over();
   document.getElementById('overStat').innerHTML='Elért hullám: <b>'+wave+'</b> &nbsp;·&nbsp; Pont: <b>'+score+'</b>';
-  pauseScreen.classList.add('hide'); startScreen.classList.add('hide'); overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
+  overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
 
 document.getElementById('startBtn').addEventListener('click',beginPlay);
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);

@@ -923,9 +923,10 @@ function makeArrow(){
   // ELEM: per-arrow additive glow sprite (color/opacity set by applyArrowVisual)
   const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
   glow.scale.setScalar(0.55); glow.position.set(0,0,-0.42); g.add(glow);
+  const elemHolder=new THREE.Group(); elemHolder.position.set(0,0,-0.46); g.add(elemHolder);   // ELEM-PRO: element-head decoration mount (flame/crystal/ooze/spark)
   g.visible=false; g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   scene.add(g);
-  return { g, tip, glow, el:'base', vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, stuck:false, dmg:25 };
+  return { g, tip, glow, elemHolder, flames:null, el:'base', vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, stuck:false, dmg:25 };
 }
 for(let i=0;i<30;i++) arrows.push(makeArrow());
 function fireArrow(charge){
@@ -975,15 +976,18 @@ const STATUS_CFG = {
 
 function applyArrowVisual(a){
   const def=EL[a.el]||EL.base;
-  if(a.tip&&a.tip.material){ a.tip.material.emissive.setHex(def.head); a.tip.material.emissiveIntensity=(a.el==='base')?0:1.5; }
-  if(a.glow){ a.glow.material.color.setHex(def.glow); a.glow.material.opacity=(a.el==='base')?0:0.65; }
+  if(a.tip&&a.tip.material){ a.tip.material.emissive.setHex(def.head); a.tip.material.emissiveIntensity=(a.el==='base')?0:1.5; a.tip.visible=(a.el!=='ice'&&a.el!=='poison'); }
+  if(a.glow){ a.glow.material.color.setHex(def.glow); a.glow.material.opacity=(a.el==='base')?0:0.5; }
+  buildElemHead(a);   // ELEM-PRO: visible element head on the projectile
 }
 function emitArrowTrail(a){
-  const def=EL[a.el]||EL.base, p=a.g.position;
-  if(a.el==='base'){ if(Math.random()<0.4) sparks.burst(p.x,p.y,p.z,1,def.trail,0.6,0.2); return; }
-  sparks.burst(p.x,p.y,p.z,1,def.trail,0.8,0.3);                                  // fő nyom
-  if(a.el==='fire'&&Math.random()<0.5) sparks.burst(p.x,p.y,p.z,1,0xffc24d,1.2,1.0); // felszálló parázs
-  if(a.el==='lightning') sparks.burst(p.x,p.y,p.z,1,0xffffff,2.0,0.3);             // sziporka
+  const p=a.g.position, el=a.el;
+  if(a.flames){ for(const s of a.flames){ s.material.opacity=0.7+Math.random()*0.3; s.scale.setScalar(0.3+Math.random()*0.12); } } // láng-pislogás a hegyen
+  if(el==='base'){ if(Math.random()<0.4) sparks.burst(p.x,p.y,p.z,1,0xcfe0ff,0.6,0.2); return; }
+  if(el==='fire'){ sparks.burst(p.x,p.y,p.z,1,pick([0xff5a2a,0xff9a3d]),0.8,0.2); if(Math.random()<0.6) sparks.burst(p.x,p.y,p.z,1,0xffc24d,1.3,1.3); if(Math.random()<0.3) sparks.burst(p.x,p.y,p.z,1,0x3a2a22,0.5,1.6); } // láng + felszálló parázs + füst
+  else if(el==='ice'){ sparks.burst(p.x,p.y,p.z,1,0x9fe3ff,0.6,-0.4); if(Math.random()<0.5) sparks.burst(p.x,p.y,p.z,1,0xffffff,0.8,-0.8); } // hulló dér
+  else if(el==='poison'){ sparks.burst(p.x,p.y,p.z,1,pick([0x7e9a2e,0x9fdc4a]),0.6,0.2); if(Math.random()<0.5) sparks.burst(p.x,p.y,p.z,1,0xc8e26a,0.5,-0.9); } // csöpögő csepp
+  else if(el==='lightning'){ sparks.burst(p.x,p.y,p.z,1,0xffffff,1.6,0.3); if(Math.random()<0.7) arcSpark(a.prev,p,0xc8e6ff,2); } // cikázó ív a nyom mentén
 }
 function elementalImpact(pos, elKey, head){
   const def=EL[elKey]||EL.base, n=head?28:18;
@@ -998,11 +1002,13 @@ function applyStatus(m, elKey){
   m.statusEl=def.status; m.statusT=s.dur; m.burnAcc=0;
   if(s.slow<1) m.slowMul=s.slow;
   if(s.stun>0) m.rooted=Math.max(m.rooted||0, s.stun);         // VILLÁM bénítás a meglévő root-tal
+  if(def.status==='ice') freezeEncase(m);                      // ELEM-PRO: látható jégburok
   if(m._eyeBase==null && m.eyes&&m.eyes[0]) m._eyeBase=m.eyes[0].material.emissive.getHex();
   if(m.eyes) m.eyes.forEach(e=>e.material.emissive.setHex(s.tint));  // szem-tint a státusz színére
 }
 function clearStatus(m){
   m.statusEl=null; m.statusT=0; m.slowMul=1;
+  if(m.iceShell){ m.g.remove(m.iceShell); m.iceShell.geometry.dispose(); m.iceShell.material.dispose(); m.iceShell=null; }  // ELEM-PRO: jégburok le
   if(m._eyeBase!=null && m.eyes) m.eyes.forEach(e=>e.material.emissive.setHex(m._eyeBase));
 }
 function tickStatus(m, dt){
@@ -1055,6 +1061,37 @@ function updateElementHUD(){
 }
 function setElement(id){ if(!EL[id]) return; currentElement=id; updateElementHUD(); }
 
+/* ===================== ELEM-PRO: látható nyilak + elem-logika =====================
+   Minden elem saját mechanikát kap (nem csak szín): tűz=DoT+terjedés, jég=fagy/szilánk,
+   méreg=megmaradó gázfelhő, villám=lánc. A nyil hegyén látható az elem (buildElemHead). */
+let gasClouds=[];
+function buildElemHead(a){
+  const h=a.elemHolder; if(!h) return;
+  while(h.children.length){ const c=h.children.pop(); if(c.geometry)c.geometry.dispose(); if(c.material&&c.material.dispose)c.material.dispose(); h.remove(c); }
+  a.flames=null; const el=a.el;
+  if(el==='fire'){ a.flames=[]; for(let i=0;i<3;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:(i?0xff7a3d:0xffe08a),transparent:true,opacity:0.9,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.34-i*0.06); s.position.set(0,0.02+i*0.03,-0.04); h.add(s); a.flames.push(s); } }
+  else if(el==='ice'){ const cr=new THREE.Mesh(new THREE.OctahedronGeometry(0.075,0), new THREE.MeshStandardMaterial({color:0x9fe3ff,emissive:0x6fd8ff,emissiveIntensity:1.2,transparent:true,opacity:0.85,flatShading:true,roughness:0.3})); cr.position.set(0,0,-0.02); cr.scale.set(1,1,1.6); h.add(cr); const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xe2f6ff,transparent:true,opacity:0.55,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.3); h.add(s); }
+  else if(el==='poison'){ const blob=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6), new THREE.MeshStandardMaterial({color:0x9fdc4a,emissive:0x7e9a2e,emissiveIntensity:0.9,transparent:true,opacity:0.92,flatShading:true,roughness:0.4})); blob.position.set(0,-0.01,-0.02); blob.scale.set(1,1.4,1); h.add(blob); const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xc8e26a,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.26); h.add(s); }
+  else if(el==='lightning'){ const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0.95,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(0.32); h.add(core); const v=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xb48cff,transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending})); v.scale.setScalar(0.5); h.add(v); }
+}
+function arcSpark(from,to,color,n){ const k=n*5; for(let i=0;i<k;i++){ const t=i/k; sparks.burst(from.x+(to.x-from.x)*t+rand(-0.15,0.15), from.y+(to.y-from.y)*t+rand(-0.15,0.15), from.z+(to.z-from.z)*t+rand(-0.15,0.15), 1, color, 0.2, 0); } }
+function nearestTrolls(x,z,exclude,radius,max){ const out=[]; for(const o of monsters){ if(!o.alive||o.dying>0||o===exclude||coopIsRemote(o)) continue; const d=Math.hypot(o.g.position.x-x,o.g.position.z-z); if(d<radius) out.push([d,o]); } out.sort((a,b)=>a[0]-b[0]); return out.slice(0,max).map(e=>e[1]); }
+function chainLightning(hit,dmg){ const targets=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,7,2); let prev=hit; for(const tg of targets){ const a=prev.g.position.clone(); a.y+=prev.bodyCY; const b=tg.g.position.clone(); b.y+=tg.bodyCY; arcSpark(a,b,0xffffff,3); arcSpark(a,b,0xb48cff,2); tg.hp-=dmg*0.5; tg.hurtFlash=0.15; applyStatus(tg,'lightning'); if(tg.hp<=0&&tg.alive) killMonster(tg,false); prev=tg; } shake=Math.max(shake,0.12); }
+function freezeEncase(m){ if(m.iceShell) return; const r=(m.bodyR/m.scale)*1.25; const sh=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0), new THREE.MeshStandardMaterial({color:0xbfe6ff,emissive:0x6fd8ff,emissiveIntensity:0.5,transparent:true,opacity:0.42,flatShading:true,roughness:0.2})); sh.position.y=m.bodyCY/m.scale; sh.scale.set(1,1.35,1); m.g.add(sh); m.iceShell=sh; }
+function spawnGasCloud(x,y,z){ const mat=new THREE.MeshBasicMaterial({color:0x9fdc4a,transparent:true,opacity:0.24,depthWrite:false}); const mm=new THREE.Mesh(new THREE.SphereGeometry(1,12,10),mat); const yy=Math.max(GROUND_Y+0.5,y); mm.position.set(x,yy,z); mm.scale.setScalar(0.4); scene.add(mm); gasClouds.push({m:mm,x,y:yy,z,r:0.4,life:0,max:4.5,tick:0}); sparks.burst(x,yy,z,14,0x9fdc4a,4,0.5); }
+function elementMechanic(pos, el, hit, dmg, head, wasStatus){
+  if(el==='fire'){ sparks.burst(pos.x,pos.y,pos.z,12,0xff7a3d,5,1.3); const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,3.5,1); for(const tg of near){ const a=hit.g.position.clone(); a.y+=hit.bodyCY; const b=tg.g.position.clone(); b.y+=tg.bodyCY; arcSpark(a,b,0xff9a3d,2); tg.hp-=dmg*0.3; tg.hurtFlash=0.12; applyStatus(tg,'fire'); if(tg.hp<=0&&tg.alive) killMonster(tg,false); } }
+  else if(el==='ice'){ if(wasStatus==='ice'){ hit.hp-=dmg*0.6; sparks.burst(pos.x,pos.y,pos.z,30,0xe2f6ff,12,0.3); gore.burst(pos.x,pos.y,pos.z,16,0x9fe3ff,9,0.4); shake=Math.max(shake,0.2); if(hit.iceShell){ hit.g.remove(hit.iceShell); hit.iceShell.geometry.dispose(); hit.iceShell.material.dispose(); hit.iceShell=null; } if(hit.hp<=0&&hit.alive){ killMonster(hit,false); } } }
+  else if(el==='poison'){ spawnGasCloud(pos.x,pos.y,pos.z); }
+  else if(el==='lightning'){ chainLightning(hit,dmg); }
+}
+function updateElemFx(dt){
+  for(let i=gasClouds.length-1;i>=0;i--){ const c=gasClouds[i]; c.life+=dt; c.tick-=dt; c.r=Math.min(2.2,c.r+dt*0.9); c.m.scale.setScalar(c.r); c.m.material.opacity=0.26*(1-c.life/c.max);
+    if(Math.random()<0.5) sparks.burst(c.x+rand(-c.r,c.r),c.y+rand(-0.2,0.6),c.z+rand(-c.r,c.r),1,pick([0x7e9a2e,0x9fdc4a]),0.5,0.6);
+    if(c.tick<=0){ c.tick=0.5; for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; if(Math.hypot(o.g.position.x-c.x,o.g.position.z-c.z)<c.r){ o.hp-=3; o.hurtFlash=0.1; applyStatus(o,'poison'); if(o.hp<=0&&o.alive) killMonster(o,false); } } }
+    if(c.life>=c.max){ scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); gasClouds.splice(i,1); } }
+}
+
 /* ===================== TROLL REDESIGN (részlet-pass) =====================
    Egy közös díszítő-lépés MINDEN trollra (a meglévő rigged handle-eket használva:
    m.g / m.head / m.arms). Gerinc-tüskék, zuzmó-csomók, szőrcsomók, szemölcsök,
@@ -1062,15 +1099,31 @@ function setElement(id){ if(!EL[id]) return; currentElement=id; updateElementHUD
    Megosztott anyagokat használ (nincs per-troll material-leak a mesh-eken). */
 const lichenMat = std({color:0x9fb59f, roughness:1});
 function embellishTroll(m){
-  if(m.typeId==='wisp') return;                 // a Lidércnek saját, áttetsző arculata van
+  if(m.typeId==='wisp') return;                 // a Lidércnek saját arculata van
   const g=m.g, head=m.head;
-  const ns=3+((Math.random()*3)|0);             // gerinc-tüskék a háton (csont)
-  for(let i=0;i<ns;i++){ const sp=mesh(new THREE.ConeGeometry(0.05,0.15+Math.random()*0.07,5), tuskMat, rand(-0.05,0.05), 0.95+i*0.18, -0.32-Math.random()*0.04); sp.rotation.x=-0.5; g.add(sp); }
-  for(let i=0;i<4;i++){ const a=rand(0,6.28); g.add(mesh(new THREE.DodecahedronGeometry(0.07+Math.random()*0.06,0), lichenMat, Math.cos(a)*0.42, 1.0+Math.random()*0.7, Math.sin(a)*0.28-0.18, 1,0.6,1)); } // zuzmó
-  [m.arms.L,m.arms.R].forEach(arm=>{ if(!arm) return; for(let i=0;i<3;i++){ const f=mesh(new THREE.ConeGeometry(0.028,0.13,4), mossMat, rand(-0.08,0.08),-0.42-Math.random()*0.18,rand(-0.05,0.05)); f.rotation.set(rand(-0.6,0.6),Math.random()*3,rand(-0.6,0.6)); arm.add(f);} }); // alkar-szőr
-  for(let i=0;i<3;i++) head.add(mesh(new THREE.SphereGeometry(0.028+Math.random()*0.02,6,5), skinDark, rand(-0.16,0.16), rand(-0.08,0.08), 0.3+Math.random()*0.16)); // szemölcs
-  head.add(mesh(new THREE.DodecahedronGeometry(0.09,0), lichenMat, rand(-0.12,0.12),0.22,-0.04, 1,0.6,1));
-  for(let i=0;i<2;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:pick([0x7fb8d8,0xffd27a,0x9fe0c8]),transparent:true,opacity:0.45,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.16+Math.random()*0.08); s.position.set(rand(-0.4,0.4),1.0+Math.random()*0.7,rand(-0.3,0.3)); g.add(s); } // világító spóra
+  // --- VILÁGÍTÓ GOMBÁK a trollon (a "mohás" jegy; a glow messziről is olvasható) ---
+  function sprout(parent,x,y,z,sc,red){
+    const mg=new THREE.Group(); mg.position.set(x,y,z); mg.scale.setScalar(sc);
+    mg.rotation.set(rand(-0.5,0.5),rand(0,6.28),rand(-0.5,0.5));
+    mg.add(mesh(new THREE.CylinderGeometry(0.035,0.05,0.22,6), stemMat, 0,0.11,0));
+    mg.add(mesh(new THREE.SphereGeometry(0.15,10,7,0,6.28,0,Math.PI/2), red?capMat:glowCapM, 0,0.24,0, 1,0.72,1));
+    if(!red){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x7fe2ff,transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending})); sp.scale.setScalar(0.6); sp.position.y=0.24; mg.add(sp); }
+    parent.add(mg);
+  }
+  sprout(g, rand(0.2,0.4),1.5,-0.25, 1.0, false);
+  sprout(g, -rand(0.2,0.4),1.2,-0.20, 0.8, Math.random()<0.5);
+  if(Math.random()<0.6) sprout(head, rand(-0.15,0.15),0.34,-0.05, 0.55, false);
+  // --- görbe csont-SZARVAK (sziluett-változás) ---
+  [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.08,0.40,6), tuskMat, s*0.20,0.26,0.0); h.rotation.z=s*0.55; h.rotation.x=-0.35; head.add(h);
+    const h2=mesh(new THREE.ConeGeometry(0.05,0.18,5), tuskMat, s*0.31,0.50,-0.05); h2.rotation.z=s*1.0; head.add(h2); });
+  // --- magas, szaggatott HÁT-TARAJ ---
+  const ns=4+((Math.random()*3)|0);
+  for(let i=0;i<ns;i++){ const sp=mesh(new THREE.ConeGeometry(0.07,0.30+Math.random()*0.14,5), tuskMat, rand(-0.05,0.05), 0.90+i*0.18, -0.36); sp.rotation.x=-0.35; g.add(sp); }
+  // --- nagy MOHA-tömegek + zuzmó-kontraszt a vállon/háton ---
+  for(let i=0;i<5;i++){ const a=rand(0,6.28); g.add(mesh(new THREE.DodecahedronGeometry(0.14+Math.random()*0.10,0), (i%2?lichenMat:mossMat), Math.cos(a)*0.46, 1.0+Math.random()*0.8, Math.sin(a)*0.32-0.20, 1.1,0.7,1.1)); }
+  for(let i=0;i<3;i++) head.add(mesh(new THREE.SphereGeometry(0.03+Math.random()*0.02,6,5), skinDark, rand(-0.16,0.16), rand(-0.08,0.08), 0.30+Math.random()*0.16)); // szemölcs
+  // --- glózó cián RÚNA-folt a mellkason ---
+  const rune=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); rune.scale.setScalar(0.5); rune.position.set(0,1.05,0.5); g.add(rune);
 }
 
 buildElementHUD();
@@ -1823,9 +1876,9 @@ function update(dt,t){
     }
     if(hit){ const dmg=a.dmg*(head?2:1);
       if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg); } // CO-OP: server applies dmg/kill/score
-      else { hit.hp-=dmg; hit.hurtFlash=0.15; applyStatus(hit, a.el); }   // ELEM: apply the arrow's status on a local hit
+      else { const wasStatus=hit.statusEl; hit.hp-=dmg; hit.hurtFlash=0.15; elementMechanic(a.g.position, a.el, hit, dmg, head, wasStatus); applyStatus(hit, a.el); }   // ELEM-PRO: per-element mechanic (chain/cloud/shatter/spread) + status
       const hp=a.g.position;
-      elementalImpact(hp, a.el, head);   // ELEM: element-colored impact burst (replaces the generic spark)
+      elementalImpact(hp, a.el, head);   // ELEM: element-colored impact burst
       if(head) AUD.head(); else AUD.hit();
       if(head) toast('FEJLÖVÉS!');
       a.active=false; a.g.visible=false;
@@ -1918,7 +1971,7 @@ function update(dt,t){
   if(coop) coopTick(dt); // FIX: peer-szinkron + interpoláció + sendInput szünetben/menüben/halál után is fusson
 
   /* --- effektek --- */
-  sparks.update(dt); gore.update(dt);
+  sparks.update(dt); gore.update(dt); updateElemFx(dt);
   drawRadar(t);
   // szentjánosbogarak
   for(let i=0;i<FCOUNT;i++){ const s=fSeed[i];
