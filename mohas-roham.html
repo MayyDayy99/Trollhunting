@@ -234,8 +234,16 @@ function mesh(geo,mat,x,y,z,sx,sy,sz){
   m.castShadow=true; m.receiveShadow=true; return m;
 }
 function jitter(geo,axz,ay){
-  const p=geo.attributes.position;
-  for(let i=0;i<p.count;i++){ p.setX(i,p.getX(i)+(Math.random()-0.5)*axz); p.setZ(i,p.getZ(i)+(Math.random()-0.5)*axz); p.setY(i,p.getY(i)+(Math.random()-0.5)*ay); }
+  // FONTOS: a Dodeka/Ikosa geometriák NEM indexeltek (minden lapnak saját, duplikált
+  // sarokpontjai vannak). Ha minden vertexet külön tolunk el, a lapok SZÉTSZAKADNak a
+  // varratoknál (rések/lyukak a kövön). Ezért az egybeeső pontok KÖZÖS eltolást kapnak.
+  const p=geo.attributes.position, seen=Object.create(null);
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i), y=p.getY(i), z=p.getZ(i);
+    const key=Math.round(x*1e3)+'_'+Math.round(y*1e3)+'_'+Math.round(z*1e3);
+    let o=seen[key]; if(!o) o=seen[key]=[(Math.random()-0.5)*axz,(Math.random()-0.5)*ay,(Math.random()-0.5)*axz];
+    p.setX(i,x+o[0]); p.setY(i,y+o[1]); p.setZ(i,z+o[2]);
+  }
   geo.computeVertexNormals(); return geo;
 }
 
@@ -288,15 +296,15 @@ function tree(x,z,s){
     (Math.random()-0.5)*1.4, 4.4+Math.random()*1.0, (Math.random()-0.5)*1.4); c.castShadow=true; g.add(c); }
   scene.add(g);
   // ÜTKÖZŐ: a törzs alja a CylinderGeometry(0.3,0.6,...) miatt ~0.6 sugarú -> tömör henger a tövénél
-  solidCyl(x, z, 0.55*s);
+  solidCyl(x, z, 0.55*s, {mob:true});
   return g;
 }
 function rock(x,z,r){ const m=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(r,0), r*0.25, r*0.25), rockMat);
   m.position.set(x,GROUND_Y+r*0.4,z); m.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
   m.castShadow=true; m.receiveShadow=true; scene.add(m);
   // ÜTKÖZŐ: a kő lábnyoma; ha elég lapos (r<0.7) ráállható-tetőként is regisztrál (climb)
-  if(r>=0.7) solidCyl(x, z, r*0.92);
-  else solidCyl(x, z, r*0.9, {top:GROUND_Y+r*0.75, climb:true});
+  if(r>=0.7) solidCyl(x, z, r*0.92, {mob:true});
+  else solidCyl(x, z, r*0.9, {top:GROUND_Y+r*0.75, climb:true, mob:true});
   return m; }
 const swayers=[];
 function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(sc);
@@ -684,7 +692,7 @@ function applyCamera(){
 
 /* ===================== Szilárd ütközés — feloldó/groundAt függvények (a konstansok feljebb deklarálva) ===================== */
 function solidCyl(x, z, r, opts){
-  SOLIDS.push({kind:'cyl', x:x, z:z, r:r, top:(opts&&opts.top)||0, climb:!!(opts&&opts.climb)});
+  SOLIDS.push({kind:'cyl', x:x, z:z, r:r, top:(opts&&opts.top)||0, climb:!!(opts&&opts.climb), mob:!!(opts&&opts.mob)});
 }
 function solidBox(cx, cz, halfX, halfZ, opts){
   SOLIDS.push({kind:'box', minX:cx-halfX, maxX:cx+halfX, minZ:cz-halfZ, maxZ:cz+halfZ,
@@ -716,6 +724,13 @@ function _resolvePass(x, z, feet){
       }
     }
   }
+  return {x:x, z:z};
+}
+// szörny-kitolás a fa/kő törzsekből (mob:true hengerek) — hogy a trollok ne menjenek át rajtuk
+function pushMob(x, z, r){
+  for(let pass=0; pass<2; pass++){ for(const s of SOLIDS){ if(!s.mob || s.kind!=='cyl') continue;
+    const dx=x-s.x, dz=z-s.z; let d=Math.hypot(dx,dz); const R=s.r+r;
+    if(d<R){ if(d<1e-4){ x=s.x+R; z=s.z; } else { const k=R/d; x=s.x+dx*k; z=s.z+dz*k; } } } }
   return {x:x, z:z};
 }
 // több passz: így nem préselhető ÁT két szomszédos test közötti résen
@@ -2020,7 +2035,7 @@ function trollAI(m, dt, t){
   const walkAnim=()=>{ m.walkPhase+=dt*(4+m.speed); const sw=Math.sin(m.walkPhase)*0.6;
     m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(m.walkPhase))*0.06;
     m.arms.L.rotation.x=0.5+Math.sin(m.walkPhase)*0.3; m.arms.R.rotation.x=0.5-Math.sin(m.walkPhase)*0.3; };
-  const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; p.x+=dx/d*step; p.z+=dz/d*step; };   // ELEM: slowMul<1 while frozen/poisoned
+  const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; p.x+=dx/d*step; p.z+=dz/d*step; const _pm=pushMob(p.x,p.z,(m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z; };   // ELEM: slowMul; + nem megy át fán/kövön (mob solids)
   const meleeAttack=(onHit)=>{ m.atkCd-=dt; m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,1.6,0.2); if(m.atkCd<=0){ if(player.pos.y-1.7 < p.y+1.9*m.scale){ onHit(); } else { m.atkCd=0.5; } m.arms.R.rotation.x=-0.4; } }; // függőleges hatótáv
   switch(T.id){
     case 'scout': {
@@ -2511,6 +2526,7 @@ function beginPlay(){
   AUD.unlock(); resetGame(); running=true; coopStarted=true;
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
+  if(!window.__elHintShown){ window.__elHintShown=true; setTimeout(()=>{ if(running) toast('1–5: VÁLTS ELEMI NYILAT — TŰZ · JÉG · MÉREG · VILLÁM'); }, 1900); }  // felfedezhetőség: az elemi FX csak 2–5 nyíllal látszik
 }
 function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
   if(document.pointerLockElement) document.exitPointerLock(); }
