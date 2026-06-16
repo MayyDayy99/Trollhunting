@@ -1104,16 +1104,18 @@ function applyStatus(m, elKey, charge, stacksToAdd){
   const def=EL[elKey]; if(!def||!def.status) return;          // ALAP = nincs státusz
   const st=def.status, s=STATUS_CFG[st];
   const add=(stacksToAdd!=null?stacksToAdd:((charge!=null&&charge>=0.66)?2:1));   // teli húrnál 2 stack
+  const dur=s.dur*Math.min((m.resist&&m.resist[st])?m.resist[st]:1, 1.6);   // sebezhető trollon tovább tart (cap 1.6×)
   if(m.statusEl===st){                                        // ugyanaz az elem → STACK + idő-frissítés
-    m.statusStacks=Math.min(s.maxStacks||1, (m.statusStacks||1)+add); m.statusT=Math.max(m.statusT, s.dur);
+    m.statusStacks=Math.min(s.maxStacks||1, (m.statusStacks||1)+add); m.statusT=Math.max(m.statusT, dur);
   } else {                                                    // új elem felülírja a primer slotot
-    m.statusEl=st; m.statusT=s.dur; m.burnAcc=0; m.statusStacks=Math.min(s.maxStacks||1, add);
+    m.statusEl=st; m.statusT=dur; m.burnAcc=0; m.statusStacks=Math.min(s.maxStacks||1, add);
   }
   if(st==='ice'){ m.slowMul=Math.max(0.25, s.slow + (s.slowRamp||0)*((m.statusStacks||1)-1)); freezeEncase(m);
     if((m.statusStacks||1)>=3 || (charge!=null&&charge>=0.85)) freezeFull(m);   // TELJES FAGY
   } else if(s.slow<1){ m.slowMul=Math.min(m.slowMul||1, s.slow); }
   if(s.stun>0) m.rooted=Math.max(m.rooted||0, s.stun);        // VILLÁM bénítás a meglévő root-tal
   if(st==='lightning') m.charged=Math.max(m.charged||0, 2.0); // tölött → jég-túltöltést enged
+  if(st==='ice' && m.typeId==='scout') m.dashTimer=0;         // jég megszakítja a kobold lendületét
   if(m._eyeBase==null && m.eyes&&m.eyes[0]) m._eyeBase=m.eyes[0].material.emissive.getHex();
   if(m.eyes) m.eyes.forEach(e=>e.material.emissive.setHex(s.tint));  // szem-tint a státusz színére
 }
@@ -1130,11 +1132,15 @@ function tickStatus(m, dt){
   if(!m.statusEl) return;
   const s=STATUS_CFG[m.statusEl]; m.statusT-=dt;
   let dps=s.dps + (s.dpsRamp||0)*((m.statusStacks||1)-1);     // stack-skálázott DoT (tűz 7/10/13, méreg 4/6/8)
+  if(m.resist && m.resist[m.statusEl]) dps*=m.resist[m.statusEl];   // per-troll ellenállás/sebezhetőség
   if(dps>0){ if(m.statusEl==='poison' && m.frozenSolid>0) dps*=1.3;   // FAGYOS ROTHADÁS: +30% méreg fagyott trollon
     m.burnAcc=(m.burnAcc||0)+dps*dt;                          // DoT egész sebzésre kvantálva
     if(m.burnAcc>=1){ const d=Math.floor(m.burnAcc); m.burnAcc-=d; m.hp-=d; m.hurtFlash=Math.max(m.hurtFlash,0.08);
       if(m.hp<=0 && m.alive){ killMonster(m,false); return; } } }
   if(m.statusEl!=='ice' && s.slow<1) m.slowMul=s.slow;        // lassítás frissítése (jég a saját mélyülő értékét tartja)
+  if(m.statusEl==='fire' && (m.statusStacks||1)>=2){ m._fireSpreadT=(m._fireSpreadT||0)-dt;   // TŰZ TERJEDÉS 2+ stacknél: ~1/mp átragad a legközelebbi trollra
+    if(m._fireSpreadT<=0){ m._fireSpreadT=1.0; const sp=nearestTrolls(m.g.position.x,m.g.position.z,m,3.0,1);
+      for(const tg of sp){ if(tg.statusEl!=='fire'){ const a=m.g.position, b=tg.g.position; EFX.bolt(a.x,a.y+(m.bodyCY||1),a.z,b.x,b.y+(tg.bodyCY||1),b.z,0xff9a3d,0.1,0.2); } applyStatus(tg,'fire',null,1); } } }
   statusAura(m, m.statusEl);
   if(m.statusT<=0) clearStatus(m);
 }
@@ -1165,8 +1171,8 @@ function elementalDeath(m){
   } else if(k==='ice'){                                       // SZÉTFAGY: szilánk-robbanás + dér-gyűrű
     EFX.flash(bx,by,bz,0xe2f6ff,0.7,4.0,0.3); EFX.light(bx,by,bz,0x9fd0ff,4,0.4); EFX.ring(bx,gy,bz,0xbfe6ff,0.5,4.0,0.5,0.9);
     for(let i=0;i<46;i++){ const a=rand(0,6.28),pp=Math.acos(rand(-1,1)),s=rand(4,11); RP.spawn(bx,by,bz,Math.sin(pp)*Math.cos(a)*s,Math.cos(pp)*s+rand(0,2),Math.sin(pp)*Math.sin(a)*s,pick([0x9fe3ff,0xe2f6ff,0xffffff,0x7fd0ff]),rand(0.45,0.9),0.02,rand(0.5,0.9),6,0.5); }
-  } else if(k==='poison'){                                    // ELOLVAD: zöld kitörés + tócsa-gyűrű + buborék
-    EFX.flash(bx,by,bz,0x9fdc4a,0.6,3.4,0.34); EFX.light(bx,by,bz,0x9fdc4a,3.5,0.45); EFX.ring(bx,gy,bz,0x9fdc4a,0.5,3.8,0.7,0.7);
+  } else if(k==='poison'){                                    // ELOLVAD: zöld kitörés + tócsa-gyűrű + buborék + MARADÓ gázfelhő
+    EFX.flash(bx,by,bz,0x9fdc4a,0.6,3.4,0.34); EFX.light(bx,by,bz,0x9fdc4a,3.5,0.45); EFX.ring(bx,gy,bz,0x9fdc4a,0.5,3.8,0.7,0.7); spawnGasCloud(bx, p.y, bz);
     for(let i=0;i<30;i++){ const a=rand(0,6.28),s=rand(1.5,5); RP.spawn(bx,by,bz,Math.cos(a)*s,rand(-1,3),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a,0xc8e26a]),rand(0.5,0.9),0.05,rand(0.5,0.9),5,1); }
     for(let i=0;i<8;i++) RP.spawn(bx+rand(-0.4,0.4),gy,bz+rand(-0.4,0.4),rand(-0.2,0.2),rand(0.5,1.2),rand(-0.2,0.2),0xc8e26a,0.5,0.7,0.7,-1,1,0.9);
   } else if(k==='lightning'){                                 // ELSZENESEDIK: ívvihar + fehér villanás + korom
@@ -1329,7 +1335,7 @@ buildElementHUD();
 const monsters=[];
 /* ---- 5 troll-típus (art-direkciós újratervezés, erős sziluett-különbség) ---- */
 const TROLL_TYPES = {
-  wisp: { id:'wisp', name:'Lidérc', threat:0x7fe2ff, scaleMul:0.7, hpMul:0.4, speedMul:1.8, dmgMul:0.5, speedCap:7.0,
+  wisp: { id:'wisp', resist:{fire:1.5,ice:0.4,poison:0.8,lightning:1.0}, name:'Lidérc', threat:0x7fe2ff, scaleMul:0.7, hpMul:0.4, speedMul:1.8, dmgMul:0.5, speedCap:7.0,
     skin:0x16414f, eyeColor:0x7fe2ff, club:false, noTusks:true, earLen:0.52, deathSpin:1.4, postureLean:0.05,
     build(m){
       // áttetsző, rúna-fényű test (a megosztott bodySkin-t CSAK ezen a trollon módosítjuk)
@@ -1339,7 +1345,7 @@ const TROLL_TYPES = {
       core.scale.setScalar(1.2); core.position.set(0,1.1,0); m.g.add(core);
       for(let i=0;i<5;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.45-i*0.06); s.position.set(rand(-0.25,0.25),0.55-i*0.1,rand(-0.25,0.25)); m.g.add(s); }
     } },
-  grunt: { id:'grunt', name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:4.5, skin:0x5f9168, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.05, shoulderW:1.0, torsoW:1.0, neckLen:0.0, tuskScale:1.0, earLen:0.34, noTusks:false,
+  grunt: { id:'grunt', resist:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:4.5, skin:0x5f9168, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.05, shoulderW:1.0, torsoW:1.0, neckLen:0.0, tuskScale:1.0, earLen:0.34, noTusks:false,
     build(m){
 const g=m.g;
 // ---- HAFTED STONE-&-WOOD CLUB, parented to the RIGHT FIST so it swings with the attack ----
@@ -1369,7 +1375,7 @@ m.head.add(mesh(new THREE.SphereGeometry(0.075, 6, 5), mossMat, -0.15, 0.22, -0.
 // a small mossy clump crusted on the right shoulder (ties club arm into the back-moss line)
 m.arms.R.add(mesh(jitter(new THREE.DodecahedronGeometry(0.13, 0), 0.04, 0.04), mossMat, 0.04, 0.16, -0.08));
     } },
-  scout: { id:'scout', name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:9.0, skin:0x8fd64a, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.32, shoulderW:0.78, torsoW:0.72, neckLen:0.0, tuskScale:0.0, noTusks:true, earLen:0.85,
+  scout: { id:'scout', resist:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2}, name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:9.0, skin:0x8fd64a, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.32, shoulderW:0.78, torsoW:0.72, neckLen:0.0, tuskScale:0.0, noTusks:true, earLen:0.85,
     build(m){
 const g=m.g;
   // LITHE LIMBS — thin the rigged arm/leg Groups so the imp reads lean & wiry.
@@ -1411,7 +1417,7 @@ const g=m.g;
   // the least moss of the caste, per the art direction).
   m.head.add(mesh(new THREE.SphereGeometry(0.07,7,6), mossMat, 0.20,0.20,-0.05));
     } },
-  brute: { id:'brute', name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.2, skin:0x6f7a72, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.18, shoulderW:1.5, torsoW:1.35, neckLen:-0.10, tuskScale:2.2, earLen:0.22,
+  brute: { id:'brute', resist:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.2, skin:0x6f7a72, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.18, shoulderW:1.5, torsoW:1.35, neckLen:-0.10, tuskScale:2.2, earLen:0.22,
     build(m){
 const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   // SHRINK THE HEAD so it reads buried between the shoulders (tiny sunken head = key brute silhouette).
@@ -1442,7 +1448,7 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   // a brow-ridge moss crust to anchor the sunken-eyes "two coals in shadow" look on the tiny head
   m.head.add(mesh(new THREE.SphereGeometry(0.14,7,6), mossDk, 0,0.16,0.18, 1.6,0.6,1.0));
     } },
-  shaman: { id:'shaman', name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x2f6f6a, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18, postureLean:0.0, shoulderW:0.9, torsoW:0.85, neckLen:0.15, tuskScale:1.2, earLen:0.5,
+  shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x2f6f6a, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18, postureLean:0.0, shoulderW:0.9, torsoW:0.85, neckLen:0.15, tuskScale:1.2, earLen:0.5,
     build(m){
 const g=m.g;
       // ONE shared per-monster glow material for every mystic part (crystal/horns/runes) -> returned on m.staffMat (already disposed by disposeMonster)
@@ -1490,7 +1496,7 @@ const g=m.g;
       // ability/animation state the shaman AI reads every frame
       m.healTimer=rand(1.5,3.0); m.auraPulse=0;
     } },
-  spitter: { id:'spitter', name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:2.8, skin:0x9fb84a, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.10, shoulderW:0.95, torsoW:1.25, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
+  spitter: { id:'spitter', resist:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:2.8, skin:0x9fb84a, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.10, shoulderW:0.95, torsoW:1.25, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
     build(m){
 const g=m.g, head=m.head;
       // ── per-monster bile material (the ONLY new material → disposed via m.spitMat) ──
@@ -2074,7 +2080,8 @@ function update(dt,t){
     }
     if(hit){ const dmg=a.dmg*(head?2:1);
       if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg); } // CO-OP: server applies dmg/kill/score
-      else { const wasStatus=hit.statusEl; const _dmg=dmg*(hit.frozenSolid>0?1.5:1); hit.hp-=_dmg; hit.hurtFlash=0.15;   // törékeny: fagyott troll +50% sebződés
+      else { const wasStatus=hit.statusEl; const _rz=(hit.resist&&hit.resist[a.el])?hit.resist[a.el]:1; const _dmg=dmg*(hit.frozenSolid>0?1.5:1)*_rz; hit.hp-=_dmg; hit.hurtFlash=(_rz>1.3?0.3:0.15);   // törékeny ×1.5 + per-troll resist
+        if(_rz<0.6){ const _q=a.g.position; for(let i=0;i<4;i++) RP.spawn(_q.x,_q.y,_q.z,rand(-1,1),rand(0,1.5),rand(-1,1),0x8a8f99,0.3,0.02,0.3,1,1); }   // ELLENÁLL: szürke sercegés (rossz elem)
         const _skip=elementMechanic(a.g.position, a.el, hit, dmg, head, wasStatus, a.charge); if(!_skip) applyStatus(hit, a.el, a.charge); }   // ELEM-REACT: reakció VAGY alap-mechanika, majd (ha nem reakció kezelte) státusz
       const hp=a.g.position;
       elementalImpact(hp, a.el, head);   // ELEM: element-colored impact burst
@@ -2246,7 +2253,7 @@ function trollAI(m, dt, t){
       else if(d>8){ moveToward(0.7); walkAnim(); }
       else { m.arms.L.rotation.x=0.5+Math.sin(t*2)*0.15; m.arms.R.rotation.x=0.5+Math.cos(t*2)*0.15; }
       m.healTimer-=dt;
-      if(m.healTimer<=0){ m.healTimer=T.healCd;
+      if(m.healTimer<=0 && m.statusEl!=='poison'){ m.healTimer=T.healCd;   // MÉREG elnémítja a sámán gyógyítását
         for(const o of monsters){ if(o===m || !o.alive || o.dying>0) continue;
           const od=Math.hypot(o.g.position.x-p.x, o.g.position.z-p.z);
           if(od<T.healRadius && o.hp<o.maxHp){ o.hp=Math.min(o.maxHp,o.hp+T.healAmt); o.hurtFlash=0.12;
