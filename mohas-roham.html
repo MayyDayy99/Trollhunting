@@ -138,6 +138,13 @@ const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp  = (a,b,t)=>a+(b-a)*t;
 const rand  = (a,b)=>a+Math.random()*(b-a);
 
+/* SOLIDS ütközés-konstansok — KORÁN deklarálva: a tree()/rock()/buildLandmarks() már
+   regisztrál ütközőt, ezért ezeknek a const-oknak előbb kell léteznie (TDZ-elkerülés). */
+const SOLIDS   = [];
+const PLAYER_R = 0.42;   // játékos vízszintes sugara
+const STEP     = 0.55;   // max automatikus fellépés-magasság
+const BOUND_R  = ARENA_R - 1.5; // 32.5 — a látható peremen belül tartja a játékost
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e1726);
 scene.fog = new THREE.Fog(0x0e1726, 40, 130);
@@ -263,7 +270,8 @@ for(let p=0;p<4;p++){ const ang=p*Math.PI/2 + Math.PI/4;
 }
 
 function tree(x,z,s){
-  const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(s||1);
+  s=s||1;
+  const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(s);
   const trunk=new THREE.Mesh(jitter(new THREE.CylinderGeometry(0.3,0.6,4.5,9,4),0.12,0.08), woodDark);
   trunk.position.y=2.25; trunk.rotation.z=(Math.random()-0.5)*0.18; trunk.castShadow=true; trunk.receiveShadow=true; g.add(trunk);
   for(let i=0;i<4;i++){ const a=Math.random()*6.28, len=1.2+Math.random()*1.2;
@@ -273,10 +281,17 @@ function tree(x,z,s){
   for(let i=0;i<5;i++){ const c=mesh(new THREE.SphereGeometry(0.5+Math.random()*0.4,7,6), mossMat,
     (Math.random()-0.5)*1.4, 4.4+Math.random()*1.0, (Math.random()-0.5)*1.4); c.castShadow=true; g.add(c); }
   scene.add(g);
+  // ÜTKÖZŐ: a törzs alja a CylinderGeometry(0.3,0.6,...) miatt ~0.6 sugarú -> tömör henger a tövénél
+  solidCyl(x, z, 0.55*s);
+  return g;
 }
 function rock(x,z,r){ const m=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(r,0), r*0.25, r*0.25), rockMat);
   m.position.set(x,GROUND_Y+r*0.4,z); m.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
-  m.castShadow=true; m.receiveShadow=true; scene.add(m); }
+  m.castShadow=true; m.receiveShadow=true; scene.add(m);
+  // ÜTKÖZŐ: a kő lábnyoma; ha elég lapos (r<0.7) ráállható-tetőként is regisztrál (climb)
+  if(r>=0.7) solidCyl(x, z, r*0.92);
+  else solidCyl(x, z, r*0.9, {top:GROUND_Y+r*0.75, climb:true});
+  return m; }
 const swayers=[];
 function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(sc);
   g.add(mesh(new THREE.CylinderGeometry(0.09,0.13,0.42,8), glow?std({color:0xbfe8ef}):stemMat,0,0.21,0));
@@ -285,15 +300,37 @@ function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROU
     sp.scale.setScalar(0.9); sp.position.y=0.5; g.add(sp); }
   g.userData.phase=Math.random()*6.28; swayers.push(g); scene.add(g); }
 
-  /* ---- megalit kőkör (henge) az aréna peremén ---- */
-  const N_STONE=14, RING=ARENA_R+5; const STONE=jitter(new THREE.BoxGeometry(1.6,5.5,1.0,2,3,2),0.25,0.2);
+  /* ---- megalit kőkör (henge) az aréna peremén — most KÖRBEÉRŐ, sűrűbb (perem-fal) ---- */
+  /* Az upright kövek a BOUND_R-en kívül, sűrűn körben (látható, tömör fal-ív).
+     Mindegyik álló kő solidBox ütközőt kap, így a perem fizikailag is zárt. */
+  const N_STONE=22, RING=BOUND_R+3.0; const STONE=jitter(new THREE.BoxGeometry(1.6,5.5,1.0,2,3,2),0.25,0.2);
   const stoneIM=new THREE.InstancedMesh(STONE, rockMat, N_STONE); stoneIM.castShadow=true; stoneIM.receiveShadow=true;
   const _sm=new THREE.Matrix4(), _sq=new THREE.Quaternion(), _ss=new THREE.Vector3(), _sp=new THREE.Vector3(), _se=new THREE.Euler();
-  for(let i=0;i<N_STONE;i++){ const a=(i/N_STONE)*6.283 + rand(-0.05,0.05), r=RING+rand(-1,1.5); const fallen=Math.random()<0.18; const h=rand(0.85,1.25);
-    _se.set(fallen?Math.PI/2*rand(.7,1):(Math.random()-0.5)*0.12, a+rand(-0.3,0.3), (Math.random()-0.5)*0.16);
-    _sp.set(Math.cos(a)*r, fallen?0.5:2.4*h, Math.sin(a)*r); _sq.setFromEuler(_se); _ss.set(rand(0.8,1.3),h,rand(0.8,1.3));
-    _sm.compose(_sp,_sq,_ss); stoneIM.setMatrixAt(i,_sm); }
+  for(let i=0;i<N_STONE;i++){ const a=(i/N_STONE)*6.283 + rand(-0.04,0.04), r=RING+rand(-0.6,1.2); const fallen=Math.random()<0.12; const h=rand(0.95,1.35);
+    _se.set(fallen?Math.PI/2*rand(.7,1):(Math.random()-0.5)*0.10, a+rand(-0.2,0.2), (Math.random()-0.5)*0.12);
+    _sp.set(Math.cos(a)*r, fallen?0.5:2.4*h, Math.sin(a)*r); _sq.setFromEuler(_se); _ss.set(rand(0.95,1.4),h,rand(0.95,1.4));
+    _sm.compose(_sp,_sq,_ss); stoneIM.setMatrixAt(i,_sm);
+    // ütköző csak az álló köveknek (a ledőltek lapos díszek); cyl a hengeres lábnyomra
+    if(!fallen) solidCyl(Math.cos(a)*r, Math.sin(a)*r, 0.95); }
   stoneIM.instanceMatrix.needsUpdate=true; scene.add(stoneIM);
+  /* ---- folytonos MOHÁS SZIKLAFAL-gyűrű a kövek mögött (a perem vizuálisan zárt, nincs rés) ---- */
+  const N_WALL=40, WALLR=BOUND_R+6.0;
+  const WALLG=jitter(new THREE.DodecahedronGeometry(3.4,0), 1.0, 0.9);
+  const wallIM=new THREE.InstancedMesh(WALLG, rockMat, N_WALL); wallIM.castShadow=true; wallIM.receiveShadow=true;
+  const _wm=new THREE.Matrix4(), _wq=new THREE.Quaternion(), _wp=new THREE.Vector3(), _we=new THREE.Euler(), _wsv=new THREE.Vector3();
+  for(let i=0;i<N_WALL;i++){ const a=(i/N_WALL)*6.283 + rand(-0.02,0.02), r=WALLR+rand(-1.2,1.2), sc=rand(1.0,1.7);
+    _we.set(rand(0,3),rand(0,6.28),rand(0,3)); _wq.setFromEuler(_we);
+    _wp.set(Math.cos(a)*r, GROUND_Y+rand(0.2,1.4), Math.sin(a)*r); _wsv.set(sc,sc*rand(0.9,1.4),sc);
+    _wm.compose(_wp,_wq,_wsv); wallIM.setMatrixAt(i,_wm); }
+  wallIM.instanceMatrix.needsUpdate=true; scene.add(wallIM);
+  /* mohás korona-sapkák a fal tetején, hogy a sziluett a mi világunk maradjon (külön kis IM) */
+  const N_WCAP=N_WALL, WCAP=new THREE.SphereGeometry(1.9,8,6);
+  const wcapIM=new THREE.InstancedMesh(WCAP, mossMat, N_WCAP); wcapIM.castShadow=true; wcapIM.receiveShadow=true;
+  for(let i=0;i<N_WCAP;i++){ const a=(i/N_WALL)*6.283 + rand(-0.02,0.02), r=WALLR+rand(-1.0,1.0);
+    _we.set(0,rand(0,6.28),0); _wq.setFromEuler(_we);
+    _wp.set(Math.cos(a)*r, GROUND_Y+rand(2.6,4.2), Math.sin(a)*r); _wsv.set(rand(0.8,1.4),rand(0.6,1.0),rand(0.8,1.4));
+    _wm.compose(_wp,_wq,_wsv); wcapIM.setMatrixAt(i,_wm); }
+  wcapIM.instanceMatrix.needsUpdate=true; scene.add(wcapIM);
 
 /* ===================== HERO LANDMARKS — "Sunken Moon-Circle" =====================
    Self-contained block. Uses only helpers/materials defined ABOVE the dais:
@@ -435,9 +472,58 @@ function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROU
   skylineRock(Math.cos(5.6)*100, Math.sin(5.6)*100, 7.0, 0.0);
 })();
 
-// szórj fákat/köveket/gombákat az arénán kívülre (díszlet + takarás)
-for(let i=0;i<24;i++){ const a=rand(0,6.28), r=rand(ARENA_R+8, 95); tree(Math.cos(a)*r, Math.sin(a)*r, rand(0.8,1.7)); }
-for(let i=0;i<28;i++){ const a=rand(0,6.28), r=rand(ARENA_R+6, 120); rock(Math.cos(a)*r, Math.sin(a)*r, rand(0.5,1.8)); }
+/* ===================== KOHERENS MOHÁS-ERDŐ ELHELYEZÉS (tömör propok) =====================
+   Minden tömör prop ütközőt regisztrál (tree()/rock() automatikusan). A tisztás
+   közepe (spawn, r<6.5) szabad; a meglévő mászó-építmények és a középső landmarkok
+   lábnyoma körül kerülünk. A propok klaszteresen ülnek (ligetek + kő-kibúvások),
+   nem véletlen-átfedőn, és legalább ~1.0-re egymástól, hogy a 0.42 sugár elférjen
+   vagy tisztán blokkoljon. */
+
+// foglalt zónák, amiket KERÜLÜNK (cx,cz,r) — spawn + mászó-építmények + landmarkok
+const KEEP_CLEAR = [
+  [0,0,6.5],            // spawn-tisztás
+  [9,-5,2.2],[9,-6.3,2.2],[9,-7.6,2.2],[9,-8.9,2.2],[9,-11.5,3.0], // lépcső+tető-emelvény
+  [-7.0,5.5,2.0],[-8.6,6.2,2.0],[-7.6,4.0,2.0],                    // fa ládák
+  [13,11,2.6],[16,13,2.6],                                          // kőlépcsők kifelé
+  [11.55,7.90,2.6],    // oldWell
+  [-7.3,8.2,2.4],      // cairnShrine
+  [-16.3,7.65,7.0],    // fallenTree (hosszú log)
+  [-15.9,-15.2,4.0],   // brokenPillars #1
+  [3.7,-19.6,4.0]      // brokenPillars #2
+];
+function zoneFree(x,z,pad){ for(const c of KEEP_CLEAR){ if(Math.hypot(x-c[0],z-c[1]) < c[2]+(pad||0)) return false; } return true; }
+
+// --- KÖZÉPSŐ LANDMARKOK ütközői (a buildLandmarks() vizuáljaihoz illesztve) ---
+solidCyl(11.55, 7.90, 1.5);                 // oldWell kőperem
+solidCyl(-7.3, 8.2, 1.0);                   // cairnShrine alap
+solidBox(-16.3, 7.65, 5.0, 1.1);            // fallenTree fekvő törzs (kb. 11 hosszú, forgatva ~vízszintes)
+solidCyl(-15.9, -15.2, 1.3);                // brokenPillars #1 oszlop-csokor
+solidCyl(3.7, -19.6, 1.3);                  // brokenPillars #2
+
+// --- FA-LIGETEK a tisztás peremén (klaszteres, természetes csoportok) ---
+const GROVES = [ [0.4,26],[1.25,27],[2.05,24],[3.0,28],[3.85,25],[4.7,27],[5.5,24],[6.0,28] ];
+for(const gr of GROVES){ const ca=gr[0], cr=gr[1];
+  const cx=Math.cos(ca)*cr, cz=Math.sin(ca)*cr; const n=2+((Math.random()*3)|0);
+  for(let k=0;k<n;k++){ let tries=0,tx,tz; do{ const aa=ca+rand(-0.18,0.18), rr=cr+rand(-3.5,3.0); tx=Math.cos(aa)*rr; tz=Math.sin(aa)*rr; }
+      while((!zoneFree(tx,tz,1.0) || Math.hypot(tx,tz)>BOUND_R-1.5 || Math.hypot(tx,tz)<10) && ++tries<8);
+    if(tries<8){ tree(tx,tz, rand(0.9,1.7)); KEEP_CLEAR.push([tx,tz,1.6]); } }
+}
+// --- SŰRŰ HATÁR-FASOR a perem mentén (vizuális zártság, fenn ütköző) ---
+for(let i=0;i<26;i++){ const a=(i/26)*6.283+rand(-0.06,0.06), r=BOUND_R+rand(0.5,2.2);
+  tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.1,1.9)); }
+// néhány nagy fa a fal mögött (sziluett, ütköző nem szükséges – peremen kívül)
+for(let i=0;i<18;i++){ const a=rand(0,6.28), r=rand(BOUND_R+10, 90); tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.0,1.8)); }
+
+// --- KŐ-KIBÚVÁSOK / sziklacsoportok a tisztáson belül (klaszteres) ---
+const OUTCROPS = [ [0.9,15],[2.4,17],[3.5,12],[4.2,18],[5.1,14],[5.9,16] ];
+for(const oc of OUTCROPS){ const ca=oc[0], cr=oc[1];
+  const n=2+((Math.random()*2)|0);
+  for(let k=0;k<n;k++){ let tries=0,rx,rz; const rr0=rand(0.7,1.7); do{ const aa=ca+rand(-0.22,0.22), rr=cr+rand(-2.5,2.5); rx=Math.cos(aa)*rr; rz=Math.sin(aa)*rr; }
+      while((!zoneFree(rx,rz,rr0+0.6) || Math.hypot(rx,rz)>BOUND_R-1.2 || Math.hypot(rx,rz)<8) && ++tries<8);
+    if(tries<8){ rock(rx,rz, rr0); KEEP_CLEAR.push([rx,rz,rr0+0.9]); } }
+}
+// szórt kis kövek a peremen kívül (díszlet, ütköző peremen kívül – ártalmatlan)
+for(let i=0;i<16;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 110); rock(Math.cos(a)*r, Math.sin(a)*r, rand(0.6,1.8)); }
 // fű-foltok az arénában
 const grassMat=std({color:0x47803f,roughness:1});
 /* ===================== FOLIAGE: Sunken Moon-Circle ground-cover ===================== */
@@ -590,11 +676,7 @@ function applyCamera(){
   camera.rotation.y=player.yaw; camera.rotation.x=player.pitch; camera.rotation.z=0;
 }
 
-/* ===================== Szilárd ütközés-rendszer (SOLIDS) — vízszintes blokkolás + ráállás ===================== */
-const SOLIDS = [];
-const PLAYER_R = 0.42;   // játékos vízszintes sugara
-const STEP     = 0.55;   // max automatikus fellépés-magasság (= a régi groundAt tűrés)
-const BOUND_R  = ARENA_R - 1.5; // 32.5 — látható peremen (kőkör r=39, fasor r=140) belül tartja a játékost
+/* ===================== Szilárd ütközés — feloldó/groundAt függvények (a konstansok feljebb deklarálva) ===================== */
 function solidCyl(x, z, r, opts){
   SOLIDS.push({kind:'cyl', x:x, z:z, r:r, top:(opts&&opts.top)||0, climb:!!(opts&&opts.climb)});
 }
@@ -628,7 +710,7 @@ function _resolvePass(x, z, feet){
 // több passz: így nem préselhető ÁT két szomszédos test közötti résen
 function resolveMove(x, z, feet){
   let r={x:x, z:z};
-  for(let i=0;i<3;i++){ r=_resolvePass(r.x, r.z, feet); }
+  for(let i=0;i<4;i++){ r=_resolvePass(r.x, r.z, feet); }
   return r;
 }
 // aréna-perem: sugaras visszaszorítás BOUND_R-re
