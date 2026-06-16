@@ -1855,7 +1855,7 @@ function update(dt,t){
   if(bowKickRot>0) bowKickRot=Math.max(0, bowKickRot - dt*5.0);
 
   /* --- nyilak (szünetben befagynak) --- */
-  if(running) for(const a of arrows){ if(!a.active) continue;
+  if(running) for(const a of arrows){ if(!a.active) continue; try {
     if(a.stuck){ a.life+=dt; if(a.life>3){ a.active=false; a.g.visible=false; } continue; }
     a.prev.copy(a.g.position);
     a.vel.y-=GRAV*dt;
@@ -1885,12 +1885,13 @@ function update(dt,t){
       if(!coopIsRemote(hit) && hit.hp<=0) killMonster(hit, head);
     }
     if(a.life>6){ a.active=false; a.g.visible=false; }
+    } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update arrow-loop caught — game continues; please report this]', _e); } }
   }
   if(running) updateBombs(dt); // köpködő-bombák (szünetben befagynak)
 
   /* --- szörnyek --- */
   aliveCount=0;
-  for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i];
+  for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i]; try {
     if(m.dying>0){ m.dying+=dt; const k=m.dying; const g=m.g, p=g.position;
       switch(m.deathStyle){
         case 'topple': {
@@ -1958,6 +1959,7 @@ function update(dt,t){
     // sérülés-villanás a szemeken
     if(m.hurtFlash>0){ m.hurtFlash-=dt; const f=m.hurtFlash>0?1:0; m.eyes.forEach(e=>e.material.emissiveIntensity=2+f*4); }
     else m.eyes.forEach(e=>e.material.emissiveIntensity=2);
+    } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update monster-loop caught — game continues; please report this]', _e); } }
   }
 
   /* --- hullám-vezérlés --- */
