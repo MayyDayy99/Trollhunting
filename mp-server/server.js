@@ -291,7 +291,7 @@ function broadcast(room, obj, exceptId = null) {
 // =============================================================================
 //  CONNECTION + MESSAGE HANDLING
 // =============================================================================
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 }); // cap inbound frame size (basic DoS guard)
 
 wss.on('connection', (ws) => {
   // A socket has no player/room until it sends a valid `join`.
@@ -330,13 +330,13 @@ function handleMessage(ws, msg) {
   switch (msg.t) {
     // ---- CLIENT-OWNED: own transform, relayed to peers --------------------
     case 'player_state': {
-      if (msg.pos && typeof msg.pos.x === 'number') {
+      if (msg.pos && Number.isFinite(+msg.pos.x) && Number.isFinite(+msg.pos.y) && Number.isFinite(+msg.pos.z)) {
         player.pos = { x: +msg.pos.x, y: +msg.pos.y, z: +msg.pos.z };
       }
-      if (typeof msg.yaw === 'number')   player.yaw = +msg.yaw;
-      if (typeof msg.pitch === 'number') player.pitch = +msg.pitch;
-      if (typeof msg.hp === 'number')    player.hp = clamp(+msg.hp, 0, 999);
-      if (typeof msg.alive === 'boolean') player.alive = msg.alive;
+      if (Number.isFinite(+msg.yaw))   player.yaw = +msg.yaw;
+      if (Number.isFinite(+msg.pitch)) player.pitch = +msg.pitch;
+      if (typeof msg.hp === 'number')  player.hp = Math.min(player.hp, clamp(+msg.hp, 0, 999)); // client may only report hp LOSS, never resurrect
+      // alive is SERVER-authoritative (melee death + rejoin/respawn revive); ignore client msg.alive.
       // Relay immediately for snappy peer movement (also folded into `state`).
       broadcast(room, { t: 'player_state', id: player.id, pos: player.pos,
                         yaw: player.yaw, pitch: player.pitch, hp: player.hp,
@@ -346,15 +346,19 @@ function handleMessage(ws, msg) {
 
     // ---- CLIENT-OWNED: shots, relayed so peers can render arrows ----------
     case 'arrow_fired': {
+      const vec = (o) => (o && Number.isFinite(+o.x) && Number.isFinite(+o.y) && Number.isFinite(+o.z)) ? { x: +o.x, y: +o.y, z: +o.z } : null;
+      const from = vec(msg.from), dir = vec(msg.dir);
+      if (!from || !dir) break; // drop malformed/NaN shots instead of amplifying them to peers
       broadcast(room, {
         t: 'arrow_fired', id: player.id,
-        from: msg.from, dir: msg.dir, power: clamp(+msg.power || 0, 0, 1),
+        from, dir, power: clamp(+msg.power || 0, 0, 1),
       }, player.id);
       break;
     }
 
     // ---- HIT: client-reported, server lightly validates + scores ---------
     case 'hit': {
+      if (!player.alive || player.hp <= 0) break; // a downed player can't deal damage or farm score
       // TODO(netcode): re-simulate the ray server-side for real anti-cheat.
       // For now: confirm the monster exists, clamp damage, apply, award score.
       const mid = msg.monsterId;
@@ -378,6 +382,12 @@ function handleMessage(ws, msg) {
       }
       broadcast(room, { t: 'hit', id: player.id, monsterId: mid, headshot,
                         dmg, killed, score: room.score }, null);
+      break;
+    }
+
+    // ---- RESPAWN: explicit revive after a co-op death/restart (server owns liveness) ----
+    case 'respawn': {
+      player.hp = 100; player.alive = true;
       break;
     }
 
@@ -420,8 +430,9 @@ function handleJoin(ws, msg) {
     room = createRoom(code, msg.max);
   }
 
-  // ---- Reconnect reclaim: same room, same pid -> reuse the existing player.
+  // ---- Reconnect reclaim: same room, same pid + matching server-issued token.
   let player = pid ? room.players.get(pid) : null;
+  if (player && player.token && msg.token !== player.token) player = null; // pid is only a hint; the secret token is required to reclaim (no hijack)
   if (player) {
     // Tear down the stale socket (if any) WITHOUT firing handleLeave's
     // peer_left/destroyRoom, then bind this fresh socket to the same player.
@@ -444,12 +455,13 @@ function handleJoin(ws, msg) {
     }
     /** @type {Player} */
     player = {
-      id: pid || makeId(),   // honor client-supplied stable id when present
+      id: makeId(),          // always server-minted; pid is only a reclaim lookup hint (authed by token)
       name,
       ws,
       pos: { x: 0, y: 1.7, z: 0 },
       yaw: 0, pitch: 0,
       hp: 100, alive: true,
+      token: makeId(),         // private reclaim secret (sent only in this player's welcome)
       lastSeen: Date.now(),
     };
     room.players.set(player.id, player);
@@ -465,6 +477,7 @@ function handleJoin(ws, msg) {
   send(ws, {
     t: 'welcome',
     id: player.id,
+    token: player.token,   // private: lets THIS client reclaim its slot on reconnect
     room: code,
     you: playerView(player),
     players: [...room.players.values()].map(playerView),
@@ -603,6 +616,7 @@ function stepWaves(room, dt) {
     const dx = target.pos.x - m.pos.x;
     const dz = target.pos.z - m.pos.z;
     const dist = Math.hypot(dx, dz);
+    if (!Number.isFinite(dist) || dist <= 0) continue; // skip NaN/degenerate distance (defends against bad client pos)
     if (dist > MELEE_RANGE) {
       // Walk toward the target on the ground plane.
       const step = Math.min(m.speed * dt, dist);
@@ -640,10 +654,10 @@ function tickAll() {
   }
 }
 
-setInterval(tickAll, TICK_MS);
+const tickTimer = setInterval(tickAll, TICK_MS);
 
 // ---- Heartbeat / dead-socket sweep (WebSocket ping every 30s) --------------
-setInterval(() => {
+const heartbeatTimer = setInterval(() => {
   for (const ws of wss.clients) {
     if (ws.isAlive === false) { ws.terminate(); continue; }
     ws.isAlive = false;
@@ -709,6 +723,9 @@ function log(...a) { console.log(`[${new Date().toISOString()}]`, ...a); }
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log(`${sig} received, shutting down.`);
+    clearInterval(tickTimer); clearInterval(heartbeatTimer);
+    for (const ws of wss.clients) { try { ws.close(1001); } catch { /* ignore */ } }
+    wss.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2000).unref();
   });

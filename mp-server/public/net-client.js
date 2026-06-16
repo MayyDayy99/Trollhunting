@@ -82,6 +82,8 @@ export function connectCoop(opts = {}) {
   let roomCode = opts.room || null;
   let joined = false;
   let closedByUser = false;
+  let selfToken = null;       // private reclaim token from welcome (anti-hijack)
+  let reconnectTimer = null;  // pending auto-reconnect timer (cancellable)
 
   // ---- outbound throttle for player_state -----------------------------------
   // The game loop runs at ~60 fps; we don't need to flood the socket with
@@ -90,11 +92,12 @@ export function connectCoop(opts = {}) {
   const INPUT_MIN_INTERVAL_MS = 50;
 
   function open() {
+    if (closedByUser) return;
     ws = new WebSocket(url);
 
     ws.addEventListener('open', () => {
       // Send our join request as soon as the socket is open.
-      send({ t: 'join', room: roomCode || undefined, name: opts.name || 'Archer', max: opts.max, pid: selfId || undefined }); // pid = stabil id => duplikátum-mentes újracsatlakozás
+      send({ t: 'join', room: roomCode || undefined, name: opts.name || 'Archer', max: opts.max, pid: selfId || undefined, token: selfToken || undefined }); // pid+token = duplikátum-mentes, biztonságos újracsatlakozás
       hooks.onOpen();
     });
 
@@ -107,8 +110,10 @@ export function connectCoop(opts = {}) {
     ws.addEventListener('close', () => {
       joined = false;
       hooks.onClose();
-      // Auto-reconnect unless the user closed us on purpose.
-      if (!closedByUser) setTimeout(open, 1500);
+      // Auto-reconnect unless the user closed us on purpose (cancellable).
+      if (!closedByUser && reconnectTimer === null) {
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; open(); }, 1500);
+      }
     });
 
     ws.addEventListener('error', (e) => hooks.onError({ code: 'socket', message: String(e?.message || 'ws error') }));
@@ -118,7 +123,7 @@ export function connectCoop(opts = {}) {
     switch (msg.t) {
       case 'hello':       /* server greeting; join already sent on open */ break;
       case 'welcome':
-        selfId = msg.id; roomCode = msg.room; joined = true;
+        selfId = msg.id; if (msg.token) selfToken = msg.token; roomCode = msg.room; joined = true;
         hooks.onWelcome(msg);
         break;
       case 'state':        hooks.onState(msg); break;
@@ -169,6 +174,7 @@ export function connectCoop(opts = {}) {
 
   function close() {
     closedByUser = true;
+    if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (ws) try { ws.close(); } catch { /* ignore */ }
   }
 
