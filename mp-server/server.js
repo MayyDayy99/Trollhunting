@@ -125,6 +125,20 @@ const INTERMISSION  = 3.0;    // seconds of calm between cleared wave and next
 const TROLL_TYPES   = ['grunt', 'scout', 'brute', 'shaman', 'spitter'];
 let   monsterSeq    = 0;      // process-wide monotonic monster id source
 
+// ELEM (co-op, server-authoritative): mirrors mohas-roham.html STATUS_CFG + TROLL_TYPES.resist
+const EL_STATUS = { fire:'fire', ice:'ice', poison:'poison', lightning:'lightning' };   // base -> no status
+const STATUS_CFG_S = {
+  fire:      { dur:4.0, dps:7, slow:1.0,  stun:0,   maxStacks:3, dpsRamp:3,      leaves:'' },
+  ice:       { dur:3.0, dps:0, slow:0.45, stun:0,   maxStacks:3, slowRamp:-0.10, leaves:'wet' },
+  poison:    { dur:6.0, dps:4, slow:0.85, stun:0,   maxStacks:3, dpsRamp:2,      leaves:'' },
+  lightning: { dur:1.2, dps:0, slow:1.0,  stun:1.2, maxStacks:1,                 leaves:'charged' },
+};
+const RESIST_S = {
+  grunt:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, scout:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2},
+  brute:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, shaman:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5},
+  spitter:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, wisp:{fire:1.5,ice:0.4,poison:0.8,lightning:1.0},
+};
+
 // =============================================================================
 //  STATIC FILE HANDLER  (hand-rolled — keeps deps to just `ws`)
 // =============================================================================
@@ -232,7 +246,8 @@ function pickQuickRoom(max) {
 // Transport-free, client-safe view of a monster for the `state` frame. Drops
 // server-internal sim fields (meleeCd) the client never needs.
 function monsterView(m) {
-  return { id: m.id, type: m.type, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed };
+  return { id: m.id, type: m.type, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed,
+    st: m.statusEl ? { e:m.statusEl, s:m.statusStacks, f:(m.frozenSolid>0?1:0), w:(m.wet>0?1:0) } : null };  // ELEM: kliens-vizuál (aura/szem-tint/jégburok)
 }
 
 let idCounterFallback = 0;
@@ -352,6 +367,8 @@ function handleMessage(ws, msg) {
       broadcast(room, {
         t: 'arrow_fired', id: player.id,
         from, dir, power: clamp(+msg.power || 0, 0, 1),
+        el: (typeof msg.el === 'string' && (EL_STATUS[msg.el] || msg.el === 'base')) ? msg.el : 'base',
+        charge: clamp(+msg.charge || 0, 0, 1),
       }, player.id);
       break;
     }
@@ -371,17 +388,29 @@ function handleMessage(ws, msg) {
                           score: room.score }, null);
         break;
       }
-      const dmg = clamp(+msg.dmg || 0, 0, 999);
+      const dmgBase = clamp(+msg.dmg || 0, 0, 999);
       const headshot = !!msg.headshot;
-      m.hp -= dmg;
-      let killed = false;
-      if (m.hp <= 0) {
-        killed = true;
-        room.monsters = room.monsters.filter((x) => x.id !== mid);
-        room.score += headshot ? 150 : 100; // matches single-player scoring
+      const el = (typeof msg.el === 'string' && EL_STATUS[msg.el]) ? msg.el : 'base';
+      const charge = clamp(+msg.charge || 0, 0, 1);
+      const rz = (m.resist && m.resist[el]) ? m.resist[el] : 1;
+      m.hp -= dmgBase * (m.frozenSolid > 0 ? 1.5 : 1) * rz;   // ELEM: brittle (fagyott +50%) + per-troll resist
+      let reaction = null;
+      if (el !== 'base') {
+        const now = Date.now() / 1000, onCd = (now - (m.lastReactT || -999)) < 0.45;
+        const rid = onCd ? null : resolveReactionS(el, m);
+        if (rid) { m.lastReactT = now; reaction = rid; const skip = applyReactionS(rid, room, m, dmgBase, charge); if (!skip) applyServerStatus(m, el, charge); }
+        else {   // base per-element mechanic
+          if (el === 'fire') { for (const tg of elNearest(room, m.pos.x, m.pos.z, m, 3.5, 1)) { tg.hp -= dmgBase * 0.3; applyServerStatus(tg, 'fire', null, 1); } }
+          else if (el === 'lightning') chainLightningS(room, m, dmgBase);
+          else if (el === 'poison') elFx(room, { k: 'zone', kind: 'gas', x: m.pos.x, z: m.pos.z });
+          applyServerStatus(m, el, charge);
+        }
       }
+      let killed = false;
+      if (m.hp <= 0) { killed = true; room.monsters = room.monsters.filter((x) => x.id !== mid); room.score += headshot ? 150 : 100; elFx(room, { k:'kill', id:mid, el:(m.statusEl||el), x:m.pos.x, z:m.pos.z }); }
+      reapDead(room);   // reaction/chain neighbours that dropped to 0
       broadcast(room, { t: 'hit', id: player.id, monsterId: mid, headshot,
-                        dmg, killed, score: room.score }, null);
+                        dmg: dmgBase, killed, score: room.score, el, reaction, reactPos: { x: m.pos.x, z: m.pos.z } }, null);
       break;
     }
 
@@ -554,7 +583,10 @@ function spawnMonster(room) {
     maxHp: hp,
     speed,
     meleeCd: 0, // per-monster melee cooldown (seconds remaining)
+    // ELEM: server-authoritative status spine (mirrors the client monster fields)
+    statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999,
   };
+  m.resist = RESIST_S[m.type] || null;
   room.monsters.push(m);
   return m;
 }
@@ -580,6 +612,63 @@ function nearestLivingPlayer(room, x, z) {
     if (d < bestD) { bestD = d; best = p; }
   }
   return best;
+}
+
+// ---- ELEM (co-op): server-authoritative status / reactions / chains ---------
+function elFx(room, ev){ (room._fx || (room._fx = [])).push(ev); }   // batched render-only FX events (broadcast each tick)
+function elNearest(room, x, z, exclude, radius, max){
+  const out=[]; for(const o of room.monsters){ if(o===exclude || o.hp<=0) continue; const d=Math.hypot(o.pos.x-x,o.pos.z-z); if(d<radius) out.push([d,o]); }
+  out.sort((a,b)=>a[0]-b[0]); return out.slice(0,max).map(e=>e[1]);
+}
+function applyServerStatus(m, el, charge, stacksToAdd){
+  const st=EL_STATUS[el]; if(!st) return; const s=STATUS_CFG_S[st];
+  const add=(stacksToAdd!=null?stacksToAdd:((charge!=null&&charge>=0.66)?2:1));
+  const dur=s.dur*Math.min((m.resist&&m.resist[st])?m.resist[st]:1, 1.6);
+  if(m.statusEl===st){ m.statusStacks=Math.min(s.maxStacks||1,(m.statusStacks||1)+add); m.statusT=Math.max(m.statusT,dur); }
+  else { m.statusEl=st; m.statusT=dur; m.burnAcc=0; m.statusStacks=Math.min(s.maxStacks||1,add); }
+  if(st==='ice'){ m.slowMul=Math.max(0.25, s.slow+(s.slowRamp||0)*((m.statusStacks||1)-1)); if((m.statusStacks||1)>=3||(charge!=null&&charge>=0.85)) m.frozenSolid=Math.max(m.frozenSolid||0,2.0); }
+  else if(s.slow<1) m.slowMul=Math.min(m.slowMul||1, s.slow);
+  if(s.stun>0) m.rooted=Math.max(m.rooted||0, s.stun);
+  if(st==='lightning') m.charged=Math.max(m.charged||0,2.0);
+}
+function resolveReactionS(el, m){
+  const iced=(m.statusEl==='ice'||m.frozenSolid>0), burning=(m.statusEl==='fire'), poisoned=(m.statusEl==='poison'), wet=(m.wet>0), charged=(m.charged>0);
+  if(el==='lightning'){ if(iced) return 'overload'; if(poisoned||charged) return 'galvanic'; }
+  else if(el==='ice'){ if(burning) return 'steam'; if(charged) return 'overload'; if(poisoned) return 'frostrot'; }
+  else if(el==='fire'){ if(iced) return 'steam'; if(poisoned) return 'ignite'; }
+  else if(el==='poison'){ if(burning) return 'ignite'; if(charged) return 'galvanic'; }
+  return null;
+}
+function chainLightningS(room, hit, dmg){
+  const hx=hit.pos.x, hz=hit.pos.z;
+  const anyWet=room.monsters.some(o=>o.hp>0 && o.wet>0 && Math.hypot(o.pos.x-hx,o.pos.z-hz)<10);
+  const radius=anyWet?10:7, maxNodes=anyWet?5:3;
+  const cand=elNearest(room,hx,hz,hit,radius,5); cand.sort((a,b)=>((b.wet>0)-(a.wet>0)));
+  let prev=hit, nodes=1;
+  for(const tg of cand){ if(nodes>=maxNodes) break; tg.hp-=dmg*(tg.wet>0?0.9:0.5); applyServerStatus(tg,'lightning'); elFx(room,{k:'chain',from:{x:prev.pos.x,z:prev.pos.z},to:{x:tg.pos.x,z:tg.pos.z},el:'lightning'}); prev=tg; nodes++; }
+}
+// returns true if the caller should SKIP applying the base status (reaction handled it)
+function applyReactionS(id, room, m, dmg, charge){
+  const x=m.pos.x, z=m.pos.z;
+  if(id==='overload'){ m.hp-=dmg*1.2; m.frozenSolid=0; m.rooted=Math.max(m.rooted||0,1.6);
+    for(const tg of elNearest(room,x,z,m,9,4)){ tg.hp-=dmg*0.6; tg.rooted=Math.max(tg.rooted||0,1.6); tg.frozenSolid=0; elFx(room,{k:'chain',from:{x,z},to:{x:tg.pos.x,z:tg.pos.z},el:'lightning'}); }
+    elFx(room,{k:'reaction',kind:'overload',x,z}); }
+  else if(id==='steam'){ m.hp-=dmg*0.9; m.statusEl=null; m.statusStacks=1; m.frozenSolid=0; m.wet=Math.max(m.wet||0,2.5);
+    for(const tg of elNearest(room,x,z,m,3.5,3)) tg.rooted=Math.max(tg.rooted||0,0.3);
+    elFx(room,{k:'reaction',kind:'steam',x,z}); elFx(room,{k:'zone',kind:'steam',x,z}); elFx(room,{k:'zone',kind:'puddle',x,z}); return true; }
+  else if(id==='ignite'){ const stacks=m.statusStacks||1; m.hp-=dmg*1.0+(12+3*stacks); const R=4.5*(0.75+0.5*(charge==null?0.5:charge));
+    for(const tg of elNearest(room,x,z,m,R,6)){ tg.hp-=dmg*0.5; applyServerStatus(tg,'fire',null,1); }
+    elFx(room,{k:'reaction',kind:'ignite',x,z}); elFx(room,{k:'zone',kind:'fire',x,z}); }
+  else if(id==='galvanic'){ m.hp-=dmg*0.5; let prev=m; for(const tg of elNearest(room,x,z,m,8,3)){ tg.hp-=dmg*0.4; tg.rooted=Math.max(tg.rooted||0,0.6); applyServerStatus(tg,'poison',null,1); elFx(room,{k:'chain',from:{x:prev.pos.x,z:prev.pos.z},to:{x:tg.pos.x,z:tg.pos.z},el:'poison'}); prev=tg; }
+    elFx(room,{k:'reaction',kind:'galvanic',x,z}); }
+  else if(id==='frostrot'){ m.frozenSolid=Math.max(m.frozenSolid||0,1.2); m.slowMul=Math.min(m.slowMul||1,0.35); elFx(room,{k:'reaction',kind:'frostrot',x,z}); return true; }
+  return false;
+}
+// Remove dead monsters (hp<=0), score them, emit element-keyed kill FX for the client.
+function reapDead(room){
+  if(!room.monsters.some(m=>m.hp<=0)) return;
+  const dead=room.monsters.filter(m=>m.hp<=0); room.monsters=room.monsters.filter(m=>m.hp>0);
+  for(const m of dead){ room.score += 100; elFx(room,{k:'kill', id:m.id, el:(m.statusEl||null), x:m.pos.x, z:m.pos.z}); }
 }
 
 // Real server-authoritative wave + monster simulation (co-op).
@@ -621,18 +710,28 @@ function stepWaves(room, dt) {
     }
   }
 
-  // ---- Monster movement + melee (co-op aggro on nearest living player) ----
+  // ---- Status tick (DoT/slow/freeze) + movement + melee (co-op aggro) -----
   for (const m of room.monsters) {
     if (m.meleeCd > 0) m.meleeCd -= dt;
+    // ELEM: flag-timers + DoT + slow (server-authoritative)
+    if (m.wet>0) m.wet-=dt; if (m.charged>0) m.charged-=dt; if (m.frozenSolid>0) m.frozenSolid-=dt; if (m.chill>0) m.chill-=dt; if (m.rooted>0) m.rooted-=dt;
+    if (m.statusEl) { const s=STATUS_CFG_S[m.statusEl]; m.statusT-=dt;
+      let dps=s.dps + (s.dpsRamp||0)*((m.statusStacks||1)-1); if(m.resist&&m.resist[m.statusEl]) dps*=m.resist[m.statusEl]; if(m.statusEl==='poison'&&m.frozenSolid>0) dps*=1.3;
+      if(dps>0){ m.burnAcc=(m.burnAcc||0)+dps*dt; if(m.burnAcc>=1){ const d=Math.floor(m.burnAcc); m.burnAcc-=d; m.hp-=d; } }
+      if(m.statusEl==='ice') m.slowMul=Math.max(0.25, s.slow+(s.slowRamp||0)*((m.statusStacks||1)-1)); else if(s.slow<1) m.slowMul=s.slow;
+      if(m.statusT<=0){ if(m.statusEl==='ice') m.wet=Math.max(m.wet||0,2.5); m.statusEl=null; m.statusStacks=1; m.frozenSolid=0; m.slowMul=(m.chill>0?0.55:1); }
+    } else { m.slowMul=(m.chill>0?0.55:1); }
+    if (m.hp <= 0) continue; // died from DoT -> reaped after the loop
     const target = nearestLivingPlayer(room, m.pos.x, m.pos.z);
     if (!target) continue; // everyone is down; trolls idle
     const dx = target.pos.x - m.pos.x;
     const dz = target.pos.z - m.pos.z;
     const dist = Math.hypot(dx, dz);
     if (!Number.isFinite(dist) || dist <= 0) continue; // skip NaN/degenerate distance (defends against bad client pos)
+    if (m.frozenSolid > 0 || m.rooted > 0) continue;   // ELEM: teljes fagy / bénítás = se mozgás, se harapás
     if (dist > MELEE_RANGE) {
-      // Walk toward the target on the ground plane.
-      const step = Math.min(m.speed * dt, dist);
+      // Walk toward the target on the ground plane (lassítás-szorzóval).
+      const step = Math.min(m.speed * (m.slowMul||1) * dt, dist);
       m.pos.x += (dx / dist) * step;
       m.pos.z += (dz / dist) * step;
     } else if (m.meleeCd <= 0) {
@@ -646,6 +745,7 @@ function stepWaves(room, dt) {
       }
     }
   }
+  reapDead(room);   // ELEM: DoT/reakció-halálok (pontozás + elem-igazított halál-FX a kliensnek)
 }
 
 function tickAll() {
@@ -662,8 +762,10 @@ function tickAll() {
       wave: room.wave,
       score: room.score,
       players: [...room.players.values()].map(playerView),
-      monsters: room.monsters.map(monsterView), // client-safe view (no meleeCd)
+      monsters: room.monsters.map(monsterView), // client-safe view (+ compact status `st`)
     });
+    // ELEM: render-only FX events accumulated this tick (reactions, chains, zones, element-keyed kills)
+    if (room._fx && room._fx.length) { broadcast(room, { t: 'monster_fx', fx: room._fx }); room._fx = []; }
   }
 }
 
