@@ -122,6 +122,7 @@
         🧊+⚡ <b style="color:#9fd0ff">Fagytúltöltés</b> &nbsp;·&nbsp; 🔥+🧊 <b style="color:#e8f0ff">Gőzrobbanás</b> &nbsp;·&nbsp; 🔥+☠️ <b style="color:#ff9a3d">Mérges gyújtás</b> &nbsp;·&nbsp; ☠️+⚡ <b style="color:#c8e26a">Galván permet</b>
       </div>
       <div class="brief-hint">Minden troll más elemre gyenge — a <b>szürke sercegés</b> = ellenáll, az <b>erős felvillanás</b> = gyenge pont.</div>
+      <div class="brief-hint"><b style="color:#ffd27a">Környezet:</b> a tűz felgyújtja a fákat · víz/tócsa vezeti a villámot &nbsp;·&nbsp; <b style="color:#ffd27a">VIHAR (R):</b> reakciókkal töltöd fel, majd az egész pályát elárasztja az aktuális elem.</div>
     </div>
     <button id="startBtn">JÁTÉK ▶</button>
   </div>
@@ -977,7 +978,7 @@ function fireArrow(charge){
   a.vel.copy(fwd).multiplyScalar(speed);
   a.dmg=18+charge*30;
   a.life=0; a.active=true; a.stuck=false; a.g.visible=true;
-  a.el=currentElement; a.charge=charge; applyArrowVisual(a);   // ELEM: stamp the equipped element + charge + tint head/glow
+  a.el=currentElement; a.charge=charge; a.resonant=(performance.now()*0.001-lastSwapT)<1.2; applyArrowVisual(a);   // ELEM: element + charge + rezonancia (gyors váltás után)
   orientArrow(a);
   AUD.twang(charge);
   coopOnShot(start, fwd, charge); // CO-OP: relay this shot to peers (no-op offline)
@@ -1208,7 +1209,7 @@ function elementalDeath(m){
     for(let i=0;i<8;i++){ const a=rand(0,6.28),pp=Math.acos(rand(-1,1)),L=rand(1.5,3.2); EFX.bolt(bx,by,bz, bx+Math.sin(pp)*Math.cos(a)*L,by+Math.cos(pp)*L,bz+Math.sin(pp)*Math.sin(a)*L, pick([0xffffff,0xc8e6ff,0xb48cff]),0.16,0.22); }
     for(let i=0;i<26;i++){ const a=rand(0,6.28),pp=Math.acos(rand(-1,1)),s=rand(3,9); RP.spawn(bx,by,bz,Math.sin(pp)*Math.cos(a)*s,Math.cos(pp)*s,Math.sin(pp)*Math.sin(a)*s,pick([0xffffff,0xd8e6ff,0x5a3fb0]),rand(0.35,0.6),0.02,rand(0.3,0.6),3,1.5); }
   }
-  shake=Math.max(shake,0.28);
+  shake=Math.max(shake,0.28); gainUlt(6);   // elemi státusszal megölt troll tölti a VIHAR-t
 }
 
 /* --- elem-választó HUD (a HUD aljára, középre; a menük z-index 10 eltakarják) --- */
@@ -1232,7 +1233,32 @@ function updateElementHUD(){
     chip.style.boxShadow=on?('0 0 14px '+def.ui+'66'):'none';
     chip.querySelector('div:last-child').style.color=on?def.ui:'#9db4d6'; });
 }
-function setElement(id){ if(!EL[id]) return; currentElement=id; updateElementHUD(); }
+let lastSwapT=-999, ult=0, _ultBar=null;
+function setElement(id){ if(!EL[id]) return; currentElement=id; lastSwapT=performance.now()*0.001; updateElementHUD(); }   // PLAYER: rezonancia-ablak nyílik váltáskor
+function gainUlt(n){ ult=Math.min(100, ult+n); }
+function buildUltHud(){
+  const w=document.createElement('div'); w.id='ulthud';
+  w.style.cssText='position:fixed;left:50%;bottom:60px;transform:translateX(-50%);z-index:6;width:230px;height:8px;border-radius:6px;background:rgba(14,22,40,.55);border:1px solid rgba(180,200,240,.18);overflow:hidden;pointer-events:none';
+  const bar=document.createElement('div'); bar.style.cssText='height:100%;width:0%;transition:width .15s,background .2s'; w.appendChild(bar);
+  const lab=document.createElement('div'); lab.id='ultlab'; lab.textContent='VIHAR'; lab.style.cssText='position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:6;font:800 10px/1 -apple-system,\'Segoe UI\',sans-serif;letter-spacing:.16em;color:#9db4d6;pointer-events:none';
+  document.body.appendChild(w); document.body.appendChild(lab); _ultBar=bar;
+}
+function updateUltHud(){
+  if(!_ultBar) return; const full=ult>=100, def=EL[currentElement]||EL.base;
+  _ultBar.style.width=Math.min(100,ult)+'%'; _ultBar.style.background=full?'linear-gradient(90deg,#ffd27a,#fff)':def.ui;
+  const lab=document.getElementById('ultlab'); if(lab){ lab.textContent=full?'VIHAR KÉSZ — R':'VIHAR'; lab.style.color=full?'#ffd27a':'#9db4d6'; }
+  if(_elHud){ const rem=Math.max(0,1.2-(performance.now()*0.001-lastSwapT)); const chip=_elHud.querySelector('[data-el="'+currentElement+'"]');
+    if(chip) chip.style.boxShadow = rem>0 ? ('0 0 '+(8+rem*18).toFixed(0)+'px #ffd27a') : ('0 0 14px '+def.ui+'66'); }   // rezonancia = arany ragyogás az aktív chipen
+}
+function fireVihar(){   // VIHAR ultimate: az aktuális elemet 3 stackkel rászórja az EGÉSZ pályára (előkészít a reakciókhoz)
+  if(ult<100 || !running) return; ult=0; const el=currentElement, def=EL[el]||EL.base; const px=player.pos.x, pz=player.pos.z;
+  EFX.flash(px,GROUND_Y+2,pz, def.glow, 1, ARENA_R*1.1, 0.6); EFX.ring(px,GROUND_Y+0.05,pz, def.trail, 1, ARENA_R, 0.9, 0.95); EFX.light(px,GROUND_Y+3,pz, def.glow, 9, 0.7);
+  shake=Math.max(shake,0.7); if(AUD.head)AUD.head(); toast('VIHAR! ('+def.name+')');
+  for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; o.hurtFlash=0.25; o.hp-=8;
+    if(el!=='base') applyStatus(o, el, null, 3);
+    const b=o.g.position, by=b.y+(o.bodyCY||1); for(let i=0;i<6;i++) RP.spawn(b.x,by,b.z, rand(-2,2),rand(0,3),rand(-2,2), def.glow, 0.5,0.03,0.4, 1,1.2);
+    if(o.hp<=0&&o.alive) killMonster(o,false); }
+}
 
 /* ===================== ELEM-PRO: látható nyilak + elem-logika =====================
    Minden elem saját mechanikát kap (nem csak szín): tűz=DoT+terjedés, jég=fagy/szilánk,
@@ -1288,7 +1314,7 @@ function igniteTree(f){
   for(let i=0;i<22;i++) RP.spawn(f.x+rand(-0.5,0.5),GROUND_Y+rand(0.6,cy),f.z+rand(-0.5,0.5),rand(-0.8,0.8),rand(1,3),rand(-0.8,0.8),pick([0xff5a2a,0xff8a3a,0xffc24d]),rand(0.5,0.9),0.05,rand(0.6,1.2),-1.5,1.2);
 }
 function spawnGasCloud(x,y,z){ spawnZone('gas', x, z, {y:y}); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,3.0,0.5,0.7); for(let i=0;i<14;i++){ const a=rand(0,6.28),s=rand(1,4); RP.spawn(x,Math.max(GROUND_Y+0.5,y),z,Math.cos(a)*s,rand(0.5,2),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a]),rand(0.5,0.8),0.05,rand(0.5,0.9),3,1); } }
-function freezeFull(m){ m.frozenSolid=Math.max(m.frozenSolid||0, 2.0); if(!m.iceShell) freezeEncase(m); if(m.iceShell){ m.iceShell.material.opacity=0.7; m.iceShell.scale.set(1.15,1.5,1.15); } }
+function freezeFull(m){ const fresh=!(m.frozenSolid>0); m.frozenSolid=Math.max(m.frozenSolid||0, 2.0); if(!m.iceShell) freezeEncase(m); if(m.iceShell){ m.iceShell.material.opacity=0.7; m.iceShell.scale.set(1.15,1.5,1.15); } if(fresh) gainUlt(4); }
 function shatterShell(m){ if(m.iceShell){ m.g.remove(m.iceShell); m.iceShell.geometry.dispose(); m.iceShell.material.dispose(); m.iceShell=null; } m.frozenSolid=0; }
 /* ELEM-REACT: melyik reakció sül el, ha `el` nyíl csapódik a `m` állapotú trollba (pre-hit állapot) */
 function resolveReaction(el, m){
@@ -1344,7 +1370,7 @@ function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant){
   if(el!=='base'){
     const onCd=((now-(hit.lastReactT||-999))<0.45) && !resonant;
     const rid=onCd?null:resolveReaction(el, hit);
-    if(rid){ hit.lastReactT=now; return applyReaction(rid, pos, hit, dmg*(resonant?1.3:1), charge); }   // reakció helyettesíti az alap-mechanikát
+    if(rid){ hit.lastReactT=now; gainUlt(12); return applyReaction(rid, pos, hit, dmg*(resonant?1.3:1), charge); }   // reakció helyettesíti az alap-mechanikát + tölti a VIHAR-t
   }
   // --- alap (reakció nélküli) per-elem mechanika ---
   if(el==='fire'){ const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,3.5,1); for(const tg of near){ const a=hit.g.position.clone(); a.y+=hit.bodyCY||1; const b=tg.g.position.clone(); b.y+=tg.bodyCY||1; EFX.bolt(a.x,a.y,a.z,b.x,b.y,b.z,0xff9a3d,0.12,0.25); for(let i=0;i<6;i++) RP.spawn(b.x,b.y,b.z,rand(-2,2),rand(0,3),rand(-2,2),pick([0xff5a2a,0xffc24d]),0.5,0.04,0.4,-1,1.2); tg.hp-=dmg*0.3; tg.hurtFlash=0.12; applyStatus(tg,'fire',null,1); if(tg.hp<=0&&tg.alive) killMonster(tg,false); } }
@@ -1406,7 +1432,7 @@ function embellishTroll(m){
   const rune=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); rune.scale.setScalar(0.5); rune.position.set(0,1.05,0.5); g.add(rune);
 }
 
-buildElementHUD();
+buildElementHUD(); buildUltHud();
 
 /* ===================== Szörnyek (mohás trollok) ===================== */
 const monsters=[];
@@ -1874,6 +1900,7 @@ addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
   if('12345'.includes(k)) setElement(EL_ORDER[+k-1]);   // ELEM: 1–5 switch arrow element
   if(k==='escape'&&running) pauseGame();
   else if(k==='b'){ bowTune=!bowTune; bowTuneEl.style.display=bowTune?'block':'none'; if(bowTune) applyBowAdj(); }
+  else if(k==='r'){ if(running) fireVihar(); }   // VIHAR ultimate
   else if(bowTune){ const A=bowAdj;
     if(k==='j') A.ry-=0.05; else if(k==='l') A.ry+=0.05;
     else if(k==='i') A.rx-=0.05; else if(k==='k') A.rx+=0.05;
@@ -2159,7 +2186,7 @@ function update(dt,t){
       if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg); } // CO-OP: server applies dmg/kill/score
       else { const wasStatus=hit.statusEl; const _rz=(hit.resist&&hit.resist[a.el])?hit.resist[a.el]:1; const _dmg=dmg*(hit.frozenSolid>0?1.5:1)*_rz; hit.hp-=_dmg; hit.hurtFlash=(_rz>1.3?0.3:0.15);   // törékeny ×1.5 + per-troll resist
         if(_rz<0.6){ const _q=a.g.position; for(let i=0;i<4;i++) RP.spawn(_q.x,_q.y,_q.z,rand(-1,1),rand(0,1.5),rand(-1,1),0x8a8f99,0.3,0.02,0.3,1,1); }   // ELLENÁLL: szürke sercegés (rossz elem)
-        const _skip=elementMechanic(a.g.position, a.el, hit, dmg, head, wasStatus, a.charge); if(!_skip) applyStatus(hit, a.el, a.charge); }   // ELEM-REACT: reakció VAGY alap-mechanika, majd (ha nem reakció kezelte) státusz
+        const _skip=elementMechanic(a.g.position, a.el, hit, dmg, head, wasStatus, a.charge, a.resonant); if(!_skip) applyStatus(hit, a.el, a.charge); if(head) gainUlt(2); }   // ELEM-REACT: reakció/alap + rezonancia; fejlövés tölti a VIHAR-t
       const hp=a.g.position;
       elementalImpact(hp, a.el, head);   // ELEM: element-colored impact burst
       if(head) AUD.head(); else AUD.hit();
@@ -2258,6 +2285,7 @@ function update(dt,t){
   /* --- effektek --- */
   sparks.update(dt); gore.update(dt); updateElemFx(dt);
   RP.update(dt); SMK.update(dt); EFX.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg léptetése
+  updateUltHud();   // PLAYER: VIHAR-csík + rezonancia-ragyogás
   if(arrowLightT>0){ arrowLightT-=dt; if(arrowLightT<=0) arrowLight.visible=false; }   // repülő elemi nyíl fénye lecseng
   drawRadar(t);
   // szentjánosbogarak
@@ -2793,7 +2821,7 @@ function resetGame(){
   if(coop) coopOnReset(); // FIX: co-op könyvelés ürítése + revive új játéknál
 }
 function beginPlay(){
-  AUD.unlock(); resetGame(); running=true; coopStarted=true;
+  AUD.unlock(); resetGame(); ult=0; running=true; coopStarted=true;
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
   if(!window.__elHintShown){ window.__elHintShown=true; setTimeout(()=>{ if(running) toast('1–5: VÁLTS ELEMI NYILAT — TŰZ · JÉG · MÉREG · VILLÁM'); }, 1900); }  // felfedezhetőség: az elemi FX csak 2–5 nyíllal látszik
