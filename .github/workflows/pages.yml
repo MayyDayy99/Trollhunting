@@ -1,0 +1,41 @@
+name: Deploy single-player to GitHub Pages
+
+# Publishes ONLY the single-file single-player game (mohas-roham.html) to Pages,
+# copied to index.html. Co-op is intentionally not hosted here — it needs the
+# WebSocket server in mp-server/ (run that locally; see README).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mohas-roham.html'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site (single-player only)
+        run: |
+          mkdir -p _site
+          cp mohas-roham.html _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
