@@ -922,14 +922,17 @@ function setString(){
 const nockArrow=new THREE.Group();
 (function(){
   const shaft=mesh(new THREE.CylinderGeometry(0.0055,0.0055,0.78,8), arrowWood,0,0,0.39); shaft.rotation.x=Math.PI/2; nockArrow.add(shaft);
-  // kovácsolt broadhead (lapos rombusz)
-  const head=mesh(new THREE.ConeGeometry(0.020,0.075,4),  metalMat,0,0,-0.038); head.rotation.x=-Math.PI/2; head.rotation.z=Math.PI/4; nockArrow.add(head);
-  const collar=mesh(new THREE.CylinderGeometry(0.007,0.009,0.02,8), metalMat,0,0,0.005); collar.rotation.x=Math.PI/2; nockArrow.add(collar);
-  // három piros tollazat a vég felé
+  // tiszta 6-oldalú hegy (saját anyag-klón, hogy elemenként színezhető/izzítható legyen)
+  const head=mesh(new THREE.ConeGeometry(0.020,0.085,6), metalMat.clone(),0,0,-0.04); head.rotation.x=-Math.PI/2; nockArrow.add(head);
+  const collar=mesh(new THREE.CylinderGeometry(0.007,0.009,0.02,8), metalMat,0,0,0.01); collar.rotation.x=Math.PI/2; nockArrow.add(collar);
+  // három tollazat a vég felé
   [0,1,2].forEach(i=>{ const f=mesh(new THREE.PlaneGeometry(0.080,0.040), featherMat,0,0,0.70); f.rotation.y=Math.PI/2; f.rotation.z=i*(Math.PI*2/3); nockArrow.add(f); });
-  // szaru-nock a vég
-  nockArrow.add(mesh(new THREE.CylinderGeometry(0.008,0.0065,0.014,8), hornMat,0,0,0.775));
+  nockArrow.add(mesh(new THREE.CylinderGeometry(0.008,0.0065,0.014,8), hornMat,0,0,0.775));   // szaru-nock a vég
+  // ELEM: elem-glow + elem-fej tartó a hegyen — feszítés közben is látszik a kiválasztott elem
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})); glow.scale.setScalar(0.18); glow.position.set(0,0,-0.06); nockArrow.add(glow);
+  const elemHolder=new THREE.Group(); elemHolder.position.set(0,0,-0.07); elemHolder.scale.setScalar(0.42); nockArrow.add(elemHolder);
   nockArrow.children.forEach(o=>{ if(o.isMesh) o.castShadow=true; });
+  nockArrow._tip=head; nockArrow._glow=glow; nockArrow._elemHolder=elemHolder;
 })();
 nockArrow.visible=false;
 nockArrow.rotation.y=Math.PI; // a ~180°-os íjpózban a nyíl hegye a jelenetbe (a célkereszt felé) mutasson
@@ -1234,7 +1237,9 @@ function updateElementHUD(){
     chip.querySelector('div:last-child').style.color=on?def.ui:'#9db4d6'; });
 }
 let lastSwapT=-999, ult=0, _ultBar=null;
-function setElement(id){ if(!EL[id]) return; currentElement=id; lastSwapT=performance.now()*0.001; updateElementHUD(); }   // PLAYER: rezonancia-ablak nyílik váltáskor
+const nockVis={ el:'base', tip:null, glow:null, elemHolder:null, flames:null };
+function updateNockElement(){ if(!nockArrow._tip) return; nockVis.el=currentElement; nockVis.tip=nockArrow._tip; nockVis.glow=nockArrow._glow; nockVis.elemHolder=nockArrow._elemHolder; applyArrowVisual(nockVis); }   // a nockolt nyíl is mutassa a kiválasztott elemet (tint + glow + elem-fej)
+function setElement(id){ if(!EL[id]) return; currentElement=id; lastSwapT=performance.now()*0.001; updateElementHUD(); updateNockElement(); }   // PLAYER: rezonancia-ablak nyílik váltáskor + nock frissül
 function gainUlt(n){ ult=Math.min(100, ult+n); }
 function buildUltHud(){
   const w=document.createElement('div'); w.id='ulthud';
@@ -1433,7 +1438,7 @@ function embellishTroll(m){
   const rune=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); rune.scale.setScalar(0.5); rune.position.set(0,1.05,0.5); g.add(rune);
 }
 
-buildElementHUD(); buildUltHud();
+buildElementHUD(); buildUltHud(); updateNockElement();
 
 /* ===================== Szörnyek (mohás trollok) ===================== */
 const monsters=[];
