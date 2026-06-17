@@ -1238,7 +1238,18 @@ function updateElementHUD(){
 }
 let lastSwapT=-999, ult=0, _ultBar=null;
 const nockVis={ el:'base', tip:null, glow:null, elemHolder:null, flames:null };
-function updateNockElement(){ if(!nockArrow._tip) return; nockVis.el=currentElement; nockVis.tip=nockArrow._tip; nockVis.glow=nockArrow._glow; nockVis.elemHolder=nockArrow._elemHolder; applyArrowVisual(nockVis); }   // a nockolt nyíl is mutassa a kiválasztott elemet (tint + glow + elem-fej)
+function updateNockElement(){   // a nockolt nyíl FINOMAN mutassa az elemet — a hegy LÁTSZÓDJON, ne vakítson
+  const na=nockArrow; if(!na._tip) return; const def=EL[currentElement]||EL.base, base=(currentElement==='base');
+  if(na._tip.material){ na._tip.material.emissive.setHex(base?0x000000:def.head); na._tip.material.emissiveIntensity=base?0:0.45; na._tip.visible=true; }   // a fém hegy mindig látszik, csak izzik
+  if(na._glow){ na._glow.material.color.setHex(def.glow); na._glow.material.opacity=base?0:0.2; }
+  nockVis.el=currentElement; nockVis.elemHolder=na._elemHolder; nockVis.flames=null; buildElemHead(nockVis); na._flames=nockVis.flames;   // elem-specifikus fej (láng/kristály/csepp/szikra)
+  na._elemHolder.children.forEach(o=>{ if(o.material && typeof o.material.opacity==='number') o.material.opacity*=0.5; });   // tompítás (a kilőtt nyíl marad a fényes)
+}
+function animateNock(t){   // finom, elem-megfelelő pulzálás feszítés közben
+  const na=nockArrow; if(!na._glow || currentElement==='base') return;
+  na._glow.material.opacity=0.2*(0.6+0.4*Math.sin(t*7));
+  if(na._flames) for(let i=0;i<na._flames.length;i++){ const sp=na._flames[i]; if(sp.material) sp.material.opacity=0.4+0.35*Math.abs(Math.sin(t*12+i)); }
+}
 function setElement(id){ if(!EL[id]) return; currentElement=id; lastSwapT=performance.now()*0.001; updateElementHUD(); updateNockElement(); }   // PLAYER: rezonancia-ablak nyílik váltáskor + nock frissül
 function gainUlt(n){ ult=Math.min(100, ult+n); }
 function buildUltHud(){
@@ -1426,8 +1437,8 @@ function embellishTroll(m){
   sprout(g, -rand(0.2,0.4),1.2,-0.20, 0.8, Math.random()<0.5);
   if(Math.random()<0.6) sprout(head, rand(-0.15,0.15),0.34,-0.05, 0.55, false);
   // --- görbe csont-SZARVAK (sziluett-változás) ---
-  [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.08,0.40,6), tuskMat, s*0.20,0.26,0.0); h.rotation.z=s*0.55; h.rotation.x=-0.35; head.add(h);
-    const h2=mesh(new THREE.ConeGeometry(0.05,0.18,5), tuskMat, s*0.31,0.50,-0.05); h2.rotation.z=s*1.0; head.add(h2); });
+  [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.08,0.40,6), tuskMat, s*0.20,0.20,-0.04); h.rotation.z=s*0.5; h.rotation.x=-0.35; head.add(h);   // FEJEN ülő szarv: alap a koponyában (tető ~0.40), hegy felfelé
+    const h2=mesh(new THREE.ConeGeometry(0.05,0.18,5), tuskMat, s*0.30,0.42,-0.06); h2.rotation.z=s*0.9; h2.rotation.x=-0.3; head.add(h2); });
   // --- magas, szaggatott HÁT-TARAJ ---
   const ns=4+((Math.random()*3)|0);
   for(let i=0;i<ns;i++){ const sp=mesh(new THREE.ConeGeometry(0.07,0.30+Math.random()*0.14,5), tuskMat, rand(-0.05,0.05), 0.90+i*0.18, -0.36); sp.rotation.x=-0.35; g.add(sp); }
@@ -2130,7 +2141,7 @@ function update(dt,t){
 
   /* --- íj feszítés + lövés-animáció (csak futó játékban tölt) --- */
   idleT+=dt;
-  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powfill.style.width=(charge*100)+'%'; nockArrow.visible=true; }
+  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powfill.style.width=(charge*100)+'%'; nockArrow.visible=true; animateNock(t); }
   else { nockArrow.visible=false; }
   // elengedés-detektálás -> twang + FOV-rúgás + limb-snap
   if(prevCharge>0.12 && charge<=0.0001){ bowKick=1; bowKickRot=1; relTwang=0.14; camera.fov=FOV_BASE+5.5; camera.updateProjectionMatrix(); }
