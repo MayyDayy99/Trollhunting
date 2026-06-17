@@ -2183,7 +2183,7 @@ function update(dt,t){
       if(segDist(a.prev,a.g.position,c)<m.bodyR){ hit=m; break; }
     }
     if(hit){ const dmg=a.dmg*(head?2:1);
-      if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg); } // CO-OP: server applies dmg/kill/score
+      if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg, a.el, a.charge); } // CO-OP: server applies dmg/kill/score/status (+el/charge)
       else { const wasStatus=hit.statusEl; const _rz=(hit.resist&&hit.resist[a.el])?hit.resist[a.el]:1; const _dmg=dmg*(hit.frozenSolid>0?1.5:1)*_rz; hit.hp-=_dmg; hit.hurtFlash=(_rz>1.3?0.3:0.15);   // törékeny ×1.5 + per-troll resist
         if(_rz<0.6){ const _q=a.g.position; for(let i=0;i<4;i++) RP.spawn(_q.x,_q.y,_q.z,rand(-1,1),rand(0,1.5),rand(-1,1),0x8a8f99,0.3,0.02,0.3,1,1); }   // ELLENÁLL: szürke sercegés (rossz elem)
         const _skip=elementMechanic(a.g.position, a.el, hit, dmg, head, wasStatus, a.charge, a.resonant); if(!_skip) applyStatus(hit, a.el, a.charge); if(head) gainUlt(2); }   // ELEM-REACT: reakció/alap + rezonancia; fejlövés tölti a VIHAR-t
@@ -2263,6 +2263,7 @@ function update(dt,t){
     if(!m.alive) continue;
     aliveCount++;
     if(!coopIsRemote(m)) tickStatus(m, dt);    // ELEM: burn/poison DoT, freeze slow, shock stun, aura
+    else if(m.statusEl) statusAura(m, m.statusEl);   // ELEM co-op: a távoli (szerver-vezérelt) trollon is fusson az aura-vizuál
     if(!m.alive){ aliveCount--; continue; }    // ELEM: a DoT just killed it → hand over to the dying animation
     if(coopIsRemote(m)){ /* CO-OP: server owns this monster's movement/attacks; skip local AI (interpolated in coopTick) */ }
     else trollAI(m, dt, t); // típus-függő mozgás/támadás (belül running&&alive gate)
@@ -2565,6 +2566,7 @@ function coopEnsureMonster(sm){
     coopPushSnap(m.coopBuf, p.x, (p.y!=null?p.y:GROUND_Y), p.z, yaw);
   }
   if(typeof sm.hp==='number') m.hp = sm.hp;
+  coopApplyStatusVisual(m, sm.st);   // ELEM: szerver-státusz -> vizuális aura/szem-tint/jégburok a távoli trollon
   return m;
 }
 function coopReconcileMonsters(serverMons){
@@ -2585,6 +2587,34 @@ function coopKillRemote(netId, headshot){
   const m = coopRemoteById.get(netId);
   coopRemoteById.delete(netId);
   if(m && m.alive){ const _s=score; killMonster(m, !!headshot); score=_s; scoreN.textContent=_s; } // FIX: a pontot a szerver adja, ne dupláz
+}
+/* ELEM co-op: a szerver `st` összefoglalójából VIZUÁLIS státusz a TÁVOLI trollon (aura/szem-tint/jégburok). A hp/DoT/AI a szerveré. */
+function coopApplyStatusVisual(m, st){
+  const e=(st&&st.e)||null;
+  if(e!==m.statusEl){ m.statusEl=e; m.statusStacks=st?(st.s||1):1;
+    if(e){ const cfg=STATUS_CFG[e]; if(m._eyeBase==null && m.eyes&&m.eyes[0]) m._eyeBase=m.eyes[0].material.emissive.getHex(); if(m.eyes&&cfg) m.eyes.forEach(x=>x.material.emissive.setHex(cfg.tint)); }
+    else if(m._eyeBase!=null && m.eyes) m.eyes.forEach(x=>x.material.emissive.setHex(m._eyeBase)); }
+  const frozen=!!(st&&st.f);
+  if((e==='ice'||frozen)&&!m.iceShell) freezeEncase(m);
+  else if(!(e==='ice'||frozen)&&m.iceShell){ m.g.remove(m.iceShell); m.iceShell.geometry.dispose(); m.iceShell.material.dispose(); m.iceShell=null; }
+  m.frozenSolid=frozen?1:0;
+}
+/* ELEM co-op: vizuál-only reakció-villanás a megadott talajponton */
+function reactionFxVisual(kind, x, z){ const y=GROUND_Y+1.2;
+  if(kind==='overload'){ EFX.flash(x,y,z,0x9fd0ff,0.6,3.8,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fd0ff,0.5,6,0.5,0.9); EFX.light(x,y,z,0xbfe6ff,4.5,0.3); shake=Math.max(shake,0.4); toast('FAGYTÚLTÖLTÉS!'); }
+  else if(kind==='steam'){ EFX.flash(x,y,z,0xffffff,0.5,3.2,0.26); for(let i=0;i<14;i++) SMK.spawn(x+rand(-0.3,0.3),y,z+rand(-0.3,0.3),rand(-1,1),rand(0.5,1.6),rand(-1,1),0xdfeaf2,0.8,2.2,0.9,-0.5,0.8,0.7); toast('GŐZROBBANÁS!'); }
+  else if(kind==='ignite'){ EFX.flash(x,y,z,0xff8a2a,0.7,5,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,5.5,0.45,0.85); EFX.light(x,y,z,0xff7a3d,4.5,0.35); shake=Math.max(shake,0.4); toast('MÉRGES GYÚJTÁS!'); }
+  else if(kind==='galvanic'){ EFX.flash(x,y,z,0xc8e26a,0.4,2.5,0.2); EFX.light(x,y,z,0x9fdc4a,2.2,0.2); toast('GALVÁN PERMET!'); }
+  else if(kind==='frostrot'){ EFX.ring(x,GROUND_Y+0.05,z,0x9fd2ff,0.3,2.6,0.4,0.8); }
+}
+/* ELEM co-op: a szerver monster_fx eseményeinek lejátszása (reakció/lánc/zóna/elemi halál) — vizuál-only */
+function coopHandleFx(fx){ if(!Array.isArray(fx)) return;
+  for(const e of fx){
+    if(e.k==='reaction'){ reactionFxVisual(e.kind, e.x, e.z); }
+    else if(e.k==='chain' && e.from && e.to){ const c=(e.el==='poison')?0x9fdc4a:0xffffff; EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, c, 0.16, 0.4); EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, 0xb48cff, 0.16, 0.5); }
+    else if(e.k==='zone'){ spawnZone(e.kind, e.x, e.z, {}); }
+    else if(e.k==='kill'){ const m=coopRemoteById.get(e.id); if(m){ if(e.el) m.statusEl=e.el; coopKillRemote(e.id, false); } }   // elem-igazított halál a távoli trollon
+  }
 }
 
 /* ---- per-frame interpolation of peers + remote monsters (called from coopTick) ---- */
@@ -2633,14 +2663,15 @@ function coopShowPeerArrow(a){
   if(!tr){ const g = mesh(new THREE.CylinderGeometry(0.012,0.012,0.7,5), tuskMat, 0,0,0); g.rotation.x=Math.PI/2; const wrap=new THREE.Group(); wrap.add(g); scene.add(wrap); tr={wrap, active:false, life:0}; coopPeerArrows.push(tr); }
   tr.wrap.position.set(a.from.x, a.from.y, a.from.z);
   tr.wrap.lookAt(a.from.x+a.dir.x, a.from.y+a.dir.y, a.from.z+a.dir.z);
-  tr.wrap.visible=true; tr.active=true; tr.life=0;
+  tr.wrap.visible=true; tr.active=true; tr.life=0; tr.el=a.el;
   tr.vx=a.dir.x; tr.vy=a.dir.y; tr.vz=a.dir.z; tr.sp=(22+ (a.power||0)*30);
-  sparks.burst(a.from.x,a.from.y,a.from.z,4,0xffd27a,4,0.25);
+  sparks.burst(a.from.x,a.from.y,a.from.z,4, (a.el&&a.el!=='base'&&EL[a.el])?EL[a.el].glow:0xffd27a, 4, 0.25);
 }
 function coopUpdatePeerArrows(dt){
   for(const tr of coopPeerArrows){ if(!tr.active) continue;
     tr.life+=dt; const s=tr.sp*dt;
     tr.wrap.position.x+=tr.vx*s; tr.wrap.position.y+=tr.vy*s; tr.wrap.position.z+=tr.vz*s;
+    if(tr.el && tr.el!=='base' && EL[tr.el]){ const p=tr.wrap.position; RP.spawn(p.x,p.y,p.z, rand(-0.3,0.3),rand(-0.3,0.3),rand(-0.3,0.3), EL[tr.el].trail, 0.3,0.02,0.25, 0,1.5); }   // ELEM: társ-nyíl elemi nyoma
     if(tr.life>0.9){ tr.active=false; tr.wrap.visible=false; }
   }
 }
@@ -2655,8 +2686,8 @@ function coopTick(dt){
 }
 
 /* --- hook helpers called from the gated edits in fireArrow / collision --- */
-function coopOnShot(start, fwd, charge){ if(coop) coop.sendShot({ from:{x:start.x,y:start.y,z:start.z}, dir:{x:fwd.x,y:fwd.y,z:fwd.z}, power:charge }); }
-function coopOnLocalHit(hit, head, dmg){ if(coop && hit && hit.coopRemote && hit.netId!=null) coop.sendHit({ monsterId:hit.netId, headshot:head, dmg:dmg }); }
+function coopOnShot(start, fwd, charge){ if(coop) coop.sendShot({ from:{x:start.x,y:start.y,z:start.z}, dir:{x:fwd.x,y:fwd.y,z:fwd.z}, power:charge, el:currentElement, charge:charge }); }   // ELEM: az elemet+töltést is átküldjük
+function coopOnLocalHit(hit, head, dmg, el, charge){ if(coop && hit && hit.coopRemote && hit.netId!=null) coop.sendHit({ monsterId:hit.netId, headshot:head, dmg:dmg, el:el, charge:charge }); }
 /* true when the LOCAL spawner / local kill / local AI must be suppressed for this monster */
 function coopShouldSuppressLocalSpawner(){ return !!coop; }
 function coopIsRemote(m){ return !!(coop && m && m.coopRemote); }
@@ -2793,7 +2824,10 @@ function coopConnect(){
     onPeerJoined: (p)=>{ if(p && p.id!==coopMyId){ coopMakePeer(p.id, p.name); coopUpdateHudPlayers(); } },
     onPeerLeft:   (id)=>{ coopRemovePeer(id); coopUpdateHudPlayers(); },
     onArrow:      (a)=>{ coopShowPeerArrow(a); },
-    onHit:        (h)=>{ if(typeof h.score==='number'){ score=h.score; scoreN.textContent=score; } if(h.killed && h.monsterId!=null) coopKillRemote(h.monsterId, h.headshot); },
+    onHit:        (h)=>{ if(typeof h.score==='number'){ score=h.score; scoreN.textContent=score; }
+                         if(h.id!==coopMyId && h.el && h.el!=='base' && h.reactPos) elementalImpact({x:h.reactPos.x,y:GROUND_Y+1.2,z:h.reactPos.z}, h.el, h.headshot);   // társ találatának elemi becsapódása
+                         if(h.killed && h.monsterId!=null){ const rm=coopRemoteById.get(h.monsterId); if(rm && h.el && h.el!=='base') rm.statusEl=h.el; coopKillRemote(h.monsterId, h.headshot); } },
+    onMonsterFx:  (fx)=>{ coopHandleFx(fx); },   // ELEM: szerver reakció/lánc/zóna/elemi-halál FX
     onSpawnWave:  (w)=>{ if(typeof w.wave==='number'){ coopWaveNum=w.wave; wave=w.wave; if(waveN) waveN.textContent='HULLÁM '+w.wave; AUD.wave(); toast('HULLÁM '+w.wave); } },
     onPlayerDown: (id)=>{ if(id===coopMyId && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }, // FIX: szerver-vezérelt elesés
     onOpen:       ()=>{ /* socket up; "connected" is confirmed on welcome (re-join in flight) */ },

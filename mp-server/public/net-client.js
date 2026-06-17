@@ -138,6 +138,7 @@ export function connectCoop(opts = {}) {
       case 'hit':          hooks.onHit(msg); break;
       case 'spawn_wave':   hooks.onSpawnWave(msg); break;
       case 'monster_state':if (opts.onMonsters) opts.onMonsters(msg.monsters); break;
+      case 'monster_fx':   if (opts.onMonsterFx) opts.onMonsterFx(msg.fx); break;   // ELEM: render-only FX (reactions/chains/zones/elemi halál)
       case 'player_down':  hooks.onPlayerDown(msg.id); break;
       case 'chat':         hooks.onChat(msg); break;
       case 'error':        hooks.onError(msg); break;
@@ -161,11 +162,11 @@ export function connectCoop(opts = {}) {
   }
 
   function sendShot(shot) {
-    send({ t: 'arrow_fired', from: shot.from, dir: shot.dir, power: shot.power });
+    send({ t: 'arrow_fired', from: shot.from, dir: shot.dir, power: shot.power, el: shot.el, charge: shot.charge });
   }
 
   function sendHit(hit) {
-    send({ t: 'hit', monsterId: hit.monsterId, headshot: !!hit.headshot, dmg: hit.dmg });
+    send({ t: 'hit', monsterId: hit.monsterId, headshot: !!hit.headshot, dmg: hit.dmg, el: hit.el, charge: hit.charge });
   }
 
   function sendChat(text) {
