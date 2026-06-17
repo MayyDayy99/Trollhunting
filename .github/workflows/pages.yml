@@ -34,6 +34,8 @@ jobs:
           mkdir -p _site
           cp mohas-roham.html _site/index.html
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true   # let the workflow turn on Pages itself (no manual Settings step needed)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
