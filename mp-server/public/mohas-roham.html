@@ -1252,6 +1252,7 @@ function updateUltHud(){
 }
 function fireVihar(){   // VIHAR ultimate: az aktuális elemet 3 stackkel rászórja az EGÉSZ pályára (előkészít a reakciókhoz)
   if(ult<100 || !running) return; ult=0; const el=currentElement, def=EL[el]||EL.base; const px=player.pos.x, pz=player.pos.z;
+  if(coop){ coop.send({t:'ult', el:el}); toast('VIHAR! ('+def.name+')'); if(AUD.head)AUD.head(); return; }   // co-op: a szerver alkalmazza + broadcastolja a nova-t mindenkinek
   EFX.flash(px,GROUND_Y+2,pz, def.glow, 1, ARENA_R*1.1, 0.6); EFX.ring(px,GROUND_Y+0.05,pz, def.trail, 1, ARENA_R, 0.9, 0.95); EFX.light(px,GROUND_Y+3,pz, def.glow, 9, 0.7);
   shake=Math.max(shake,0.7); if(AUD.head)AUD.head(); toast('VIHAR! ('+def.name+')');
   for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; o.hurtFlash=0.25; o.hp-=8;
@@ -2606,6 +2607,7 @@ function reactionFxVisual(kind, x, z){ const y=GROUND_Y+1.2;
   else if(kind==='ignite'){ EFX.flash(x,y,z,0xff8a2a,0.7,5,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,5.5,0.45,0.85); EFX.light(x,y,z,0xff7a3d,4.5,0.35); shake=Math.max(shake,0.4); toast('MÉRGES GYÚJTÁS!'); }
   else if(kind==='galvanic'){ EFX.flash(x,y,z,0xc8e26a,0.4,2.5,0.2); EFX.light(x,y,z,0x9fdc4a,2.2,0.2); toast('GALVÁN PERMET!'); }
   else if(kind==='frostrot'){ EFX.ring(x,GROUND_Y+0.05,z,0x9fd2ff,0.3,2.6,0.4,0.8); }
+  else if(kind==='nova'){ EFX.flash(x,GROUND_Y+2,z,0xffffff,1,ARENA_R*1.1,0.6); EFX.ring(x,GROUND_Y+0.05,z,0x9fd2ff,1,ARENA_R,0.9,0.95); EFX.light(x,GROUND_Y+3,z,0xffffff,9,0.7); shake=Math.max(shake,0.7); toast('VIHAR!'); }
 }
 /* ELEM co-op: a szerver monster_fx eseményeinek lejátszása (reakció/lánc/zóna/elemi halál) — vizuál-only */
 function coopHandleFx(fx){ if(!Array.isArray(fx)) return;

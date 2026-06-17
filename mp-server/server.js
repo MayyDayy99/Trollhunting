@@ -429,6 +429,19 @@ function handleMessage(ws, msg) {
       break;
     }
 
+    // ---- ELEM: server-authoritative VIHAR ultimate (client fills the meter, server applies) ----
+    case 'ult': {
+      if (!player.alive || player.hp <= 0 || !player.playing) break;
+      const el = (typeof msg.el === 'string' && EL_STATUS[msg.el]) ? msg.el : null;
+      const now = Date.now() / 1000;
+      if (now - (player._ultAt || -999) < 15) break;   // anti-spam gate (PvE: low cheat incentive — no full meter sim)
+      player._ultAt = now;
+      for (const m of room.monsters) { if (m.hp <= 0) continue; m.hp -= 8; if (el) applyServerStatus(m, el, null, 3); }   // nova: equipped element @3 stacks on the whole field
+      reapDead(room);
+      elFx(room, { k: 'reaction', kind: 'nova', x: player.pos.x, z: player.pos.z, el: (el || 'base') });
+      break;
+    }
+
     default:
       send(ws, { t: 'error', code: 'unknown_type', message: `Unknown message type: ${msg.t}` });
   }
