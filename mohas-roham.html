@@ -1437,8 +1437,8 @@ function embellishTroll(m){
   sprout(g, -rand(0.2,0.4),1.2,-0.20, 0.8, Math.random()<0.5);
   if(Math.random()<0.6) sprout(head, rand(-0.15,0.15),0.34,-0.05, 0.55, false);
   // --- görbe csont-SZARVAK (sziluett-változás) ---
-  [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.08,0.40,6), tuskMat, s*0.20,0.20,-0.04); h.rotation.z=s*0.5; h.rotation.x=-0.35; head.add(h);   // FEJEN ülő szarv: alap a koponyában (tető ~0.40), hegy felfelé
-    const h2=mesh(new THREE.ConeGeometry(0.05,0.18,5), tuskMat, s*0.30,0.42,-0.06); h2.rotation.z=s*0.9; h2.rotation.x=-0.3; head.add(h2); });
+  [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.07,0.42,6), tuskMat, s*0.15,0.28,-0.06); h.rotation.x=-0.30; h.rotation.z=s*0.28; head.add(h);   // FŐ szarv: a koponya tetejéről (közel a középvonalhoz) hátra-felfelé ível
+    const h2=mesh(new THREE.ConeGeometry(0.04,0.20,6), tuskMat, s*0.21,0.46,-0.12); h2.rotation.x=-0.45; h2.rotation.z=s*0.5; head.add(h2); });   // hegy: a fő szarv folytatása (átfed vele, nincs lebegő rés)
   // --- magas, szaggatott HÁT-TARAJ ---
   const ns=4+((Math.random()*3)|0);
   for(let i=0;i<ns;i++){ const sp=mesh(new THREE.ConeGeometry(0.07,0.30+Math.random()*0.14,5), tuskMat, rand(-0.05,0.05), 0.90+i*0.18, -0.36); sp.rotation.x=-0.35; g.add(sp); }
