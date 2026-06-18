@@ -277,6 +277,7 @@ function createRoom(code, max) {
     wave: 0,
     score: 0,
     monsters: [],
+    zones: [],        // ELEM: szerver-oldali talaj-zónák (gáz/tűz DoT) — szerver-belső, NEM megy a wire-re (a kliens az elFx {k:'zone'} eseményből rajzol)
     waveToSpawn: 0,   // monsters still queued to trickle in this wave
     spawnTimer: 0,    // seconds until the next queued monster appears
     waveTimer: 0,     // intermission countdown between cleared waves
@@ -409,10 +410,10 @@ function handleMessage(ws, msg) {
         const now = Date.now() / 1000, onCd = (now - (m.lastReactT || -999)) < 0.45;
         const rid = onCd ? null : resolveReactionS(el, m);
         if (rid) { m.lastReactT = now; reaction = rid; const skip = applyReactionS(rid, room, m, dmgBase, charge); if (!skip) applyServerStatus(m, el, charge); }
-        else {   // base per-element mechanic
-          if (el === 'fire') { for (const tg of elNearest(room, m.pos.x, m.pos.z, m, 3.5, 1)) { tg.hp -= dmgBase * 0.3; applyServerStatus(tg, 'fire', null, 1); } }
-          else if (el === 'lightning') chainLightningS(room, m, dmgBase);
-          else if (el === 'poison') elFx(room, { k: 'zone', kind: 'gas', x: m.pos.x, z: m.pos.z });
+        else {   // base per-element mechanic + becsapódási splash (CSAK reakció nélkül)
+          elementalSplashS(room, m, el, dmgBase, charge, headshot);   // EGYETLEN splash-hívás (a régi bespoke tűz-ág megszűnt -> nincs dupla)
+          if (el === 'lightning') chainLightningS(room, m, dmgBase);
+          else if (el === 'poison') { elFx(room, { k: 'zone', kind: 'gas', x: m.pos.x, z: m.pos.z }); room.zones.push({ kind:'gas', x:m.pos.x, z:m.pos.z, life:4.5, tick:0.5 }); }   // a splash MELLETT talaj-gáz DoT
           applyServerStatus(m, el, charge);
         }
       }
@@ -648,7 +649,7 @@ function nearestLivingPlayer(room, x, z) {
 // ---- ELEM (co-op): server-authoritative status / reactions / chains ---------
 function elFx(room, ev){ (room._fx || (room._fx = [])).push(ev); }   // batched render-only FX events (broadcast each tick)
 function elNearest(room, x, z, exclude, radius, max){
-  const out=[]; for(const o of room.monsters){ if(o===exclude || o.hp<=0) continue; const d=Math.hypot(o.pos.x-x,o.pos.z-z); if(d<radius) out.push([d,o]); }
+  const out=[]; for(const o of room.monsters){ if(o===exclude || o.hp<=0) continue; const d=Math.hypot(o.pos.x-x,o.pos.z-z); if(d-0.7<radius) out.push([d,o]); }   // él-tudatos: a ~0.7 testsugár széle számít (a kliens nearestTrolls tükre)
   out.sort((a,b)=>a[0]-b[0]); return out.slice(0,max).map(e=>e[1]);
 }
 function applyServerStatus(m, el, charge, stacksToAdd){
@@ -661,6 +662,14 @@ function applyServerStatus(m, el, charge, stacksToAdd){
   else if(s.slow<1) m.slowMul=Math.min(m.slowMul||1, s.slow);
   if(s.stun>0) m.rooted=Math.max(m.rooted||0, s.stun);
   if(st==='lightning') m.charged=Math.max(m.charged||0,2.0);
+}
+// "AHOL IZZIK, OTT SEBEZ": kis becsapódási AoE a NEM-reakciós elemi találatra (a kliens elementalSplash tükre).
+function elementalSplashS(room, hit, el, dmg, charge, head){
+  const R = el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0;   // a villám láncol, nem splashel
+  if(R<=0) return;
+  const frac = (el==='fire'?0.30 : el==='ice'?0.22 : 0.20) * (head?1.5:1);
+  for(const tg of elNearest(room, hit.pos.x, hit.pos.z, hit, R, 4)){ tg.hp -= dmg*frac; applyServerStatus(tg, el, null, 1); }   // exclude=hit -> az elsődleges célt nem sebzi duplán
+  elFx(room,{k:'reaction',kind:'splash',el,x:hit.pos.x,z:hit.pos.z,r:R});
 }
 function resolveReactionS(el, m){
   const iced=(m.statusEl==='ice'||m.frozenSolid>0), burning=(m.statusEl==='fire'), poisoned=(m.statusEl==='poison'), wet=(m.wet>0), charged=(m.charged>0);
@@ -687,9 +696,9 @@ function applyReactionS(id, room, m, dmg, charge){
   else if(id==='steam'){ m.hp-=dmg*0.9; m.statusEl=null; m.statusStacks=1; m.frozenSolid=0; m.wet=Math.max(m.wet||0,2.5);
     for(const tg of elNearest(room,x,z,m,3.5,3)) tg.rooted=Math.max(tg.rooted||0,0.3);
     elFx(room,{k:'reaction',kind:'steam',x,z}); elFx(room,{k:'zone',kind:'steam',x,z}); elFx(room,{k:'zone',kind:'puddle',x,z}); return true; }
-  else if(id==='ignite'){ const stacks=m.statusStacks||1; m.hp-=dmg*1.0+(12+3*stacks); const R=4.5*(0.75+0.5*(charge==null?0.5:charge));
+  else if(id==='ignite'){ const stacks=m.statusStacks||1; m.hp-=dmg*1.0+(12+3*stacks); const R=4.5*1.3*(0.75+0.5*(charge==null?0.5:charge));   // R a kliens zöld gyűrűjéig ér (egyetlen ×1.3 szorzó)
     for(const tg of elNearest(room,x,z,m,R,6)){ tg.hp-=dmg*0.5; applyServerStatus(tg,'fire',null,1); }
-    elFx(room,{k:'reaction',kind:'ignite',x,z}); elFx(room,{k:'zone',kind:'fire',x,z}); }
+    elFx(room,{k:'reaction',kind:'ignite',x,z}); elFx(room,{k:'zone',kind:'fire',x,z}); room.zones.push({kind:'fire',x,z,life:5.0,tick:0.5}); }
   else if(id==='galvanic'){ m.hp-=dmg*0.5; let prev=m; for(const tg of elNearest(room,x,z,m,8,3)){ tg.hp-=dmg*0.4; tg.rooted=Math.max(tg.rooted||0,0.6); applyServerStatus(tg,'poison',null,1); elFx(room,{k:'chain',from:{x:prev.pos.x,z:prev.pos.z},to:{x:tg.pos.x,z:tg.pos.z},el:'poison'}); prev=tg; }
     elFx(room,{k:'reaction',kind:'galvanic',x,z}); }
   else if(id==='frostrot'){ m.frozenSolid=Math.max(m.frozenSolid||0,1.2); m.slowMul=Math.min(m.slowMul||1,0.35); elFx(room,{k:'reaction',kind:'frostrot',x,z}); return true; }
@@ -700,6 +709,20 @@ function reapDead(room){
   if(!room.monsters.some(m=>m.hp<=0)) return;
   const dead=room.monsters.filter(m=>m.hp<=0); room.monsters=room.monsters.filter(m=>m.hp>0);
   for(const m of dead){ room.score += 100; elFx(room,{k:'kill', id:m.id, el:(m.statusEl||null), x:m.pos.x, z:m.pos.z}); }
+}
+// ELEM (co-op): talaj-zóna DoT léptetése — gáz (3 dps / rMax 2.2 / méreg) + tűz (5 dps / rMax 2.5 / tűz), 0.5s tick.
+// A KILL->FX a záró reapDead-en megy (sosem splice-olunk iteráció közben). Csak DoT-os zónát tartunk (steam/puddle kimarad).
+function stepZones(room, dt){
+  if(!room.zones || !room.zones.length) return;
+  for(const z of room.zones){
+    z.life -= dt; z.tick = (z.tick==null?0.5:z.tick) - dt;
+    if(z.tick<=0){ z.tick = 0.5;
+      const dps = z.kind==='fire'?5 : 3, rMax = z.kind==='fire'?2.5 : 2.2, stat = z.kind==='fire'?'fire':'poison';
+      for(const m of room.monsters){ if(m.hp<=0) continue; if(Math.hypot(m.pos.x-z.x,m.pos.z-z.z)-0.7 < rMax){ m.hp -= dps*0.5; applyServerStatus(m, stat, null, 1); } }   // 0.5s tick -> dps*0.5
+    }
+  }
+  room.zones = room.zones.filter(z=>z.life>0);
+  reapDead(room);   // a zóna-DoT által megöltek leszedése + element-keyed kill FX (különben némán eltűnnének)
 }
 
 // Real server-authoritative wave + monster simulation (co-op).
@@ -784,6 +807,7 @@ function tickAll() {
   for (const room of rooms.values()) {
     room.tick++;
     stepWaves(room, dt);
+    stepZones(room, dt);   // ELEM: talaj-zóna DoT (gáz/tűz) — "ahol izzik, ott sebez" co-opban is
 
     // ELEM: render-only FX events accumulated this tick (reactions, chains, zones, element-keyed kills).
     // Sent BEFORE the state frame so an element-keyed kill animates (coopKillRemote sets m.dying)

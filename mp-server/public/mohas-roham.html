@@ -44,6 +44,13 @@
     border-radius:6px;background:rgba(8,14,28,.6);border:1px solid rgba(180,200,240,.25);opacity:0;transition:opacity .15s;}
   #powwrap.on{opacity:1;}
   #powfill{height:100%;width:0%;border-radius:6px;background:linear-gradient(90deg,#5fe0ff,#7fe2ff,#fff);}
+  /* ÚJRATÖLTÉS mód: borostyán, mozgó borbély-csík + felirat -> egyértelmű, hogy "töltök", nem hogy "elromlott" */
+  #powwrap.reload #powfill{background:#caa24a;background-image:repeating-linear-gradient(60deg,rgba(255,255,255,.22) 0 8px,transparent 8px 16px);background-size:200% 100%;animation:reloadStripes .5s linear infinite;}
+  @keyframes reloadStripes{to{background-position:32px 0;}}
+  #powwrap.reload{border-color:rgba(202,162,74,.7);box-shadow:0 0 4px rgba(202,162,74,.35);}
+  #powwrap.ready{border-color:rgba(255,214,120,1);box-shadow:0 0 9px 2px rgba(255,214,120,.85);}
+  #powlabel{position:absolute;left:50%;top:-16px;transform:translateX(-50%);font:600 11px system-ui,sans-serif;color:#e9c873;letter-spacing:.06em;text-shadow:0 1px 2px #000;opacity:0;transition:opacity .12s;white-space:nowrap;pointer-events:none;}
+  #powwrap.reload #powlabel{opacity:1;}
 
   #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
     background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(4,8,16,.7) 100%);}
@@ -90,7 +97,7 @@
   <div id="wave"><div class="n">HULLÁM 1</div><div class="left">trollok: 0</div></div>
   <div id="score"><div class="n">0</div><small>pont</small></div>
   <div id="hpwrap"><div class="lab">Életerő</div><div id="hpbar"><div id="hpghost"></div><div id="hpfill"></div></div><div id="dmgpop"></div></div>
-  <div id="powwrap"><div id="powfill"></div></div>
+  <div id="powwrap"><div id="powfill"></div><span id="powlabel"></span></div>
   <canvas id="radar" width="160" height="160"></canvas>
 </div>
 <div id="vignette"></div>
@@ -963,6 +970,8 @@ bow.add(nockArrow);
 const BOW_BASE_X=0.34, BOW_BASE_Y=-0.10, BOW_BASE_Z=-0.62, BOW_BASE_ROTZ=0.13;
 const FOV_BASE=camera.fov;
 let prevCharge=0, bowKick=0, bowKickRot=0, relTwang=0, idleT=0;
+// ÚJRATÖLTÉS-animáció: egyszer-sülő hang/impulzus-jelzők (lövéskor/húzáskor/cancelkor nullázódnak)
+let raspFired=false, swingFired=false, tapFired=false, seatFired=false;
 // élő íj-hangoló: B = be/ki, J/L yaw, I/K pitch, U/O roll, N/M méret, P tükör
 const bowAdj={rx:0.05, ry:-3.22, rz:-0.27, s:0.90, mx:1, mz:-1}; // beégetett póz; mz = limb-görbület tükör (B-vel hangolható)
 let bowTune=false;
@@ -1326,7 +1335,7 @@ function buildElemHead(a){
   else if(el==='lightning'){ const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0.95,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(0.32); h.add(core); const v=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xb48cff,transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending})); v.scale.setScalar(0.5); h.add(v); }
 }
 function arcSpark(from,to,color,n){ const k=n*5; for(let i=0;i<k;i++){ const t=i/k; sparks.burst(from.x+(to.x-from.x)*t+rand(-0.15,0.15), from.y+(to.y-from.y)*t+rand(-0.15,0.15), from.z+(to.z-from.z)*t+rand(-0.15,0.15), 1, color, 0.2, 0); } }
-function nearestTrolls(x,z,exclude,radius,max){ const out=[]; for(const o of monsters){ if(!o.alive||o.dying>0||o===exclude||coopIsRemote(o)) continue; const d=Math.hypot(o.g.position.x-x,o.g.position.z-z); if(d<radius) out.push([d,o]); } out.sort((a,b)=>a[0]-b[0]); return out.slice(0,max).map(e=>e[1]); }
+function nearestTrolls(x,z,exclude,radius,max){ const out=[]; for(const o of monsters){ if(!o.alive||o.dying>0||o===exclude||coopIsRemote(o)) continue; const d=Math.hypot(o.g.position.x-x,o.g.position.z-z); if(d-Math.min(o.bodyR||0.4,0.7)<radius) out.push([d,o]); } out.sort((a,b)=>a[0]-b[0]); return out.slice(0,max).map(e=>e[1]); }   // él-tudatos (a test széle számít), de a bónusz 0.7-re sapkázva, hogy a nagy AoE ne tarolja az arénát
 function chainLightning(hit,dmg){   // ELEM-ENV: nedves/tócsa-trollok vezetik → nagyobb hatótáv + több csomópont + erősebb ív
   const hx=hit.g.position.x, hz=hit.g.position.z;
   const anyWet=monsters.some(o=>o.alive&&o.dying<=0&&!coopIsRemote(o)&&o.wet>0&&Math.hypot(o.g.position.x-hx,o.g.position.z-hz)<10);
@@ -1358,7 +1367,7 @@ function igniteTree(f){
   const cy=GROUND_Y+4.2*((f.r/0.55)||1); EFX.light(f.x,cy,f.z,0xff7a3d,4,0.5);
   for(let i=0;i<22;i++) RP.spawn(f.x+rand(-0.5,0.5),GROUND_Y+rand(0.6,cy),f.z+rand(-0.5,0.5),rand(-0.8,0.8),rand(1,3),rand(-0.8,0.8),pick([0xff5a2a,0xff8a3a,0xffc24d]),rand(0.5,0.9),0.05,rand(0.6,1.2),-1.5,1.2);
 }
-function spawnGasCloud(x,y,z){ spawnZone('gas', x, z, {y:y}); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,3.0,0.5,0.7); for(let i=0;i<14;i++){ const a=rand(0,6.28),s=rand(1,4); RP.spawn(x,Math.max(GROUND_Y+0.5,y),z,Math.cos(a)*s,rand(0.5,2),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a]),rand(0.5,0.8),0.05,rand(0.5,0.9),3,1); } }
+function spawnGasCloud(x,y,z){ spawnZone('gas', x, z, {y:y}); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,2.2,0.5,0.7); for(let i=0;i<14;i++){ const a=rand(0,6.28),s=rand(1,4); RP.spawn(x,Math.max(GROUND_Y+0.5,y),z,Math.cos(a)*s,rand(0.5,2),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a]),rand(0.5,0.8),0.05,rand(0.5,0.9),3,1); } }
 function freezeFull(m){ const fresh=!(m.frozenSolid>0); m.frozenSolid=Math.max(m.frozenSolid||0, 2.0); if(!m.iceShell) freezeEncase(m); if(m.iceShell){ m.iceShell.material.opacity=0.7; m.iceShell.scale.set(1.15,1.5,1.15); } if(fresh) gainUlt(4); }
 function shatterShell(m){ if(m.iceShell){ m.g.remove(m.iceShell); m.iceShell.geometry.dispose(); m.iceShell.material.dispose(); m.iceShell=null; } m.frozenSolid=0; }
 /* ELEM-REACT: melyik reakció sül el, ha `el` nyíl csapódik a `m` állapotú trollba (pre-hit állapot) */
@@ -1376,7 +1385,7 @@ function applyReaction(id, pos, hit, dmg, charge){
   const px=pos.x, py=pos.y, pz=pos.z; charge=(charge==null?0.5:charge);
   if(id==='overload'){                                        // FAGYTÚLTÖLTÉS — jég+villám
     hit.hp-=dmg*1.2; hit.hurtFlash=0.2; shatterShell(hit); hit.rooted=Math.max(hit.rooted||0,1.6);
-    EFX.flash(px,py,pz,0x9fd0ff,0.6,3.8,0.3); EFX.ring(px,GROUND_Y+0.05,pz,0x9fd0ff,0.5,6,0.5,0.9); EFX.light(px,py,pz,0xbfe6ff,4.5,0.3);
+    EFX.flash(px,py,pz,0x9fd0ff,0.6,3.8,0.3); EFX.ring(px,GROUND_Y+0.05,pz,0x9fd0ff,0.5,9,0.5,0.9); EFX.light(px,py,pz,0xbfe6ff,4.5,0.3);   // gyűrű 6->9: a sebző sugárhoz igazítva
     const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,9,4);
     for(const tg of near){ const b=tg.g.position, by=b.y+(tg.bodyCY||1);
       EFX.bolt(px,py,pz,b.x,by,b.z,0xb48cff,0.16,0.6); EFX.bolt(px,py,pz,b.x,by,b.z,0xffffff,0.14,0.4);
@@ -1391,8 +1400,8 @@ function applyReaction(id, pos, hit, dmg, charge){
     const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,3.5,3); for(const tg of near) tg.rooted=Math.max(tg.rooted||0,0.3);
     shake=Math.max(shake,0.2); toast('GŐZROBBANÁS!'); if(AUD.hit)AUD.hit(); return true;   // ne tegyen rá újra tüzet
   } else if(id==='ignite'){                                   // MÉRGES GYÚJTÁS — tűz+méreg
-    const stacks=hit.statusStacks||1, R=4.5*(0.75+0.5*charge); hit.hp-=dmg*1.0 + (12+3*stacks); hit.hurtFlash=0.2;
-    EFX.flash(px,py,pz,0xff8a2a,0.7,R*1.1,0.3); EFX.ring(px,GROUND_Y+0.05,pz,0x9fdc4a,0.4,R*1.3,0.45,0.85); EFX.light(px,py,pz,0xff7a3d,4.5,0.35);
+    const stacks=hit.statusStacks||1, R=4.5*1.3*(0.75+0.5*charge); hit.hp-=dmg*1.0 + (12+3*stacks); hit.hurtFlash=0.2;   // a sebző R most a zöld gyűrűig ér (egyetlen ×1.3 szorzó, itt)
+    EFX.flash(px,py,pz,0xff8a2a,0.7,R*0.85,0.3); EFX.ring(px,GROUND_Y+0.05,pz,0x9fdc4a,0.4,R,0.45,0.85); EFX.light(px,py,pz,0xff7a3d,4.5,0.35);   // gyűrű = R (= sebző sugár)
     for(let i=0;i<34;i++){ const a=rand(0,6.28),pp=Math.acos(rand(-1,1)),sp=rand(2,8); RP.spawn(px,py,pz,Math.sin(pp)*Math.cos(a)*sp,Math.abs(Math.cos(pp)*sp)+rand(0,2),Math.sin(pp)*Math.sin(a)*sp,pick([0xff5a2a,0xff8a3a,0xffc24d,0x9fdc4a]),rand(0.5,1),0.04,rand(0.5,0.9),-1.5,1.3); }
     for(let i=0;i<6;i++) SMK.spawn(px+rand(-0.3,0.3),py,pz+rand(-0.3,0.3),rand(-0.6,0.6),rand(1,2),rand(-0.6,0.6),0x281a10,0.7,2,rand(0.8,1.3),-1,0.8,0.5);
     const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,R,6); for(const tg of near){ tg.hp-=dmg*0.5; tg.hurtFlash=0.15; applyStatus(tg,'fire',null,1); if(tg.hp<=0&&tg.alive) killMonster(tg,false); }
@@ -1410,6 +1419,22 @@ function applyReaction(id, pos, hit, dmg, charge){
   }
   return false;
 }
+// "AHOL IZZIK, OTT SEBEZ": kis becsapódási AoE minden NEM-reakciós elemi találatra. A látható gyűrű sugara == a sebző sugár.
+function elementalSplash(hit, el, dmg, charge, head){
+  const R = el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0;   // a villám LÁNCOL, nem splashel -> 0
+  if(R<=0) return;
+  const frac = (el==='fire'?0.30 : el==='ice'?0.22 : 0.20) * (head?1.5:1);
+  const px=hit.g.position.x, pz=hit.g.position.z;
+  const col = el==='fire'?0xff7a3d : el==='ice'?0x9fd0ff : 0x9fdc4a;
+  EFX.ring(px,GROUND_Y+0.05,pz,col,0.4,R,0.4,0.7);                 // a látható gyűrű = a sebző sugár
+  EFX.flash(px,GROUND_Y+0.6,pz,col,0.35,R*0.6,0.22);
+  for(const tg of nearestTrolls(px,pz,hit,R,4)){                   // exclude=hit -> az elsődleges célt nem sebzi duplán
+    const by=tg.g.position.y+(tg.bodyCY||1);
+    tg.hp-=dmg*frac; tg.hurtFlash=0.12; applyStatus(tg,el,null,1);
+    for(let i=0;i<4;i++) RP.spawn(tg.g.position.x,by,tg.g.position.z,rand(-2,2),rand(0,3),rand(-2,2),col,0.5,0.04,0.4,(el==='fire'?-1:1),1.1);
+    if(tg.hp<=0&&tg.alive) killMonster(tg,false);
+  }
+}
 function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant){
   const now=performance.now()*0.001;
   if(el!=='base'){
@@ -1418,9 +1443,9 @@ function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant){
     if(rid){ hit.lastReactT=now; gainUlt(12); return applyReaction(rid, pos, hit, dmg*(resonant?1.3:1), charge); }   // reakció helyettesíti az alap-mechanikát + tölti a VIHAR-t
   }
   // --- alap (reakció nélküli) per-elem mechanika ---
-  if(el==='fire'){ const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,3.5,1); for(const tg of near){ const a=hit.g.position.clone(); a.y+=hit.bodyCY||1; const b=tg.g.position.clone(); b.y+=tg.bodyCY||1; EFX.bolt(a.x,a.y,a.z,b.x,b.y,b.z,0xff9a3d,0.12,0.25); for(let i=0;i<6;i++) RP.spawn(b.x,b.y,b.z,rand(-2,2),rand(0,3),rand(-2,2),pick([0xff5a2a,0xffc24d]),0.5,0.04,0.4,-1,1.2); tg.hp-=dmg*0.3; tg.hurtFlash=0.12; applyStatus(tg,'fire',null,1); if(tg.hp<=0&&tg.alive) killMonster(tg,false); } }
-  else if(el==='poison'){ spawnGasCloud(pos.x,pos.y,pos.z); }
-  else if(el==='lightning'){ chainLightning(hit,dmg); }
+  if(el!=='base') elementalSplash(hit, el, dmg, charge, head);    // becsapódási AoE — EGYETLEN splash-hívás (dupla-splash guard: a régi tűz-ág megszűnt)
+  if(el==='poison') spawnGasCloud(pos.x,pos.y,pos.z);             // méreg: a splash MELLETT marad a talaj-gázfelhő (DoT)
+  else if(el==='lightning') chainLightning(hit,dmg);             // villám: lánc (splash sugara 0, nincs átfedés)
   return false;
 }
 function updateElemFx(dt){   // ELEM-ENV: zóna-léptetés (gáz/tűz/fagy/tócsa/gőz) + tűz-terjedés a fákra
@@ -1431,7 +1456,7 @@ function updateElemFx(dt){   // ELEM-ENV: zóna-léptetés (gáz/tűz/fagy/tócs
     else if(c.kind==='frost'){ if(Math.random()<0.3) RP.spawn(c.x+rand(-c.r,c.r),c.y+rand(0,0.4),c.z+rand(-c.r,c.r),rand(-0.2,0.2),rand(-0.2,0.3),rand(-0.2,0.2),0xbfe6ff,0.3,0.02,0.5,1,0.6); }
     else if(c.kind==='steam'){ if(Math.random()<0.6) SMK.spawn(c.x+rand(-c.r,c.r),c.y+rand(0,0.6),c.z+rand(-c.r,c.r),rand(-0.4,0.4),rand(0.4,1.2),rand(-0.4,0.4),0xdfeaf2,0.6,1.4,0.7,-0.4,0.8,0.5); }
     if(c.tick<=0){ c.tick=0.5;
-      for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; if(Math.hypot(o.g.position.x-c.x,o.g.position.z-c.z)>=c.r) continue;
+      for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; if(Math.hypot(o.g.position.x-c.x,o.g.position.z-c.z)-Math.min(o.bodyR||0.4,0.7)>=c.r) continue;
         if(c.kind==='gas'){ o.hp-=c.dps; o.hurtFlash=0.1; applyStatus(o,'poison',null,1); }
         else if(c.kind==='fire'){ o.hp-=c.dps; o.hurtFlash=0.1; applyStatus(o,'fire',null,1); }
         else if(c.kind==='frost'){ o.chill=Math.max(o.chill||0,0.7); o.wet=Math.max(o.wet||0,1.0); }
@@ -1941,6 +1966,9 @@ const AUD=(function(){
     unlock,
     twang(c){ if(!ok())return; const t=ctx.currentTime; tone(220-c*40,t,0.18,'triangle',0.3,90); nz(t,0.12,0.2,'bandpass',1400,1.2); },
     whoosh(){ if(!ok())return; nz(ctx.currentTime,0.16,0.12,'bandpass',900,1.4); },
+    rasp(){ if(!ok())return; nz(ctx.currentTime,0.13,0.06,'bandpass',650,1.1); },                                   // tegez/bőr surranás (reload start)
+    tap(){ if(!ok())return; const t=ctx.currentTime; tone(420,t,0.05,'sine',0.07,260); nz(t,0.04,0.05,'highpass',2200,0.9); },   // nyél a polcon koppan
+    nock(){ if(!ok())return; const t=ctx.currentTime; tone(1500,t,0.04,'square',0.10,700); nz(t,0.03,0.07,'highpass',3000,1.2); tone(240,t,0.06,'triangle',0.05,160); },   // nock bekattan + halk húr-pendülés
     hit(){ if(!ok())return; const t=ctx.currentTime; tone(150,t,0.18,'sine',0.32,60); nz(t,0.12,0.22,'lowpass',500,0.8); },
     head(){ if(!ok())return; const t=ctx.currentTime; tone(1200,t,0.16,'square',0.22,500); tone(800,t,0.2,'sine',0.18,300); },
     growl(){ if(!ok())return; const t=ctx.currentTime; tone(90,t,0.4,'sawtooth',0.12,60); },
@@ -2006,7 +2034,7 @@ addEventListener('mousemove',e=>{
   else if(dragLook&&running){ applyLook(e.clientX-lastMX,e.clientY-lastMY); lastMX=e.clientX; lastMY=e.clientY; }
 });
 
-function startDraw(){ if(running&&player.alive&&shotCd<=0){ drawing=true; charge=0; } }   // reload alatt nem lehet újrahúzni
+function startDraw(){ if(running&&player.alive&&shotCd<=0){ drawing=true; charge=0; raspFired=swingFired=tapFired=seatFired=false; } }   // reload alatt nem lehet újrahúzni
 function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban (panic mid-reload)
   if(!(running&&player.alive) || meleeCd>0) return;
   meleeCd=MELEE_CD; meleeAnim=1; if(AUD.whoosh) AUD.whoosh();
@@ -2044,7 +2072,7 @@ cv.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('mouseup',e=>{
   if(e.button===dragBtn){ dragLook=false; dragBtn=-1; showLockHint(running&&!locked); } // csak a kezdő gomb állítja le a nézést
   if(e.button!==0) return;   // BAL gomb lő
-  if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload
+  if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD; raspFired=swingFired=tapFired=seatFired=false; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload-anim
 });
 addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
 cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
@@ -2052,7 +2080,7 @@ cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
 /* ===================== HUD ===================== */
 const hpfill=document.getElementById('hpfill'), hpghost=document.getElementById('hpghost'), hpbarEl=document.getElementById('hpbar'), dmgpop=document.getElementById('dmgpop'), waveN=document.querySelector('#wave .n'),
   waveLeft=document.querySelector('#wave .left'), scoreN=document.querySelector('#score .n'),
-  powwrap=document.getElementById('powwrap'), powfill=document.getElementById('powfill'),
+  powwrap=document.getElementById('powwrap'), powfill=document.getElementById('powfill'), powlabel=document.getElementById('powlabel'),
   hurtEl=document.getElementById('hurt'), toastEl=document.getElementById('toast'),
   startScreen=document.getElementById('start'), pauseScreen=document.getElementById('pause'), overScreen=document.getElementById('over');
 let toastT=null;
@@ -2236,9 +2264,38 @@ function update(dt,t){
   if(running && shotCd>0) shotCd=Math.max(0,shotCd-dt);
   if(meleeCd>0) meleeCd=Math.max(0,meleeCd-dt);
   if(meleeAnim>0) meleeAnim=Math.max(0,meleeAnim-dt*3.2);
-  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powfill.style.width=(charge*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; animateNock(t); }
-  else if(running && shotCd>0){ powwrap.classList.add('on'); powfill.style.width=((1-shotCd/SHOT_CD)*100).toFixed(0)+'%'; powfill.style.background='#caa24a'; nockArrow.visible=false; }   // borostyán reload-csík
-  else { nockArrow.visible=false; powwrap.classList.remove('on'); powfill.style.background=''; }
+  // ÚJRATÖLTÉS present-póz delták (alapból 0; a reload-ág tölti) — a lenti bow-írásokhoz ADDITÍVAN adódnak
+  let presentY=0, presentZ=0, presentRotX=0, presentRotZ=0;
+  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powwrap.classList.remove('reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width=(charge*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; nockArrow.scale.setScalar(1); if(currentElement==='base' && nockArrow._glow) nockArrow._glow.material.opacity=0; animateNock(t); }
+  else if(running && shotCd>0){
+    // === ÍJ-ÚJRATÖLTÉS: a cooldown alatt LÁTHATÓ "új nyíl elővétele -> íjra helyezése -> beülés" — ez magyarázza a várakozást ===
+    const rp=Math.min(1, 1-shotCd/SHOT_CD), na=nockArrow, mz=bowAdj.mz;
+    powwrap.classList.add('on','reload'); if(powlabel) powlabel.textContent='TÖLTÉS…';
+    powfill.style.width=(rp*100).toFixed(0)+'%'; powfill.style.background='';
+    // present-póz burkológörbe: 0->0.18 felfut, 0.18->0.6 tart, 0.6->0.88 kienged (az íj "felmutatja" a polcot)
+    const present = rp<0.18 ? easeOutCubic(rp/0.18) : rp<0.6 ? 1 : rp<0.88 ? 1-easeInOut((rp-0.6)/0.28) : 0;
+    presentY=-0.012*present; presentZ=0.006*present; presentRotX=0.03*present; presentRotZ=0.04*present;
+    if(rp<0.18){ na.visible=false; na.position.set(0.046,0.060,0.04*mz); na.rotation.set(0,0,0); na.scale.setScalar(1); }                 // FETCH: nyúl a tegezhez (nyíl még rejtve)
+    else if(rp<0.6){ na.visible=true; const fe=easeOutCubic((rp-0.18)/0.42);                                                            // SWING-IN: a nyíl alulról-jobbról felúszik a képbe
+      na.position.set(lerp(0.110,0.052,fe), lerp(-0.62,0.072,fe), lerp(0.12,0.02,fe)*mz);
+      na.rotation.set(lerp(-0.55,-0.10,fe), lerp(0.40,0.06,fe), lerp(0.65,0.10,fe)); na.scale.setScalar(lerp(0.92,1.0,fe)); }
+    else if(rp<0.88){ na.visible=true; const ge=easeInOut((rp-0.6)/0.28);                                                               // NOCK: ráfekteti a polcra + kiegyenesedik
+      na.position.set(lerp(0.052,0.046,ge), 0.060-0.010*Math.sin(ge*Math.PI), lerp(0.02,0.04,ge)*mz);
+      na.rotation.set(lerp(-0.10,0,ge), lerp(0.06,0,ge), lerp(0.10,0,ge)); na.scale.setScalar(1); }
+    else { na.visible=true; const s=(rp-0.88)/0.12;                                                                                     // SEAT/CLICK: bekattan a húrra
+      na.position.set(0.046, 0.060+0.004*Math.sin(s*Math.PI), 0.04*mz); na.rotation.set(0,0,0); na.scale.setScalar(1+0.04*Math.sin(s*Math.PI)); }
+    // egyszer-sülő hang/impulzus-cue-k (>= küszöb + jelző: egy dt-ugrás se hagyja ki)
+    if(!raspFired){ raspFired=true; if(AUD.rasp) AUD.rasp(); }
+    if(rp>=0.18 && !swingFired){ swingFired=true; if(AUD.whoosh) AUD.whoosh(); }
+    if(rp>=0.6 && !tapFired){ tapFired=true; if(AUD.tap) AUD.tap(); }
+    if(rp>=0.9 && !seatFired){ seatFired=true; bowKick=Math.max(bowKick,0.35); bowKickRot=Math.max(bowKickRot,0.30); relTwang=Math.max(relTwang,0.06);
+      if(na._glow) na._glow.material.opacity=0.7; if(AUD.nock) AUD.nock(); powwrap.classList.add('ready'); }   // a "beülés" pillanata: kis rúgás + szikra + arany pulzus + 'tk' hang
+    if(na._glow && na._glow.material.opacity>0) na._glow.material.opacity=Math.max(0, na._glow.material.opacity-dt*6);
+    if(rp>=0.999){ na.position.set(0.046,0.060,0.04*mz); na.rotation.set(0,0,0); na.scale.setScalar(1); }   // pontos nyugalmi póz az első húzás-frame-re
+  }
+  else { nockArrow.visible=false; powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.background='';
+    nockArrow.scale.setScalar(1); nockArrow.rotation.set(0,0,0);   // a reload-pop maradékának pontos visszaállítása
+    if(nockArrow._glow && currentElement==='base') nockArrow._glow.material.opacity=0; }
   // elengedés-detektálás -> twang + FOV-rúgás + limb-snap
   if(prevCharge>0.12 && charge<=0.0001){ bowKick=1; bowKickRot=1; relTwang=0.14; camera.fov=FOV_BASE+5.5; camera.updateProjectionMatrix(); }
   prevCharge=charge;
@@ -2248,7 +2305,7 @@ function update(dt,t){
   const twang = (relTwang>0 ? Math.sin(relTwang*70)*0.020*relTwang*7 : 0);
   const pull  = charge*PULL + twang;
   nock.position.set(0,0,-Math.max(0,pull)*bowAdj.mz);           // húr a néző felé (görbület-tükörrel kompenzálva)
-  nockArrow.position.set(0.046,0.060, (-pull+0.04)*bowAdj.mz);  // a nyíl a nockkal együtt csúszik (mz-kompenzált)
+  if(!(running && shotCd>0 && !drawing)) nockArrow.position.set(0.046,0.060, (-pull+0.04)*bowAdj.mz);  // a nyíl a nockkal csúszik — DE reload alatt a reload-ág vezérli
 
   // a végtagok valódi hajlása (longbow szép ívben görbül), elengedéskor visszacsapódik
   let flex=charge*0.22;
@@ -2268,12 +2325,11 @@ function update(dt,t){
   const steady=1-charge*0.7;
   const breath=Math.sin(idleT*1.6)*0.006*steady, sway=Math.cos(idleT*0.9)*0.004*steady;
   bow.position.x=BOW_BASE_X + sway + bowKick*0.018 - charge*0.010;
-  bow.position.y=BOW_BASE_Y + breath - charge*0.014 - bowKick*0.022;
-  bow.position.z=BOW_BASE_Z + charge*0.020 + bowKick*0.045;     // töltéskor kissé közelebb, de a near-plane (0.05) bőven biztos
-  bow.rotation.x=bowAdj.rx;
+  bow.position.y=BOW_BASE_Y + breath - charge*0.014 - bowKick*0.022 + presentY;
+  bow.position.z=BOW_BASE_Z + charge*0.020 + bowKick*0.045 + presentZ;     // töltéskor kissé közelebb, de a near-plane (0.05) bőven biztos
   bow.rotation.y=bowAdj.ry + (bowAdj.ry<0?-1:1)*charge*0.05;
-  bow.rotation.z=bowAdj.rz + charge*0.045 + bowKickRot*0.05*Math.sin(idleT*40) + meleeAnim*0.9*bowAdj.mx;   // közelharc-suhintás
-  bow.rotation.x=bowAdj.rx - meleeAnim*0.45;   // a csapás lefelé is ível
+  bow.rotation.z=bowAdj.rz + charge*0.045 + bowKickRot*0.05*Math.sin(idleT*40) + meleeAnim*0.9*bowAdj.mx + presentRotZ;   // közelharc-suhintás + reload-present
+  bow.rotation.x=bowAdj.rx - meleeAnim*0.45 + presentRotX;   // a csapás lefelé is ível + reload-present nose-down
   if(bowKickRot>0) bowKickRot=Math.max(0, bowKickRot - dt*5.0);
 
   /* --- nyilak (szünetben befagynak) --- */
@@ -2434,6 +2490,7 @@ function segDist(a,b,p){ const abx=b.x-a.x,aby=b.y-a.y,abz=b.z-a.z; const apx=p.
 const pick=(arr)=>arr[(Math.random()*arr.length)|0];
 const easeOutCubic=(x)=>1-Math.pow(1-x,3);
 const easeOutBack=(x)=>{ const c1=1.70158, c3=c1+1, u=x-1; return 1+c3*u*u*u+c1*u*u; };
+const easeInOut=(x)=> x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2;
 
 /* ===================== Troll AI (típus-függő) ===================== */
 function trollAI(m, dt, t){
@@ -2718,7 +2775,7 @@ function coopApplyStatusVisual(m, st){
 }
 /* ELEM co-op: vizuál-only reakció-villanás a megadott talajponton */
 function reactionFxVisual(kind, x, z){ const y=GROUND_Y+1.2;
-  if(kind==='overload'){ EFX.flash(x,y,z,0x9fd0ff,0.6,3.8,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fd0ff,0.5,6,0.5,0.9); EFX.light(x,y,z,0xbfe6ff,4.5,0.3); shake=Math.max(shake,0.4); toast('FAGYTÚLTÖLTÉS!'); }
+  if(kind==='overload'){ EFX.flash(x,y,z,0x9fd0ff,0.6,3.8,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fd0ff,0.5,9,0.5,0.9); EFX.light(x,y,z,0xbfe6ff,4.5,0.3); shake=Math.max(shake,0.4); toast('FAGYTÚLTÖLTÉS!'); }
   else if(kind==='steam'){ EFX.flash(x,y,z,0xffffff,0.5,3.2,0.26); for(let i=0;i<14;i++) SMK.spawn(x+rand(-0.3,0.3),y,z+rand(-0.3,0.3),rand(-1,1),rand(0.5,1.6),rand(-1,1),0xdfeaf2,0.8,2.2,0.9,-0.5,0.8,0.7); toast('GŐZROBBANÁS!'); }
   else if(kind==='ignite'){ EFX.flash(x,y,z,0xff8a2a,0.7,5,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,5.5,0.45,0.85); EFX.light(x,y,z,0xff7a3d,4.5,0.35); shake=Math.max(shake,0.4); toast('MÉRGES GYÚJTÁS!'); }
   else if(kind==='galvanic'){ EFX.flash(x,y,z,0xc8e26a,0.4,2.5,0.2); EFX.light(x,y,z,0x9fdc4a,2.2,0.2); toast('GALVÁN PERMET!'); }
@@ -2728,7 +2785,7 @@ function reactionFxVisual(kind, x, z){ const y=GROUND_Y+1.2;
 /* ELEM co-op: a szerver monster_fx eseményeinek lejátszása (reakció/lánc/zóna/elemi halál) — vizuál-only */
 function coopHandleFx(fx){ if(!Array.isArray(fx)) return;
   for(const e of fx){
-    if(e.k==='reaction'){ reactionFxVisual(e.kind, e.x, e.z); }
+    if(e.k==='reaction'){ if(e.kind==='splash'){ const col=e.el==='fire'?0xff7a3d:e.el==='ice'?0x9fd0ff:0x9fdc4a, r=e.r||3; EFX.ring(e.x,GROUND_Y+0.05,e.z,col,0.4,r,0.4,0.7); EFX.flash(e.x,GROUND_Y+0.6,e.z,col,0.35,r*0.6,0.22); } else reactionFxVisual(e.kind, e.x, e.z); }
     else if(e.k==='chain' && e.from && e.to){ const c=(e.el==='poison')?0x9fdc4a:0xffffff; EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, c, 0.16, 0.4); EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, 0xb48cff, 0.16, 0.5); }
     else if(e.k==='zone'){ spawnZone(e.kind, e.x, e.z, {}); }
     else if(e.k==='kill'){ const m=coopRemoteById.get(e.id); if(m){ if(e.el) m.statusEl=e.el; coopKillRemote(e.id, false); } }   // elem-igazított halál a távoli trollon
@@ -2962,7 +3019,9 @@ window.addEventListener('coop-net-ready', coopConnect, { once:true });
 /* ===================== /CO-OP ===================== */
 
 /* ===================== Állapot-vezérlés ===================== */
-function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; shotCd=0; meleeCd=0; meleeAnim=0; powwrap.classList.remove('on'); powfill.style.width='0%'; powfill.style.background=''; nockArrow.visible=false; nock.position.set(0,0,0); }
+function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; shotCd=0; meleeCd=0; meleeAnim=0; powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width='0%'; powfill.style.background=''; nockArrow.visible=false; nock.position.set(0,0,0);
+  // megszakított reload (halál/szünet) helyreállítása: nyíl nyugalmi pózba + jelzők nullára
+  raspFired=swingFired=tapFired=seatFired=false; nockArrow.position.set(0.046,0.060,0.04*bowAdj.mz); nockArrow.rotation.set(0,0,0); nockArrow.scale.setScalar(1); if(nockArrow._glow) nockArrow._glow.material.opacity=0; }
 function resetGame(){
   for(const m of monsters){ scene.remove(m.g); disposeMonster(m); } monsters.length=0;
   for(const a of arrows){ a.active=false; a.g.visible=false; }
