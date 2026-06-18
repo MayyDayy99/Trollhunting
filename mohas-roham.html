@@ -58,6 +58,12 @@
     background:radial-gradient(ellipse at 50% 50%, transparent 18%, rgba(210,16,16,.82) 100%);}
   #wither{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity .12s;
     background:radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(54,197,255,.55) 100%);}
+  #loading{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%, #16242e, #070b10 80%);transition:opacity .4s;}
+  #loading.hide{opacity:0;pointer-events:none;}
+  #loading .ltitle{font:800 34px/1 system-ui,sans-serif;color:#e9f1ff;letter-spacing:.08em;text-shadow:0 2px 14px rgba(54,197,255,.5);}
+  #loading .lsub{margin-top:10px;font:600 13px system-ui,sans-serif;color:#7fb0c8;letter-spacing:.12em;}
+  #loadbarwrap{margin:18px auto 0;width:260px;height:8px;border-radius:6px;background:rgba(120,160,200,.18);overflow:hidden;}
+  #loadbar{height:100%;width:0%;border-radius:6px;background:linear-gradient(90deg,#36c5ff,#7fe2ff);transition:width .12s;}
 
   #toast{position:fixed;left:50%;top:30%;transform:translateX(-50%) scale(.6);opacity:0;z-index:7;
     font:900 64px/1 inherit;color:#ffd27a;text-shadow:0 4px 24px rgba(0,0,0,.8);text-align:center;pointer-events:none;
@@ -106,6 +112,7 @@
 <div id="hurt"></div>
 <div id="wither"></div>
 <div id="toast"></div>
+<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div></div></div>
 
 <div id="start" class="screen">
   <div class="card">
@@ -2809,7 +2816,32 @@ function frame(){
   update(dt,t);
   renderer.render(scene,camera);
 }
-frame();
+// ELŐMELEGÍTÉS: induláskor egyszer felépítünk + kirenderelünk minden troll-típust és FX-et (a völgyben, a képernyőn kívül),
+// hogy a shaderek leforduljanak és a bufferek feltöltődjenek MOST — így menet közben nincs akadás. Töltőképernyő addig.
+function warmup(done){
+  const wx=120, wz=120, wy=GROUND_Y+1.5;   // messze az arénán kívül
+  const dummies=[]; for(const ty of ['grunt','scout','brute','shaman','spitter','wisp','shard']){ try{ const m=makeMonster(ty,1.0,100,2.5); m.g.position.set(wx+dummies.length*3, GROUND_Y, wz); dummies.push(m); }catch(_e){} }
+  try{
+    EFX.flash(wx,wy,wz,0xffffff,0.6,2.5,0.3); EFX.ring(wx,GROUND_Y+0.05,wz,0xffffff,0.4,2.5,0.4,0.6); EFX.bolt(wx,wy,wz,wx+2,wy,wz,0xffffff,0.12,0.3); EFX.light(wx,wy,wz,3,0.3);
+    for(const el of ['fire','ice','poison','lightning']) elementalImpact({x:wx,y:wy,z:wz}, el, true);
+    for(let i=0;i<10;i++){ RP.spawn(wx,wy,wz,rand(-2,2),rand(0,3),rand(-2,2),0xffffff,0.6,0.04,0.3,0,1); SMK.spawn(wx,wy,wz,rand(-1,1),rand(1,2),rand(-1,1),0xffffff,0.6,1,0.6,0,0.6,0.5); }
+    gore.burst(wx,wy,wz,10,0x5f9168,5,0.3); sparks.burst(wx,wy,wz,10,0xffd27a,5,0.3);
+    for(const k of ['gas','fire','frost','steam','puddle']) spawnZone(k,wx,wz,{});
+    drawBeam(wx,wy,wz,wx+3,wy,wz,0);
+    abolts[0].g.position.set(wx,wy,wz); abolts[0].g.visible=true; ebombs[0].g.position.set(wx,wy+1,wz); ebombs[0].g.visible=true;
+  }catch(_e){}
+  const TOTAL=8, loadbar=document.getElementById('loadbar'), loadingEl=document.getElementById('loading'); let n=0;
+  (function step(){ try{ renderer.render(scene,camera); }catch(_e){} n++; if(loadbar) loadbar.style.width=Math.round(n/TOTAL*100)+'%';
+    if(n<TOTAL){ setTimeout(step, 16); return; }   // setTimeout (nem rAF): akkor is lefut, ha a rAF fojtott/szünetel -> nem ragad be a töltőképernyő
+    // takarítás: a próbabábuk + zónák eltűntetése, a poolok nyugalomba
+    for(const m of dummies){ scene.remove(m.g); disposeMonster(m); }
+    for(let i=zones.length-1;i>=0;i--){ const c=zones[i]; scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); } zones.length=0;
+    beamTube.visible=false; resetAbolts(); resetBombs();
+    if(loadingEl) loadingEl.classList.add('hide');
+    done();
+  })();
+}
+warmup(frame);
 
 /* ===================== CO-OP (OPT-IN: only active with ?room=CODE) =====================
    Single-player is 100% unchanged when there is no ?room — `coop` stays null and every
