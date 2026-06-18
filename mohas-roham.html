@@ -90,6 +90,34 @@
   .card button{font:800 22px/1 inherit;letter-spacing:.05em;color:#061018;padding:16px 40px;border:none;border-radius:14px;
     cursor:pointer;background:linear-gradient(90deg,#5fe0ff,#36c5ff);box-shadow:0 8px 28px rgba(54,197,255,.5);transition:transform .1s, filter .15s;}
   .card button:hover{filter:brightness(1.1);} .card button:active{transform:scale(.95);}
+  /* ===== FEJLESZTÉS-BOLT (Kovácsműhely) ===== */
+  #shop .shopwrap{max-width:980px;width:94%;padding:22px 24px;}
+  .shop-top{display:flex;justify-content:space-between;align-items:baseline;}
+  .shop-title{font:900 26px/1 inherit;letter-spacing:.08em;background:linear-gradient(90deg,#7fe2ff,#fff,#ffd27a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .shop-pts{font:800 22px/1 inherit;color:#ffd27a;}
+  .shop-sub{font:700 12px/1.4 inherit;letter-spacing:.1em;color:#9db4d6;text-transform:uppercase;margin:8px 0 16px;}
+  .shop-lanes{display:flex;gap:13px;text-align:left;}
+  .lane{flex:1;min-width:0;border-radius:14px;padding:10px;background:rgba(10,16,30,.45);border:1px solid rgba(180,200,240,.12);}
+  .lane-h{font:800 12px/1 inherit;letter-spacing:.14em;text-transform:uppercase;margin:2px 0 10px;text-align:center;}
+  .lane-atk .lane-h{color:#ff7a3d;} .lane-def .lane-h{color:#7fd0ff;} .lane-mys .lane-h{color:#b48cff;}
+  .lane-cards{display:flex;flex-direction:column;gap:9px;}
+  .upcard{border-radius:12px;padding:10px 12px;cursor:pointer;background:rgba(18,28,48,.7);border:1px solid rgba(180,200,240,.16);transition:transform .1s, filter .12s;}
+  .upcard:hover{transform:translateY(-3px);filter:brightness(1.1);}
+  .upcard .uc-top{display:flex;align-items:center;gap:8px;}
+  .upcard .uc-glyph{font-size:18px;line-height:1;}
+  .upcard .uc-name{font:800 14px/1.2 inherit;color:#eaf2ff;}
+  .upcard .uc-eff{font:600 12px/1.4 inherit;color:#a9bcdc;margin:5px 0 8px;}
+  .upcard .uc-row{display:flex;justify-content:space-between;align-items:center;}
+  .upcard .uc-pips{letter-spacing:2px;font-size:13px;color:#7fd0ff;}
+  .upcard .uc-cost{font:800 13px/1 inherit;padding:4px 9px;border-radius:8px;}
+  .upcard .uc-cost.afford{color:#061018;background:linear-gradient(90deg,#ffe7b8,#ffd27a);}
+  .upcard .uc-cost.poor{color:#c88aa6;background:rgba(120,80,100,.25);}
+  .upcard .uc-cost.max{color:#9db4d6;background:rgba(120,140,180,.18);}
+  .upcard.shake{animation:upshake .25s;}
+  @keyframes upshake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+  #shopGoBtn{margin-top:16px;}
+  .shop-foot{font:600 12px/1.4 inherit;color:#8fa6c9;margin-top:8px;}
+  @media(max-width:760px){ .shop-lanes{flex-direction:column;} }
   .hide{display:none!important;}
   #over .stat{font:800 22px/1.5 inherit;color:#ffd27a;margin:10px 0;}
   #radar{position:fixed;right:18px;bottom:64px;z-index:6;width:160px;height:160px;border-radius:50%;pointer-events:none;
@@ -154,6 +182,22 @@
   </div>
 </div>
 
+<div id="shop" class="screen hide">
+  <div class="card shopwrap">
+    <div class="shop-top">
+      <div class="shop-title">KOVÁCSMŰHELY</div>
+      <div class="shop-pts">PONT: <span id="shopPts">0</span></div>
+    </div>
+    <div class="shop-sub" id="shopSub">HULLÁM 5 TELJESÍTVE — VÁSÁROLJ, AMENNYIT BÍRSZ</div>
+    <div class="shop-lanes">
+      <div class="lane lane-atk"><div class="lane-h">TÁMADÁS</div><div class="lane-cards" data-lane="atk"></div></div>
+      <div class="lane lane-def"><div class="lane-h">VÉDELEM</div><div class="lane-cards" data-lane="def"></div></div>
+      <div class="lane lane-mys"><div class="lane-h">ELEMI-MISZTIKA</div><div class="lane-cards" data-lane="mys"></div></div>
+    </div>
+    <button id="shopGoBtn">TOVÁBB → HULLÁM 6</button>
+    <div class="shop-foot">Minden fejlesztés a futamra szól</div>
+  </div>
+</div>
 <div id="over" class="screen hide">
   <div class="card">
     <div class="eyebrow">Elestél</div>
@@ -1085,14 +1129,15 @@ function makeArrow(){
   return { g, tip, glow, elemHolder, flames:null, el:'base', vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, stuck:false, dmg:25 };
 }
 for(let i=0;i<30;i++) arrows.push(makeArrow());
-function fireArrow(charge){
+function fireArrow(charge, yawOff){
   const a=arrows.find(x=>!x.active) || arrows[0];
   const fwd=new THREE.Vector3(); camera.getWorldDirection(fwd);
+  if(yawOff){ const _c=Math.cos(yawOff), _s=Math.sin(yawOff), _fx=fwd.x, _fz=fwd.z; fwd.x=_fx*_c-_fz*_s; fwd.z=_fx*_s+_fz*_c; fwd.normalize(); }   // FEJLESZTÉS: Megosztott Lövés — vízszintes szórás-szög
   const start=camera.position.clone().addScaledVector(fwd,0.6); start.y-=0.05;
   a.g.position.copy(start); a.prev.copy(start);
   const speed=22+charge*30;
   a.vel.copy(fwd).multiplyScalar(speed);
-  a.dmg=(18+charge*30)*(player.witherT>0?TROLL_TYPES.shaman.witherDmgMul:1);   // SÁMÁN-HEX: gyengített sebzés
+  a.dmg=(18+charge*30)*(player.witherT>0?TROLL_TYPES.shaman.witherDmgMul:1)*RUNM.dmgMul;   // SÁMÁN-HEX: gyengített sebzés; FEJLESZTÉS: Szakás Hegy dmg-szorzó
   a.life=0; a.active=true; a.stuck=false; a.g.visible=true;
   a.el=currentElement; a.charge=charge; a.resonant=(performance.now()*0.001-lastSwapT)<1.2; applyArrowVisual(a);   // ELEM: element + charge + rezonancia (gyors váltás után)
   orientArrow(a);
@@ -1373,7 +1418,7 @@ function animateNock(t){   // finom, elem-megfelelő pulzálás feszítés közb
   if(na._flames) for(let i=0;i<na._flames.length;i++){ const sp=na._flames[i]; if(sp.material) sp.material.opacity=0.4+0.35*Math.abs(Math.sin(t*12+i)); }
 }
 function setElement(id){ if(!EL[id]) return; currentElement=id; lastSwapT=performance.now()*0.001; updateElementHUD(); updateNockElement(); }   // PLAYER: rezonancia-ablak nyílik váltáskor + nock frissül
-function gainUlt(n){ ult=Math.min(100, ult+n); }
+function gainUlt(n){ ult=Math.min(100, ult+n*RUNM.ultMul); }   // FEJLESZTÉS: Vihar-Vezeték (ult-töltés szorzó; a 100-as plafon marad)
 function buildUltHud(){
   const w=document.createElement('div'); w.id='ulthud';
   w.style.cssText='position:fixed;left:50%;bottom:60px;transform:translateX(-50%);z-index:6;width:230px;height:8px;border-radius:6px;background:rgba(14,22,40,.55);border:1px solid rgba(180,200,240,.18);overflow:hidden;pointer-events:none';
@@ -2231,7 +2276,7 @@ addEventListener('mouseup',e=>{
   if(e.button===dragBtn){ dragLook=false; dragBtn=-1; showLockHint(running&&!locked); } // csak a kezdő gomb állítja le a nézést
   if(e.button!==0) return;   // BAL gomb lő
   lmbHeld=false;
-  if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD*(player.witherT>0?TROLL_TYPES.shaman.witherReloadMul:1); raspFired=swingFired=tapFired=seatFired=false; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload-anim (HEX: lassabb újratöltés)
+  if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); if(RUNM.multishot) fireArrow(charge, 0.07); shotCd=SHOT_CD*(player.witherT>0?TROLL_TYPES.shaman.witherReloadMul:1)*RUNM.reloadMul; raspFired=swingFired=tapFired=seatFired=false; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // FEJLESZTÉS: Megosztott Lövés (+1 nyíl) + Fürge Kéz (reload-szorzó)   // min. töltés alatt nem lő; lövés után reload-anim (HEX: lassabb újratöltés)
 });
 addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
 cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
@@ -2302,6 +2347,35 @@ function drawRadar(t){
 
 /* ===================== Hullám-rendszer / játékállapot ===================== */
 let running=false, wave=0, score=0, toSpawn=0, spawnTimer=0, aliveCount=0, intermission=0, spawnAngles=[];
+// ===== FEJLESZTÉS-BOLT (Kovácsműhely): 5 hullámonként a SCORE-t költve, PER-RUN (nincs mentés) =====
+let shopOpen=false;
+const RUN={ dmg:0, hands:0, multishot:0, hp:0, regen:0, lifesteal:0, speed:0, ult:0, dot:0 };   // rangok
+const RUNM={ dmgMul:1, drawMul:1, reloadMul:1, multishot:false, regen:0, lifesteal:0, ultMul:1, dotMul:1, spdMul:1 };   // élő szorzók
+const SHOP_DEFS=[
+  {id:'dmg',       hu:'Szakás Hegy',      lane:'atk', glyph:'➳', eff:'+15% nyíl-sebzés',          cap:4, costs:[800,1200,1800,2700]},
+  {id:'hands',     hu:'Fürge Kéz',        lane:'atk', glyph:'➤', eff:'+15% húzás, -10% töltés',   cap:3, costs:[700,1100,1700]},
+  {id:'multishot', hu:'Megosztott Lövés', lane:'atk', glyph:'✸', eff:'+1 nyíl lövésenként',       cap:1, costs:[2400]},
+  {id:'hp',        hu:'Edzett Bőr',       lane:'def', glyph:'♥', eff:'+30 max élet (gyógyít is)', cap:4, costs:[500,800,1200,1800]},
+  {id:'regen',     hu:'Moha-gyógyulás',   lane:'def', glyph:'✚', eff:'+1.2 élet / mp',            cap:3, costs:[600,1000,1600]},
+  {id:'lifesteal', hu:'Életfaló',         lane:'def', glyph:'✦', eff:'ölés gyógyít +4 / fej +8',  cap:2, costs:[1400,2300]},
+  {id:'speed',     hu:'Fürge Láb',        lane:'def', glyph:'➜', eff:'+8% mozgás-sebesség',       cap:3, costs:[600,950,1500]},
+  {id:'ult',       hu:'Vihar-Vezeték',    lane:'mys', glyph:'⚡', eff:'+30% VIHAR-töltés',         cap:3, costs:[600,1000,1600]},
+  {id:'dot',       hu:'Maró Méreg',       lane:'mys', glyph:'☠', eff:'+40% tűz/méreg DoT',        cap:2, costs:[1100,1900], spOnly:true},
+];
+function applyUpgrades(){
+  RUNM.dmgMul    = 1 + 0.15*RUN.dmg;
+  RUNM.drawMul   = 1 + 0.15*RUN.hands;
+  RUNM.reloadMul = Math.max(0.70, 1 - 0.10*RUN.hands);   // padló: a reload sose < ~0.6s
+  RUNM.multishot = RUN.multishot>0;
+  RUNM.regen     = 1.2*RUN.regen;
+  RUNM.lifesteal = RUN.lifesteal;
+  RUNM.spdMul    = 1 + 0.08*RUN.speed;
+  RUNM.ultMul    = 1 + 0.30*RUN.ult;
+  RUNM.dotMul    = 1 + 0.40*RUN.dot;
+  player.maxHp   = 100 + 30*RUN.hp;
+  STATUS_CFG.fire.dps   = 7 * RUNM.dotMul;
+  STATUS_CFG.poison.dps = 4 * RUNM.dotMul;
+}
 function startWave(n){
   wave=n; toSpawn=4+n*2; spawnTimer=0; intermission=0;
   spawnAngles=[]; for(let i=0;i<toSpawn;i++) spawnAngles.push(CAVES[(Math.random()*CAVES.length)|0].ang); // FÁZIS 5: barlang-irányok a radar-előrejelzéshez
@@ -2448,6 +2522,7 @@ function killMonster(m, headshot){
   elementalDeath(m);   // ELEM: element-keyed death flourish (ash / shatter / melt / char)
   if(m.typeId==='shaman'){ addScore(60); toast('SÁMÁN LETERÍTVE!'); }
   addScore(headshot?150:100);
+  if(RUNM.lifesteal>0) setHp(player.hp + (headshot?8:4)*RUNM.lifesteal);   // FEJLESZTÉS: Életfaló (ölés gyógyít, fej dupla)
 }
 
 /* ===================== Fő ciklus ===================== */
@@ -2459,7 +2534,7 @@ function update(dt,t){
   if(running && player.alive){
     fwd.set(-Math.sin(player.yaw),0,-Math.cos(player.yaw));
     right.set(Math.cos(player.yaw),0,-Math.sin(player.yaw));
-    const sp=(keys['shift']?8:4.6);
+    const sp=(keys['shift']?8:4.6)*RUNM.spdMul;   // FEJLESZTÉS: Fürge Láb
     let mx=0,mz=0;
     if(keys['w']) { mx+=fwd.x; mz+=fwd.z; } if(keys['s']){ mx-=fwd.x; mz-=fwd.z; }
     if(keys['d']){ mx+=right.x; mz+=right.z; } if(keys['a']){ mx-=right.x; mz-=right.z; }
@@ -2479,6 +2554,7 @@ function update(dt,t){
     else if(player.feet<=support){ player.feet=support; player.vy=0; player.onGround=true; }
     else player.onGround=false;
     player.pos.y=player.feet+1.7+(player.onGround?Math.sin(t*8)*Math.min(len,1)*0.04:0); // szemmagasság + járás-bólogatás
+    if(RUNM.regen>0 && player.hp<player.maxHp) setHp(player.hp + RUNM.regen*dt);   // FEJLESZTÉS: Moha-gyógyulás (regen, csak futó+élő állapotban)
   }
 
   /* --- íj feszítés + lövés-animáció (csak futó játékban tölt) --- */
@@ -2504,7 +2580,7 @@ function update(dt,t){
   else if(slashArc.visible) slashArc.visible=false;
   // ÚJRATÖLTÉS present-póz delták (alapból 0; a reload-ág tölti) — a lenti bow-írásokhoz ADDITÍVAN adódnak
   let presentY=0, presentZ=0, presentRotX=0, presentRotZ=0;
-  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powwrap.classList.remove('reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width=(charge*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; nockArrow.scale.setScalar(1); if(currentElement==='base' && nockArrow._glow) nockArrow._glow.material.opacity=0; animateNock(t); }
+  if(drawing && running){ charge=Math.min(1, charge+dt*1.5*RUNM.drawMul); powwrap.classList.add('on'); powwrap.classList.remove('reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width=(charge*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; nockArrow.scale.setScalar(1); if(currentElement==='base' && nockArrow._glow) nockArrow._glow.material.opacity=0; animateNock(t); }
   else if(running && shotCd>0){
     // === ÍJ-ÚJRATÖLTÉS: a cooldown alatt LÁTHATÓ "új nyíl elővétele -> íjra helyezése -> beülés" — ez magyarázza a várakozást ===
     const rp=Math.min(1, 1-shotCd/SHOT_CD), na=nockArrow, mz=bowAdj.mz;
@@ -2716,7 +2792,7 @@ function update(dt,t){
   /* --- hullám-vezérlés --- */
   if(running && !coopShouldSuppressLocalSpawner()){
     if(toSpawn>0 && aliveCount<14){ spawnTimer-=dt; if(spawnTimer<=0){ spawnMonster(); toSpawn--; spawnTimer=Math.max(0.25,1.0-wave*0.03); } }
-    else if(aliveCount===0 && intermission<=0){ intermission=3; toast('HULLÁM ' + wave + ' TELJESÍTVE'); addScore(50+wave*10); }
+    else if(aliveCount===0 && intermission<=0){ toast('HULLÁM ' + wave + ' TELJESÍTVE'); addScore(50+wave*10); if(wave%5===0 && !coop){ openShop(); } else { intermission=3; } }   // FEJLESZTÉS: bónusz ELŐSZÖR (költhető), majd 5 hullámonként bolt (csak SP); a TOVÁBB gomb indítja a köv. hullámot
     if(intermission>0){ intermission-=dt; if(intermission<=0) startWave(wave+1); }
     waveLeft.textContent='trollok: '+(aliveCount+toSpawn);
   }
@@ -3421,6 +3497,7 @@ function resetGame(){
   for(const a of arrows){ a.active=false; a.g.visible=false; }
   resetBombs(); resetAbolts(); beamTube.visible=false; player.witherT=0;   // SÁMÁN: lövedékek + nyaláb + gyengítés nullára
   cancelDraw();
+  for(const k in RUN) RUN[k]=0; applyUpgrades(); closeShop(true);   // FEJLESZTÉS: per-run reset (rangok 0, statok alapra, bolt zárva)
   player.pos.set(0,1.7,0); player.yaw=0; player.pitch=0; player.hp=player.maxHp; player.alive=true; player.vy=0; player.feet=0; player.onGround=true; player.jumpReady=true;
   setHp(player.maxHp); score=0; scoreN.textContent='0'; aliveCount=0; toSpawn=0; intermission=0;
   resetHpOrbs();   // FÁZIS 4: élet-gömbök vissza
@@ -3432,13 +3509,69 @@ function beginPlay(){
   ensureLock(); startWave(1);
   if(!window.__elHintShown){ window.__elHintShown=true; setTimeout(()=>{ if(running) toast('1–5: VÁLTS ELEMI NYILAT — TŰZ · JÉG · MÉREG · VILLÁM'); }, 1900); }  // felfedezhetőség: az elemi FX csak 2–5 nyíllal látszik
 }
-function pauseGame(){ if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
+function pauseGame(){ if(shopOpen) return; if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
   if(document.pointerLockElement) document.exitPointerLock(); }
 function resumeGame(){ if(player.hp<=0) return; AUD.unlock(); running=true; pauseScreen.classList.add('hide'); ensureLock(); }
 function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.over();
   document.getElementById('overStat').innerHTML='Elért hullám: <b>'+wave+'</b> &nbsp;·&nbsp; Pont: <b>'+score+'</b>';
   pauseScreen.classList.add('hide'); startScreen.classList.add('hide'); overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
 
+// ===== FEJLESZTÉS-BOLT logika =====
+function fmtPts(n){ return (''+n).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }   // ezres tagolás: 6 400
+function pips(rank,cap){ let s=''; for(let i=0;i<cap;i++) s+= (i<rank?'●':'○'); return s; }
+function renderShop(){
+  const ptsEl=document.getElementById('shopPts'); if(ptsEl) ptsEl.textContent=fmtPts(score);
+  const subEl=document.getElementById('shopSub'); if(subEl) subEl.textContent='HULLÁM '+wave+' TELJESÍTVE — VÁSÁROLJ, AMENNYIT BÍRSZ';
+  const goEl=document.getElementById('shopGoBtn'); if(goEl) goEl.textContent='TOVÁBB → HULLÁM '+(wave+1);
+  for(const lane of ['atk','def','mys']){
+    const host=document.querySelector('.lane-cards[data-lane="'+lane+'"]'); if(!host) continue; host.innerHTML='';
+    for(const d of SHOP_DEFS){
+      if(d.lane!==lane) continue;
+      if(d.spOnly && coop) continue;   // Maró Méreg rejtve co-opban (DoT szerver-oldali)
+      const rank=RUN[d.id], maxed=rank>=d.cap, cost=maxed?0:d.costs[rank];
+      const card=document.createElement('div'); card.className='upcard'; card.dataset.id=d.id;
+      const costCls=maxed?'max':(score>=cost?'afford':'poor');
+      const costTxt=maxed?'MAX':('−'+fmtPts(cost));
+      card.innerHTML='<div class="uc-top"><span class="uc-glyph">'+d.glyph+'</span><span class="uc-name">'+d.hu+'</span></div>'
+        +'<div class="uc-eff">'+d.eff+'</div>'
+        +'<div class="uc-row"><span class="uc-pips">'+pips(rank,d.cap)+'</span><span class="uc-cost '+costCls+'">'+costTxt+'</span></div>';
+      card.addEventListener('click',function(){ buyUpgrade(d.id); });
+      host.appendChild(card);
+    }
+  }
+}
+function buyUpgrade(id){
+  const d=SHOP_DEFS.find(function(x){ return x.id===id; }); if(!d) return false;
+  const rank=RUN[id]; if(rank>=d.cap) return false;
+  const cost=d.costs[rank];
+  if(score<cost){   // nincs elég pont -> piros rázás, nincs hang
+    const el=document.querySelector('.upcard[data-id="'+id+'"]');
+    if(el){ el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+    return false;
+  }
+  addScore(-cost);          // ZÁRT SZABÁLY: a pontot költöd (a kijelző élőben csökken)
+  RUN[id]=rank+1;
+  applyUpgrades();          // RUNM + player.maxHp + STATUS_CFG dps újraszámolás
+  if(id==='hp') setHp(player.hp+30);   // Edzett Bőr: az új életet azonnal gyógyítja
+  if(AUD.tap) AUD.tap();
+  renderShop();
+  return true;
+}
+function openShop(){
+  shopOpen=true; running=false;          // befagyasztja a futás-kötött ágakat (mozgás/spawn/AI/töltés/regen)
+  cancelDraw(); clearKeys(); showLockHint(false);
+  if(document.pointerLockElement) document.exitPointerLock();   // egér szabad a kattintáshoz
+  renderShop();
+  const sc=document.getElementById('shop'); if(sc) sc.classList.remove('hide');
+}
+function closeShop(silent){
+  shopOpen=false;
+  const sc=document.getElementById('shop'); if(sc) sc.classList.add('hide');
+  if(silent) return;                     // resetGame-ben: csak elrejt, nem indít hullámot
+  running=true; intermission=0; ensureLock();
+  startWave(wave+1);                     // startWave újratölti a toSpawn/spawnAngles/intermission-t
+}
+const _shopGo=document.getElementById('shopGoBtn'); if(_shopGo) _shopGo.addEventListener('click',function(){ closeShop(false); });
 document.getElementById('startBtn').addEventListener('click',beginPlay);
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);
 document.getElementById('restartBtn').addEventListener('click',beginPlay);
