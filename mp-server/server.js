@@ -767,6 +767,10 @@ function tickAll() {
     room.tick++;
     stepWaves(room, dt);
 
+    // ELEM: render-only FX events accumulated this tick (reactions, chains, zones, element-keyed kills).
+    // Sent BEFORE the state frame so an element-keyed kill animates (coopKillRemote sets m.dying)
+    // before the state reconcile would otherwise silently splice the now-absent monster (no death anim).
+    if (room._fx && room._fx.length) { broadcast(room, { t: 'monster_fx', fx: room._fx }); room._fx = []; }
     // Consolidated heartbeat/state frame — always sent so clients can detect
     // liveness and reconcile peer transforms even between event messages.
     broadcast(room, {
@@ -777,8 +781,6 @@ function tickAll() {
       players: [...room.players.values()].map(playerView),
       monsters: room.monsters.map(monsterView), // client-safe view (+ compact status `st`)
     });
-    // ELEM: render-only FX events accumulated this tick (reactions, chains, zones, element-keyed kills)
-    if (room._fx && room._fx.length) { broadcast(room, { t: 'monster_fx', fx: room._fx }); room._fx = []; }
   }
 }
 

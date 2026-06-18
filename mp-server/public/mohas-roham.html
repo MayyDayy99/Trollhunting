@@ -1923,7 +1923,7 @@ const AUD=(function(){
 const keys=Object.create(null);
 let drawing=false, charge=0, locked=false;
 let shotCd=0, meleeCd=0, meleeAnim=0;   // COMBAT: reload-zár + közelharc-időzítők
-const SHOT_CD=0.85, MIN_CHARGE=0.18, MELEE_CD=0.55, MELEE_RANGE=3.4, MELEE_ARC=0.55, MELEE_DMG=55;
+const SHOT_CD=0.85, MIN_CHARGE=0.18, MELEE_CD=0.55, MELEE_RANGE=3.4, MELEE_ARC=0.55, MELEE_DMG=24;   // 24: csak a legkisebb trollokat öli 1 ütésre, a többit löki
 const cv=renderer.domElement;
 
 const lockHint=document.createElement('div'); lockHint.id='lockhint';
@@ -1987,7 +1987,7 @@ function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban 
   const rz=(m.resist&&m.resist['base'])?m.resist['base']:1;
   m.hp -= MELEE_DMG*(m.frozenSolid>0?1.5:1)*rz; m.hurtFlash=0.2;
   const dx=m.g.position.x-player.pos.x, dz=m.g.position.z-player.pos.z, d=Math.hypot(dx,dz)||1;
-  m.g.position.x+=(dx/d)*0.6; m.g.position.z+=(dz/d)*0.6;   // visszalökés
+  const kb=1.6/Math.max(0.6,m.scale||1); m.g.position.x+=(dx/d)*kb; m.g.position.z+=(dz/d)*kb;   // visszalökés (a könnyebb/kisebb trollok messzebb repülnek)
   const b=m.g.position, by=b.y+(m.bodyCY||1);
   gore.burst(b.x,by,b.z, 12, 0x4a6a3a, 5, 0.7); sparks.burst(b.x,by,b.z, 7, 0xffe7b8, 4, 0.35);
   shake=Math.max(shake,0.18); if(AUD.hit) AUD.hit();
@@ -1998,17 +1998,17 @@ cv.addEventListener('mousedown',e=>{
   if(!locked){
     if(e.button===2||!POINTERLOCK_SUPPORTED){ dragLook=true; dragBtn=e.button; lastMX=e.clientX; lastMY=e.clientY; showLockHint(false); }
     else ensureLock();
-    if(e.button===0) meleeSwing();   // BAL = közelharc
-    if(e.button===2) startDraw();    // JOBB = íj feszítés
+    if(e.button===0) startDraw();    // BAL = íj feszítés
+    if(e.button===2) meleeSwing();   // JOBB = közelharc
     e.preventDefault(); return;
   }
-  if(e.button===0) meleeSwing();
-  if(e.button===2) startDraw();
+  if(e.button===0) startDraw();
+  if(e.button===2) meleeSwing();
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('mouseup',e=>{
   if(e.button===dragBtn){ dragLook=false; dragBtn=-1; showLockHint(running&&!locked); } // csak a kezdő gomb állítja le a nézést
-  if(e.button!==2) return;   // JOBB gomb lő
+  if(e.button!==0) return;   // BAL gomb lő
   if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload
 });
 addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
@@ -2159,6 +2159,7 @@ function killMonster(m, headshot){
     case 'sink': gore.burst(bx,p.y+0.1,bz,18,0x3c5a3e,4,0.25); shake=Math.max(shake,0.16); break;
     default: gore.burst(bx,by,bz,24,0x5f9168,6,0.4); gore.burst(bx,by,bz,10,0x2c4636,5,0.3); shake=Math.max(shake,0.18); break;
   }
+  if(m.iceShell) shatterShell(m);   // fagyott troll: a jégburok szétpattan, hogy LÁTSZÓDJON a halál-animáció
   elementalDeath(m);   // ELEM: element-keyed death flourish (ash / shatter / melt / char)
   if(m.typeId==='shaman'){ addScore(60); toast('SÁMÁN LETERÍTVE!'); }
   addScore(headshot?150:100);
