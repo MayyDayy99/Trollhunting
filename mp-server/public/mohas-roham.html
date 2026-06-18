@@ -2293,9 +2293,10 @@ function update(dt,t){
     if(na._glow && na._glow.material.opacity>0) na._glow.material.opacity=Math.max(0, na._glow.material.opacity-dt*6);
     if(rp>=0.999){ na.position.set(0.046,0.060,0.04*mz); na.rotation.set(0,0,0); na.scale.setScalar(1); }   // pontos nyugalmi póz az első húzás-frame-re
   }
-  else { nockArrow.visible=false; powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.background='';
+  else { powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.background='';
     nockArrow.scale.setScalar(1); nockArrow.rotation.set(0,0,0);   // a reload-pop maradékának pontos visszaállítása
-    if(nockArrow._glow && currentElement==='base') nockArrow._glow.material.opacity=0; }
+    if(nockArrow._glow && currentElement==='base') nockArrow._glow.material.opacity=0;
+    nockArrow.visible = (running && player.alive); }   // KÉSZENLÉT: a felajzott nyíl NEM tűnik el a reload után — ott marad nockolva (menüben/szünetben/halálkor rejtve)
   // elengedés-detektálás -> twang + FOV-rúgás + limb-snap
   if(prevCharge>0.12 && charge<=0.0001){ bowKick=1; bowKickRot=1; relTwang=0.14; camera.fov=FOV_BASE+5.5; camera.updateProjectionMatrix(); }
   prevCharge=charge;
