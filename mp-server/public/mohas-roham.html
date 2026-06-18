@@ -250,6 +250,8 @@ const woodMat=std({color:0x6e4a2c,roughness:.85,bumpMap:SKIN_N,bumpScale:0.02});
 const woodDark=std({color:0x402c1b,roughness:.95});
 const rockMat=std({color:0x4a525e,roughness:.95,bumpMap:SKIN_N,bumpScale:0.05});
 const mossMat=std({color:0x3c5a3e,roughness:1,map:MOSS_T,bumpMap:MOSS_T,bumpScale:0.06});
+const rockDark=std({color:0x2f343c,roughness:.97,bumpMap:SKIN_N,bumpScale:0.05});   // FÁZIS 5: sötét barlang-szikla
+const caveMouthMat=new THREE.MeshBasicMaterial({color:0x05070a});                    // FÁZIS 5: a barlang fekete szája ("üreg", nem tükröz fényt)
 const stemMat=std({color:0xe8dcc2,roughness:.8});
 const capMat=std({color:0xc44a43,roughness:.7});
 const glowCapM=new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.2,roughness:.6,flatShading:true});
@@ -525,8 +527,12 @@ function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROU
    nem véletlen-átfedőn, és legalább ~1.0-re egymástól, hogy a 0.42 sugár elférjen
    vagy tisztán blokkoljon. */
 
-// foglalt zónák, amiket KERÜLÜNK (cx,cz,r) — spawn + mászó-építmények + landmarkok
+// FÁZIS 5: barlang-spawnpontok az aréna peremén (a trollok innen bújnak elő, nem a falból). A szerver UGYANEZEKET a pozíciókat használja.
+const R_CAVE=30.5, CAVE_ANGS=[0.9, 2.0, 3.1, 4.2, 5.3];
+const CAVES=CAVE_ANGS.map(a=>({ ang:a, x:Math.cos(a)*R_CAVE, z:Math.sin(a)*R_CAVE }));
+// foglalt zónák, amiket KERÜLÜNK (cx,cz,r) — spawn + mászó-építmények + landmarkok + barlangok
 const KEEP_CLEAR = [
+  ...CAVES.map(c=>[c.x, c.z, 3.2]),   // barlangok köré ne kerüljön fa/kő
   [0,0,6.5],            // spawn-tisztás
   [9,-5,2.2],[9,-6.3,2.2],[9,-7.6,2.2],[9,-8.9,2.2],[9,-11.5,3.0], // lépcső+tető-emelvény
   [-7.0,5.5,2.0],[-8.6,6.2,2.0],[-7.6,4.0,2.0],                    // fa ládák
@@ -856,6 +862,18 @@ solidCyl(-13.85, 10.49, 1.0, {});       // fallenTree rönk-szegmens
 solidCyl(-16.27, 7.69, 1.0, {});        // fallenTree rönk (közép)
 solidCyl(-18.69, 4.89, 1.0, {});        // fallenTree rönk-szegmens
 solidCyl(-12.61, 11.93, 1.8, {});       // fallenTree gyökérlabda
+
+// === FÁZIS 5: BARLANGOK — troll-spawnpontok az aréna peremén. Tömör (a JÁTÉKOS nem mehet be), de mob NÉLKÜL -> a trollok kisétálnak. ===
+function buildCave(c){
+  const g=new THREE.Group(); g.position.set(c.x, GROUND_Y, c.z); g.rotation.y=Math.atan2(-c.x,-c.z);   // a száj a központ felé néz (local +z)
+  const dome=mesh(jitter(new THREE.DodecahedronGeometry(2.6,0),0.6,0.5), rockDark, 0,1.0,0, 1.15,0.95,1.15); dome.castShadow=true; dome.receiveShadow=true; g.add(dome);
+  g.add(mesh(new THREE.SphereGeometry(1.3,16,12), caveMouthMat, 0,1.05,1.75, 1,1.15,1.05));   // fekete üreg-száj (nem látni be)
+  [[-1.5,0.7,1.4,0.85],[1.5,0.7,1.4,0.85],[0,2.15,1.2,0.95]].forEach(b=> g.add(mesh(jitter(new THREE.DodecahedronGeometry(b[3],0),0.25,0.2), rockDark, b[0],b[1],b[2])));   // száj-keret szikla
+  g.add(mesh(new THREE.DodecahedronGeometry(0.55,0), mossMat, 0.7,2.5,-0.4));   // moha a tetőn
+  scene.add(g);
+  solidCyl(c.x, c.z, 1.9, {top:GROUND_Y+2.8});   // PLAYER-fal (nincs climb -> nem mászható; nincs mob -> a trollok átsétálnak)
+}
+for(const c of CAVES) buildCave(c);
 
 
 /* ===================== Íj (kamerára szerelt ranger-longbow nézet-modell) ===================== */
@@ -2171,7 +2189,7 @@ function drawRadar(t){
 let running=false, wave=0, score=0, toSpawn=0, spawnTimer=0, aliveCount=0, intermission=0, spawnAngles=[];
 function startWave(n){
   wave=n; toSpawn=4+n*2; spawnTimer=0; intermission=0;
-  spawnAngles=[]; for(let i=0;i<toSpawn;i++) spawnAngles.push(rand(0,6.28)); // radar-előrejelzéshez
+  spawnAngles=[]; for(let i=0;i<toSpawn;i++) spawnAngles.push(CAVES[(Math.random()*CAVES.length)|0].ang); // FÁZIS 5: barlang-irányok a radar-előrejelzéshez
   waveN.textContent='HULLÁM '+n; AUD.wave(); toast('HULLÁM '+n);
   resetHpOrbs();   // FÁZIS 4: minden hullám frissíti az élet-gömböket (fenntartás)
 }
@@ -2192,12 +2210,14 @@ function pickTrollType(){
   return 'grunt';
 }
 function spawnMonster(){
-  const a=(spawnAngles.length ? spawnAngles.shift() : rand(0,6.28)), r=SPAWN_R+rand(-2,3);
+  const ca=(spawnAngles.length ? spawnAngles.shift() : CAVES[(Math.random()*CAVES.length)|0].ang);
+  let cave=CAVES[0], bd=9; for(const c of CAVES){ let dd=Math.abs(c.ang-ca); if(dd>Math.PI) dd=2*Math.PI-dd; if(dd<bd){ bd=dd; cave=c; } }   // a popolt szöghöz tartozó barlang
   const id=pickTrollType(), T=TROLL_TYPES[id];
   const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3, baseSp=(1.5+wave*0.10)*rand(0.85,1.15);
   const sc=baseSc*T.scaleMul, hp=Math.round(baseHp*T.hpMul), sp=Math.min(baseSp*T.speedMul, T.speedCap);
   const m=makeMonster(id, sc, hp, sp);
-  m.g.position.set(Math.cos(a)*r, GROUND_Y, Math.sin(a)*r);
+  const inx=-cave.x/R_CAVE, inz=-cave.z/R_CAVE;   // befelé (központ felé) egységvektor
+  m.g.position.set(cave.x + inx*2.4 + rand(-0.9,0.9), GROUND_Y, cave.z + inz*2.4 + rand(-0.9,0.9));   // a barlang szája előtt bújik elő, majd befelé indul
   monsters.push(m); aliveCount++;
   if(Math.random()<0.5 && AUD.growl) AUD.growl();
 }

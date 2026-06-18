@@ -115,8 +115,12 @@ const MIN_PLAYERS         = 2;                            // co-op design minimu
 
 // ---- Gameplay tuning (server-authoritative monster sim) --------------------
 // Mirrors the single-player pacing in mohas-roham.html so co-op feels the same.
-const SPAWN_R       = 26;     // monsters spawn on a ring this far from origin
+const SPAWN_R       = 26;     // (legacy ring radius — radar/scale reference; spawns now come from caves)
 const GROUND_Y      = 0;      // monsters live on the ground plane (player y=1.7)
+// FÁZIS 5: barlang-spawnpontok — UGYANAZOK a pozíciók mint a kliens CAVES (mohas-roham.html), hogy a trollok co-opban is a barlangokból bújjanak elő
+const R_CAVE        = 30.5;
+const CAVE_ANGS     = [0.9, 2.0, 3.1, 4.2, 5.3];
+const SERVER_CAVES  = CAVE_ANGS.map(a => ({ x: Math.cos(a) * R_CAVE, z: Math.sin(a) * R_CAVE }));
 const MELEE_RANGE   = 2.2;    // horizontal (x,z) distance at which a troll bites
 const MELEE_DMG     = 8;      // hp removed per melee connect
 const MELEE_CD      = 1.0;    // seconds between a given monster's melee hits
@@ -607,8 +611,8 @@ function rollTrollType(wave) {
 // the `state` frame. Server owns id/pos/hp/type/speed.
 function spawnMonster(room) {
   const N = room.wave;
-  const a = Math.random() * Math.PI * 2;
-  const r = SPAWN_R + (Math.random() * 5 - 2); // SPAWN_R-2 .. SPAWN_R+3
+  const cave = SERVER_CAVES[(Math.random() * SERVER_CAVES.length) | 0];   // FÁZIS 5: barlangból bújik elő
+  const inx = -cave.x / R_CAVE, inz = -cave.z / R_CAVE;                     // befelé (központ felé) egységvektor
   const type = rollTrollType(N);
   const st = TYPE_STATS[type] || TYPE_STATS.grunt;
   // gentle wave QUALITY scaling (matches client spawnMonster): per-type muls applied
@@ -620,7 +624,7 @@ function spawnMonster(room) {
   const m = {
     id: 'm' + (monsterSeq++).toString(36),
     type,
-    pos: { x: Math.cos(a) * r, y: GROUND_Y, z: Math.sin(a) * r },
+    pos: { x: cave.x + inx * 2.4 + (Math.random() * 1.8 - 0.9), y: GROUND_Y, z: cave.z + inz * 2.4 + (Math.random() * 1.8 - 0.9) },
     hp,
     maxHp: hp,
     speed,
