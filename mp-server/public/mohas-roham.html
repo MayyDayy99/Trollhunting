@@ -1908,6 +1908,8 @@ const AUD=(function(){
    minden frame-ben fut, ezért egyszerre is megy. */
 const keys=Object.create(null);
 let drawing=false, charge=0, locked=false;
+let shotCd=0, meleeCd=0, meleeAnim=0;   // COMBAT: reload-zár + közelharc-időzítők
+const SHOT_CD=0.85, MIN_CHARGE=0.18, MELEE_CD=0.55, MELEE_RANGE=3.4, MELEE_ARC=0.55, MELEE_DMG=55;
 const cv=renderer.domElement;
 
 const lockHint=document.createElement('div'); lockHint.id='lockhint';
@@ -1955,22 +1957,45 @@ addEventListener('mousemove',e=>{
   else if(dragLook&&running){ applyLook(e.clientX-lastMX,e.clientY-lastMY); lastMX=e.clientX; lastMY=e.clientY; }
 });
 
-function startDraw(){ if(running&&player.alive){ drawing=true; charge=0; } }
+function startDraw(){ if(running&&player.alive&&shotCd<=0){ drawing=true; charge=0; } }   // reload alatt nem lehet újrahúzni
+function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban (panic mid-reload)
+  if(!(running&&player.alive) || meleeCd>0) return;
+  meleeCd=MELEE_CD; meleeAnim=1; if(AUD.whoosh) AUD.whoosh();
+  const fx=-Math.sin(player.yaw), fz=-Math.cos(player.yaw);
+  let best=null, bestD=1e9;
+  for(const m of monsters){ if(!m.alive||m.dying>0) continue;
+    const dx=m.g.position.x-player.pos.x, dz=m.g.position.z-player.pos.z, d=Math.hypot(dx,dz);
+    if(d>MELEE_RANGE+(m.bodyR||0.5)) continue;
+    if((dx*fx+dz*fz)/(d||1) < 1-MELEE_ARC) continue;   // csak a néző-kúpban (±~56°)
+    if(d<bestD){ bestD=d; best=m; } }
+  if(!best) return; const m=best, head=(player.pitch>0.35);
+  if(coopIsRemote(m)){ m.hurtFlash=0.2; coopOnLocalHit(m, head, MELEE_DMG, 'base', 0); return; }   // co-op: szerver-hiteles, ugyanaz a hit-boríték mint a nyílnál
+  const rz=(m.resist&&m.resist['base'])?m.resist['base']:1;
+  m.hp -= MELEE_DMG*(m.frozenSolid>0?1.5:1)*rz; m.hurtFlash=0.2;
+  const dx=m.g.position.x-player.pos.x, dz=m.g.position.z-player.pos.z, d=Math.hypot(dx,dz)||1;
+  m.g.position.x+=(dx/d)*0.6; m.g.position.z+=(dz/d)*0.6;   // visszalökés
+  const b=m.g.position, by=b.y+(m.bodyCY||1);
+  gore.burst(b.x,by,b.z, 12, 0x4a6a3a, 5, 0.7); sparks.burst(b.x,by,b.z, 7, 0xffe7b8, 4, 0.35);
+  shake=Math.max(shake,0.18); if(AUD.hit) AUD.hit();
+  if(m.hp<=0 && m.alive) killMonster(m, head);
+}
 cv.addEventListener('mousedown',e=>{
   if(!running) return;
   if(!locked){
     if(e.button===2||!POINTERLOCK_SUPPORTED){ dragLook=true; dragBtn=e.button; lastMX=e.clientX; lastMY=e.clientY; showLockHint(false); }
     else ensureLock();
-    if(e.button===0) startDraw();
+    if(e.button===0) meleeSwing();   // BAL = közelharc
+    if(e.button===2) startDraw();    // JOBB = íj feszítés
     e.preventDefault(); return;
   }
-  if(e.button===0) startDraw();
+  if(e.button===0) meleeSwing();
+  if(e.button===2) startDraw();
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('mouseup',e=>{
   if(e.button===dragBtn){ dragLook=false; dragBtn=-1; showLockHint(running&&!locked); } // csak a kezdő gomb állítja le a nézést
-  if(e.button!==0) return;
-  if(drawing){ if(charge>0.12) fireArrow(charge); drawing=false; charge=0; powwrap.classList.remove('on'); }
+  if(e.button!==2) return;   // JOBB gomb lő
+  if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload
 });
 addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
 cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
@@ -2158,8 +2183,12 @@ function update(dt,t){
 
   /* --- íj feszítés + lövés-animáció (csak futó játékban tölt) --- */
   idleT+=dt;
-  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powfill.style.width=(charge*100)+'%'; nockArrow.visible=true; animateNock(t); }
-  else { nockArrow.visible=false; }
+  if(running && shotCd>0) shotCd=Math.max(0,shotCd-dt);
+  if(meleeCd>0) meleeCd=Math.max(0,meleeCd-dt);
+  if(meleeAnim>0) meleeAnim=Math.max(0,meleeAnim-dt*3.2);
+  if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powfill.style.width=(charge*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; animateNock(t); }
+  else if(running && shotCd>0){ powwrap.classList.add('on'); powfill.style.width=((1-shotCd/SHOT_CD)*100).toFixed(0)+'%'; powfill.style.background='#caa24a'; nockArrow.visible=false; }   // borostyán reload-csík
+  else { nockArrow.visible=false; powwrap.classList.remove('on'); powfill.style.background=''; }
   // elengedés-detektálás -> twang + FOV-rúgás + limb-snap
   if(prevCharge>0.12 && charge<=0.0001){ bowKick=1; bowKickRot=1; relTwang=0.14; camera.fov=FOV_BASE+5.5; camera.updateProjectionMatrix(); }
   prevCharge=charge;
@@ -2193,7 +2222,8 @@ function update(dt,t){
   bow.position.z=BOW_BASE_Z + charge*0.020 + bowKick*0.045;     // töltéskor kissé közelebb, de a near-plane (0.05) bőven biztos
   bow.rotation.x=bowAdj.rx;
   bow.rotation.y=bowAdj.ry + (bowAdj.ry<0?-1:1)*charge*0.05;
-  bow.rotation.z=bowAdj.rz + charge*0.045 + bowKickRot*0.05*Math.sin(idleT*40);
+  bow.rotation.z=bowAdj.rz + charge*0.045 + bowKickRot*0.05*Math.sin(idleT*40) + meleeAnim*0.9*bowAdj.mx;   // közelharc-suhintás
+  bow.rotation.x=bowAdj.rx - meleeAnim*0.45;   // a csapás lefelé is ível
   if(bowKickRot>0) bowKickRot=Math.max(0, bowKickRot - dt*5.0);
 
   /* --- nyilak (szünetben befagynak) --- */
@@ -2879,7 +2909,7 @@ window.addEventListener('coop-net-ready', coopConnect, { once:true });
 /* ===================== /CO-OP ===================== */
 
 /* ===================== Állapot-vezérlés ===================== */
-function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; powwrap.classList.remove('on'); powfill.style.width='0%'; nockArrow.visible=false; nock.position.set(0,0,0); }
+function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; shotCd=0; meleeCd=0; meleeAnim=0; powwrap.classList.remove('on'); powfill.style.width='0%'; powfill.style.background=''; nockArrow.visible=false; nock.position.set(0,0,0); }
 function resetGame(){
   for(const m of monsters){ scene.remove(m.g); disposeMonster(m); } monsters.length=0;
   for(const a of arrows){ a.active=false; a.g.visible=false; }
