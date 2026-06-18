@@ -1574,7 +1574,7 @@ function embellishTroll(m){
 
 // INNATE ELEM: a troll típus-eleme (T.el) láthatóvá tétele — bőr/szem-tint + egy olcsó additív aura. A wisp saját áttetsző passt kap, ott CSAK szem+aura.
 function elementSkin(m){
-  const e=m.type&&m.type.el; if(!e) return; const C=TROLL_EL[e]; if(!C) return; m.el=e;
+  const e=m.el; if(!e) return; const C=TROLL_EL[e]; if(!C) return;   // m.el-t a makeMonster állítja be (random spawnonként, nem a típushoz kötve)
   if(m.bodySkin && m.bodySkin!==skinMat && m.typeId!=='wisp'){ m.bodySkin.color.setHex(C.skin); m.bodySkin.emissive=new THREE.Color(C.emissive); m.bodySkin.emissiveIntensity=C.emInt; }
   if(m.eyes) m.eyes.forEach(x=>{ if(x.material&&x.material.emissive) x.material.emissive.setHex(C.eye); });
   if(m._eyeBase==null && m.eyes&&m.eyes[0]) m._eyeBase=C.eye;   // státusz-tint visszaállítása az ELEM-színre, nem a narancsra
@@ -1901,7 +1901,7 @@ function updateHpBar(m, dt){
   if(b !== m._hpBucket){ m.hpbarFill.material = (b===0?HPMAT_HI:b===1?HPMAT_MID:HPMAT_LO); m._hpBucket = b; }
   _hpQ.copy(m.g.quaternion).invert(); grp.quaternion.copy(_hpQ).multiply(camera.quaternion);  // billboard: szülő-yaw kiütése
 }
-function makeMonster(type, scale, hp, speed){
+function makeMonster(type, scale, hp, speed, el){
   let T;
   if(typeof type==='string' && TROLL_TYPES[type]) T=TROLL_TYPES[type];
   else { speed=hp; hp=scale; scale=type; T=TROLL_TYPES.grunt; }
@@ -2022,7 +2022,8 @@ function makeMonster(type, scale, hp, speed){
     statusStacks:1, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999, _fireSpreadT:0, resist:(T.resist||null) };   // ELEM: status + reaction fields
   if(T.build) T.build(m);
   embellishTroll(m);   // REDESIGN: gazdagabb részlet-pass (moha/zuzmó/tüskék/spórák/szőr) minden trollon
-  elementSkin(m);      // INNATE ELEM: tint + aura a T.el alapján (co-op-safe: a típusból derül; a remote troll is makeMonster-en megy át)
+  m.el = (el!==undefined) ? el : (T.el||null);   // RANDOM ELEM: spawnonként sorsolt elem (a típustól FÜGGETLEN); co-opban a szervertől jön
+  elementSkin(m);      // INNATE ELEM: tint + aura az m.el alapján
   // FPS: a sok submesh (alaprig + díszítések) közül CSAK a sziluett vessen árnyékot -> 3-4× kevesebb árnyék-mesh
   g.traverse(o=>{ if(o.isMesh) o.castShadow=false; });
   [torso, head, legs.L, legs.R, arms.L, arms.R].forEach(p=>{ if(p) p.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); });
@@ -2293,13 +2294,15 @@ function pickTrollType(){
   for(const e of table){ r-=e[1]; if(r<=0) return e[0]; }
   return 'grunt';
 }
+// RANDOM ELEM: spawnonként sorsolt innate elem, a TÍPUSTÓL FÜGGETLENÜL (a Lidérc marad jég-identitás; sámán/szilánk semleges)
+function rollMonsterEl(id){ if(id==='wisp') return 'ice'; if(id==='shard'||id==='shaman') return null; return Math.random()<0.35 ? null : EL_ORDER[1+((Math.random()*4)|0)]; }
 function spawnMonster(){
   const ca=(spawnAngles.length ? spawnAngles.shift() : CAVES[(Math.random()*CAVES.length)|0].ang);
   let cave=CAVES[0], bd=9; for(const c of CAVES){ let dd=Math.abs(c.ang-ca); if(dd>Math.PI) dd=2*Math.PI-dd; if(dd<bd){ bd=dd; cave=c; } }   // a popolt szöghöz tartozó barlang
   const id=pickTrollType(), T=TROLL_TYPES[id];
   const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3, baseSp=(1.5+wave*0.10)*rand(0.85,1.15);
   const sc=baseSc*T.scaleMul, hp=Math.round(baseHp*T.hpMul), sp=Math.min(baseSp*T.speedMul, T.speedCap);
-  const m=makeMonster(id, sc, hp, sp);
+  const m=makeMonster(id, sc, hp, sp, rollMonsterEl(id));
   const inx=-cave.x/R_CAVE, inz=-cave.z/R_CAVE;   // befelé (központ felé) egységvektor
   m.g.position.set(cave.x + inx*2.4 + rand(-0.9,0.9), GROUND_Y, cave.z + inz*2.4 + rand(-0.9,0.9));   // a barlang szája előtt bújik elő, majd befelé indul
   monsters.push(m); aliveCount++;
@@ -2829,6 +2832,9 @@ function warmup(done){
     for(const k of ['gas','fire','frost','steam','puddle']) spawnZone(k,wx,wz,{});
     drawBeam(wx,wy,wz,wx+3,wy,wz,0);
     abolts[0].g.position.set(wx,wy,wz); abolts[0].g.visible=true; ebombs[0].g.position.set(wx,wy+1,wz); ebombs[0].g.visible=true;
+    // ELEMI NYÍL előmelegítés (ez okozta az első elemi lövés laggját): mind a 4 elem-fej + nyom + a nockolt elem-fej leforduljon MOST
+    for(let i=0;i<4;i++){ const a=arrows[i]; if(!a) break; a.el=['fire','ice','poison','lightning'][i]; applyArrowVisual(a); a.g.position.set(wx-3+i,wy,wz); a.g.visible=true; emitArrowTrail(a); }
+    { const cur=currentElement; for(const el of ['fire','ice','poison','lightning']){ currentElement=el; nockArrow.visible=true; updateNockElement(); animateNock(0); } currentElement=cur; nockArrow.visible=false; updateNockElement(); }
   }catch(_e){}
   const TOTAL=8, loadbar=document.getElementById('loadbar'), loadingEl=document.getElementById('loading'); let n=0;
   (function step(){ try{ renderer.render(scene,camera); }catch(_e){} n++; if(loadbar) loadbar.style.width=Math.round(n/TOTAL*100)+'%';
@@ -2837,6 +2843,7 @@ function warmup(done){
     for(const m of dummies){ scene.remove(m.g); disposeMonster(m); }
     for(let i=zones.length-1;i>=0;i--){ const c=zones[i]; scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); } zones.length=0;
     beamTube.visible=false; resetAbolts(); resetBombs();
+    for(let i=0;i<4;i++){ const a=arrows[i]; if(!a) break; a.el='base'; a.flames=null; applyArrowVisual(a); a.g.visible=false; a.active=false; }   // a felmelegítő nyilak nullára
     if(loadingEl) loadingEl.classList.add('hide');
     done();
   })();
@@ -3002,7 +3009,7 @@ function coopEnsureMonster(sm){
     const id = coopTrollTypeId(sm.type);
     const sc = (typeof sm.scale==='number' && sm.scale>0) ? sm.scale : ((TROLL_TYPES[id] && TROLL_TYPES[id].scaleMul) || 1.0); // típus-helyes méret (a szerver most már küld scale-t)
     const hp = (typeof sm.hp==='number') ? sm.hp : (typeof sm.maxHp==='number'?sm.maxHp:40);
-    m = makeMonster(id, sc, hp, (typeof sm.speed==='number'?sm.speed:2));
+    m = makeMonster(id, sc, hp, (typeof sm.speed==='number'?sm.speed:2), (sm.el!==undefined?sm.el:null));   // RANDOM ELEM: a szerver sorsolta, monsterView.el-ben jön
     m.coopRemote = true;            // <- collision loop reports this; AI/local-death gated by it
     m.netId = netId;
     if(typeof sm.maxHp==='number') m.maxHp = sm.maxHp;

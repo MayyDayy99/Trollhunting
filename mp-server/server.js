@@ -156,6 +156,8 @@ const RESIST_S = {
 };
 // INNATE elem típusonként — PONTOSAN tükrözi a kliens TROLL_TYPES.el-t (különben a co-op trollok rossz elemre reagálnak)
 const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, spitter:'poison', wisp:'ice', shard:null };
+// RANDOM ELEM: spawnonként sorsolt innate elem a TÍPUSTÓL FÜGGETLENÜL (kliens-tükör). Lidérc=jég identitás; sámán/szilánk semleges.
+function rollMonsterElS(type){ if(type==='wisp') return 'ice'; if(type==='shard'||type==='shaman') return null; return Math.random()<0.35 ? null : ['fire','ice','poison','lightning'][(Math.random()*4)|0]; }
 // SÁMÁN képesség-konfig (a kliens TROLL_TYPES.shaman számaival EGYEZŐ): távoli arkán lövedék + közeli gyengítő-nyaláb
 const SHAMAN_S = { castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:8.0, beamDrop:8.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };
 
@@ -266,7 +268,7 @@ function pickQuickRoom(max) {
 // Transport-free, client-safe view of a monster for the `state` frame. Drops
 // server-internal sim fields (meleeCd) the client never needs.
 function monsterView(m) {
-  return { id: m.id, type: m.type, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed, scale: m.scale,
+  return { id: m.id, type: m.type, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed, scale: m.scale, el: m.el||null,
     st: m.statusEl ? { e:m.statusEl, s:m.statusStacks, f:(m.frozenSolid>0?1:0), w:(m.wet>0?1:0) } : null };  // ELEM: kliens-vizuál (aura/szem-tint/jégburok)
 }
 
@@ -644,7 +646,7 @@ function spawnMonster(room) {
     casting:0, beaming:false, beamAcc:0, castTimer:1.5+Math.random()*1.1, healTimer:1.5+Math.random()*1.5, noSplit:false,   // SÁMÁN-AI + split állapot (ártalmatlan a többi típuson)
   };
   m.resist = RESIST_S[m.type] || null;
-  m.el = INNATE_EL[m.type] || null;   // INNATE elem (co-op reakciókhoz; a vizuál a kliensé)
+  m.el = rollMonsterElS(m.type);   // RANDOM elem spawnonként (a típustól független; monsterView.el-ben megy a kliensnek)
   room.monsters.push(m);
   return m;
 }
