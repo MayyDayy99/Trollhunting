@@ -166,7 +166,7 @@ export function connectCoop(opts = {}) {
   }
 
   function sendHit(hit) {
-    send({ t: 'hit', monsterId: hit.monsterId, headshot: !!hit.headshot, dmg: hit.dmg, el: hit.el, charge: hit.charge });
+    send({ t: 'hit', monsterId: hit.monsterId, headshot: !!hit.headshot, dmg: hit.dmg, el: hit.el, charge: hit.charge, mul: hit.mul });
   }
 
   function sendChat(text) {

@@ -407,16 +407,18 @@ function handleMessage(ws, msg) {
       const headshot = !!msg.headshot;
       const el = (typeof msg.el === 'string' && EL_STATUS[msg.el]) ? msg.el : 'base';
       const charge = clamp(+msg.charge || 0, 0, 1);
+      const elMul = clamp(+msg.mul || 1, 0, 1);   // elemi-hatás szorzó (nyíl=1, közelharc=0.25): a FIZIKAI sebzés teljes, az ELEMI negyed
+      const elDmg = dmgBase * elMul;
       const rz = (m.resist && m.resist[el]) ? m.resist[el] : 1;
-      m.hp -= dmgBase * (m.frozenSolid > 0 ? 1.5 : 1) * rz;   // ELEM: brittle (fagyott +50%) + per-troll resist
+      m.hp -= dmgBase * (m.frozenSolid > 0 ? 1.5 : 1) * rz;   // ELEM: brittle (fagyott +50%) + per-troll resist — FIZIKAI: teljes dmgBase
       let reaction = null;
       if (el !== 'base') {
         const now = Date.now() / 1000, onCd = (now - (m.lastReactT || -999)) < 0.45;
         const rid = onCd ? null : resolveReactionS(el, m);
-        if (rid) { m.lastReactT = now; reaction = rid; const skip = applyReactionS(rid, room, m, dmgBase, charge); if (!skip) applyServerStatus(m, el, charge); }
+        if (rid) { m.lastReactT = now; reaction = rid; const skip = applyReactionS(rid, room, m, elDmg, charge); if (!skip) applyServerStatus(m, el, charge); }
         else {   // base per-element mechanic + becsapódási splash (CSAK reakció nélkül)
-          elementalSplashS(room, m, el, dmgBase, charge, headshot);   // EGYETLEN splash-hívás (a régi bespoke tűz-ág megszűnt -> nincs dupla)
-          if (el === 'lightning') chainLightningS(room, m, dmgBase);
+          elementalSplashS(room, m, el, elDmg, charge, headshot);   // EGYETLEN splash-hívás (a régi bespoke tűz-ág megszűnt -> nincs dupla)
+          if (el === 'lightning') chainLightningS(room, m, elDmg);
           else if (el === 'poison') { elFx(room, { k: 'zone', kind: 'gas', x: m.pos.x, z: m.pos.z }); room.zones.push({ kind:'gas', x:m.pos.x, z:m.pos.z, life:4.5, tick:0.5 }); }   // a splash MELLETT talaj-gáz DoT
           applyServerStatus(m, el, charge);
         }

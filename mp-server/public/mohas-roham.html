@@ -1024,6 +1024,12 @@ function applyBowAdj(){ bow.scale.set(bowAdj.s*bowAdj.mx, bowAdj.s, bowAdj.s*bow
   nockArrow.rotation.y=(bowAdj.mz>0?Math.PI:0); // nyíl-hegy iránya a görbület-tükörhöz igazítva
   bowTuneEl.textContent='ÍJ HANGOLÁS  (B = kilép)\nJ/L yaw='+bowAdj.ry.toFixed(2)+'   I/K pitch='+bowAdj.rx.toFixed(2)+'\nU/O roll='+bowAdj.rz.toFixed(2)+'   N/M méret='+bowAdj.s.toFixed(2)+'\nP balra-jobbra='+bowAdj.mx+'   Z görbület-tükör='+bowAdj.mz+'\n=> írd meg a számokat, és beégetem'; }
 applyBowAdj();
+// KÖZELHARC vágás-ív: jól látható, képernyőn átsuhanó fénylő ív az ütésnél (a kiválasztott elem színében) — kamerára szerelt
+const slashArc=(function(){
+  const geo=new THREE.RingGeometry(0.30, 0.48, 36, 1, Math.PI*0.12, Math.PI*0.78);
+  const mat=new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, fog:false, toneMapped:false});
+  const m=new THREE.Mesh(geo, mat); m.position.set(0,-0.04,-0.8); m.renderOrder=1000; m.frustumCulled=false; m.visible=false; camera.add(m); return m;
+})();
 
 /* ===================== Nyíl-lövedékek (pool) ===================== */
 const GRAV=9.2;
@@ -2027,7 +2033,7 @@ const AUD=(function(){
    minden frame-ben fut, ezért egyszerre is megy. */
 const keys=Object.create(null);
 let drawing=false, charge=0, locked=false;
-let shotCd=0, meleeCd=0;   // COMBAT: reload-zár + közelharc-időzítő (az ütés-animációt a meleeCd vezérli)
+let shotCd=0, meleeCd=0, lmbHeld=false;   // COMBAT: reload-zár + közelharc-időzítő + BAL gomb lenyomva-tartás (bufferelt felhúzás)
 const SHOT_CD=0.85, MIN_CHARGE=0.18, MELEE_CD=0.55, MELEE_RANGE=3.4, MELEE_ARC=0.55, MELEE_DMG=24;   // 24: csak a legkisebb trollokat öli 1 ütésre, a többit löki
 const cv=renderer.domElement;
 
@@ -2082,6 +2088,7 @@ function startDraw(){ if(running&&player.alive&&shotCd<=0){ drawing=true; charge
 function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban (panic mid-reload)
   if(!(running&&player.alive) || meleeCd>0) return;
   meleeCd=MELEE_CD; if(AUD.whoosh) AUD.whoosh();
+  slashArc.material.color.setHex(currentElement==='base' ? 0xffffff : EL[currentElement].glow);   // a vágás-ív a kiválasztott elem színében
   const fx=-Math.sin(player.yaw), fz=-Math.cos(player.yaw);
   let best=null, bestD=1e9;
   for(const m of monsters){ if(!m.alive||m.dying>0) continue;
@@ -2090,7 +2097,7 @@ function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban 
     if((dx*fx+dz*fz)/(d||1) < 1-MELEE_ARC) continue;   // csak a néző-kúpban (±~56°)
     if(d<bestD){ bestD=d; best=m; } }
   if(!best) return; const m=best, head=(player.pitch>0.35);
-  if(coopIsRemote(m)){ m.hurtFlash=0.2; coopOnLocalHit(m, head, MELEE_DMG, 'base', 0); return; }   // co-op: szerver-hiteles, ugyanaz a hit-boríték mint a nyílnál
+  if(coopIsRemote(m)){ m.hurtFlash=0.2; coopOnLocalHit(m, head, MELEE_DMG, currentElement, 0.25, 0.25); return; }   // co-op: szerver-hiteles; az elemet is átküldjük NEGYED erővel (mul=0.25)
   const rz=(m.resist&&m.resist['base'])?m.resist['base']:1;
   m.hp -= MELEE_DMG*(m.frozenSolid>0?1.5:1)*rz; m.hurtFlash=0.2;
   const dx=m.g.position.x-player.pos.x, dz=m.g.position.z-player.pos.z, d=Math.hypot(dx,dz)||1;
@@ -2098,6 +2105,8 @@ function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban 
   const b=m.g.position, by=b.y+(m.bodyCY||1);
   gore.burst(b.x,by,b.z, 12, 0x4a6a3a, 5, 0.7); sparks.burst(b.x,by,b.z, 7, 0xffe7b8, 4, 0.35);
   shake=Math.max(shake,0.18); if(AUD.hit) AUD.hit();
+  // ELEMI ÜTÉS: a kiválasztott elem hatása NEGYED erővel (a nyílhoz képest) — reakció/splash + státusz
+  if(currentElement!=='base'){ const _sk=elementMechanic(m.g.position, currentElement, m, MELEE_DMG*0.25, head, m.statusEl, 0.25, false); if(!_sk) applyStatus(m, currentElement, 0); elementalImpact(m.g.position, currentElement, head); }
   if(m.hp<=0 && m.alive) killMonster(m, head);
 }
 cv.addEventListener('mousedown',e=>{
@@ -2105,17 +2114,18 @@ cv.addEventListener('mousedown',e=>{
   if(!locked){
     if(e.button===2||!POINTERLOCK_SUPPORTED){ dragLook=true; dragBtn=e.button; lastMX=e.clientX; lastMY=e.clientY; showLockHint(false); }
     else ensureLock();
-    if(e.button===0) startDraw();    // BAL = íj feszítés
+    if(e.button===0){ lmbHeld=true; startDraw(); }    // BAL = íj feszítés (lenyomva-tartás bufferelődik)
     if(e.button===2) meleeSwing();   // JOBB = közelharc
     e.preventDefault(); return;
   }
-  if(e.button===0) startDraw();
+  if(e.button===0){ lmbHeld=true; startDraw(); }
   if(e.button===2) meleeSwing();
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('mouseup',e=>{
   if(e.button===dragBtn){ dragLook=false; dragBtn=-1; showLockHint(running&&!locked); } // csak a kezdő gomb állítja le a nézést
   if(e.button!==0) return;   // BAL gomb lő
+  lmbHeld=false;
   if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD; raspFired=swingFired=tapFired=seatFired=false; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload-anim
 });
 addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
@@ -2347,16 +2357,23 @@ function update(dt,t){
   idleT+=dt;
   if(running && shotCd>0) shotCd=Math.max(0,shotCd-dt);
   if(meleeCd>0) meleeCd=Math.max(0,meleeCd-dt);
+  if(lmbHeld && !drawing && meleeCd<=0) startDraw();   // BUFFERELT FELHÚZÁS: ha a reload alatt nyomtad le a gombot, a reload végén AZONNAL indul a húzás
   // KÖZELHARC-SUHINTÁS animáció a TELJES meleeCd alatt: LE -> nagy balról-jobbra suhintás -> VISSZA (a nyíl az íj gyermeke, vele süllyed/emelkedik)
   let meleeX=0, meleeY=0, meleeRotX=0, meleeRotY=0, meleeRotZ=0;
   if(meleeCd>0){ const mp=1-meleeCd/MELEE_CD;
     if(mp<0.18){ const e=easeOutCubic(mp/0.18);                          // LE + felhúzás balra (windup)
-      meleeY=-0.14*e; meleeRotX=-0.5*e; meleeRotY=0.6*e; meleeRotZ=0.55*e; meleeX=-0.12*e; }
-    else if(mp<0.52){ const s=easeInOut((mp-0.18)/0.34);                 // SUHINTÁS balról -> jobbra
-      meleeY=-0.14 + 0.05*Math.sin(s*Math.PI); meleeRotX=-0.5*(1-0.4*s);
-      meleeRotY=lerp(0.6,-0.95,s); meleeRotZ=lerp(0.55,-1.05,s); meleeX=lerp(-0.12,0.16,s); }
+      meleeY=-0.18*e; meleeRotX=-0.6*e; meleeRotY=0.75*e; meleeRotZ=0.7*e; meleeX=-0.28*e; }
+    else if(mp<0.52){ const s=easeInOut((mp-0.18)/0.34);                 // NAGY SUHINTÁS balról -> jobbra, FEL a kép közepébe ívelve
+      meleeY=-0.18 + 0.30*Math.sin(s*Math.PI); meleeRotX=-0.6*(1-0.7*s);
+      meleeRotY=lerp(0.75,-1.2,s); meleeRotZ=lerp(0.7,-1.25,s); meleeX=lerp(-0.28,0.36,s); }
     else { const r=easeOutCubic((mp-0.52)/0.48);                          // VISSZA emelkedik nyugalomba
-      meleeY=lerp(-0.09,0,r); meleeRotX=lerp(-0.3,0,r); meleeRotY=lerp(-0.95,0,r); meleeRotZ=lerp(-1.05,0,r); meleeX=lerp(0.16,0,r); } }
+      meleeY=lerp(-0.10,0,r); meleeRotX=lerp(-0.18,0,r); meleeRotY=lerp(-1.2,0,r); meleeRotZ=lerp(-1.25,0,r); meleeX=lerp(0.36,0,r); }
+    // VÁGÁS-ÍV: fénylő ív balról jobbra söpör a képen át (jól látható "suhintás")
+    if(mp>=0.1 && mp<=0.62){ const s=(mp-0.1)/0.52; slashArc.visible=true; slashArc.material.opacity=0.9*Math.sin(s*Math.PI);
+      slashArc.rotation.z=lerp(1.35,-1.35,s); slashArc.position.x=lerp(-0.24,0.24,s); const sc=lerp(0.7,1.75,s); slashArc.scale.set(sc,sc,1); }
+    else slashArc.visible=false;
+  }
+  else if(slashArc.visible) slashArc.visible=false;
   // ÚJRATÖLTÉS present-póz delták (alapból 0; a reload-ág tölti) — a lenti bow-írásokhoz ADDITÍVAN adódnak
   let presentY=0, presentZ=0, presentRotX=0, presentRotZ=0;
   if(drawing && running){ charge=Math.min(1, charge+dt*1.5); powwrap.classList.add('on'); powwrap.classList.remove('reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width=(charge*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; nockArrow.scale.setScalar(1); if(currentElement==='base' && nockArrow._glow) nockArrow._glow.material.opacity=0; animateNock(t); }
@@ -2969,7 +2986,7 @@ function coopTick(dt){
 
 /* --- hook helpers called from the gated edits in fireArrow / collision --- */
 function coopOnShot(start, fwd, charge){ if(coop) coop.sendShot({ from:{x:start.x,y:start.y,z:start.z}, dir:{x:fwd.x,y:fwd.y,z:fwd.z}, power:charge, el:currentElement, charge:charge }); }   // ELEM: az elemet+töltést is átküldjük
-function coopOnLocalHit(hit, head, dmg, el, charge){ if(coop && hit && hit.coopRemote && hit.netId!=null) coop.sendHit({ monsterId:hit.netId, headshot:head, dmg:dmg, el:el, charge:charge }); }
+function coopOnLocalHit(hit, head, dmg, el, charge, mul){ if(coop && hit && hit.coopRemote && hit.netId!=null) coop.sendHit({ monsterId:hit.netId, headshot:head, dmg:dmg, el:el, charge:charge, mul:mul }); }   // mul: elemi-hatás szorzó (nyíl=1, ütés=0.25)
 /* true when the LOCAL spawner / local kill / local AI must be suppressed for this monster */
 function coopShouldSuppressLocalSpawner(){ return !!coop; }
 function coopIsRemote(m){ return !!(coop && m && m.coopRemote); }
@@ -3126,7 +3143,7 @@ window.addEventListener('coop-net-ready', coopConnect, { once:true });
 /* ===================== /CO-OP ===================== */
 
 /* ===================== Állapot-vezérlés ===================== */
-function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; shotCd=0; meleeCd=0; powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width='0%'; powfill.style.background=''; nockArrow.visible=false; nock.position.set(0,0,0);
+function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; shotCd=0; meleeCd=0; lmbHeld=false; powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width='0%'; powfill.style.background=''; nockArrow.visible=false; nock.position.set(0,0,0);
   // megszakított reload (halál/szünet) helyreállítása: nyíl nyugalmi pózba + jelzők nullára
   raspFired=swingFired=tapFired=seatFired=false; nockArrow.position.set(0.046,0.060,0.04*bowAdj.mz); nockArrow.rotation.set(0,0,0); nockArrow.scale.setScalar(1); if(nockArrow._glow) nockArrow._glow.material.opacity=0; }
 function resetGame(){
