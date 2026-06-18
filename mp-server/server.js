@@ -126,7 +126,7 @@ const MELEE_DMG     = 8;      // hp removed per melee connect
 const MELEE_CD      = 1.0;    // seconds between a given monster's melee hits
 const INTERMISSION  = 3.0;    // seconds of calm between cleared wave and next
 // 6 troll types must match the client's TROLL_TYPES keys (mohas-roham.html).
-const TROLL_TYPES   = ['grunt', 'scout', 'brute', 'shaman', 'spitter', 'wisp'];
+const TROLL_TYPES   = ['grunt', 'scout', 'brute', 'shaman', 'spitter', 'wisp', 'shard'];   // 'shard' csak osztódásból (nem a rollTrollType táblából)
 // Per-type stat multipliers — EXACT copy of the client's TROLL_TYPES table so a
 // brute is tanky and a scout/wisp is fast in co-op too (server was applying NONE = bug).
 const TYPE_STATS = {
@@ -136,6 +136,7 @@ const TYPE_STATS = {
   shaman:  { scaleMul:1.05, hpMul:1.3,  speedMul:0.8,  speedCap:3.6 },
   spitter: { scaleMul:1.05, hpMul:0.9,  speedMul:0.7,  speedCap:2.8 },
   wisp:    { scaleMul:0.70, hpMul:0.6,  speedMul:1.55, speedCap:6.0 },
+  shard:   { scaleMul:0.62, hpMul:0.9,  speedMul:1.15, speedCap:3.6 },
 };
 let   monsterSeq    = 0;      // process-wide monotonic monster id source
 
@@ -151,9 +152,10 @@ const RESIST_S = {
   grunt:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, scout:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2},
   brute:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, shaman:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5},
   spitter:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, wisp:{fire:1.5,ice:0.35,poison:0.8,lightning:1.0},
+  shard:{fire:0.6,ice:0.7,poison:0.9,lightning:1.3},
 };
 // INNATE elem típusonként — PONTOSAN tükrözi a kliens TROLL_TYPES.el-t (különben a co-op trollok rossz elemre reagálnak)
-const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, spitter:'poison', wisp:'ice' };
+const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, spitter:'poison', wisp:'ice', shard:null };
 
 // =============================================================================
 //  STATIC FILE HANDLER  (hand-rolled — keeps deps to just `ws`)
@@ -427,7 +429,7 @@ function handleMessage(ws, msg) {
         }
       }
       let killed = false;
-      if (m.hp <= 0) { killed = true; room.monsters = room.monsters.filter((x) => x.id !== mid); room.score += headshot ? 150 : 100; elFx(room, { k:'kill', id:mid, el:(m.statusEl||el), x:m.pos.x, z:m.pos.z }); }
+      if (m.hp <= 0) { killed = true; room.monsters = room.monsters.filter((x) => x.id !== mid); room.score += headshot ? 150 : 100; elFx(room, { k:'kill', id:mid, el:(m.statusEl||el), x:m.pos.x, z:m.pos.z }); splitBruteS(room, m); }   // arrow-halál: a brute itt esik szét (a 150/el pontozás+FX megmarad, nincs regresszió)
       reapDead(room);   // reaction/chain neighbours that dropped to 0
       broadcast(room, { t: 'hit', id: player.id, monsterId: mid, headshot,
                         dmg: dmgBase, killed, score: room.score, el, reaction, reactPos: { x: m.pos.x, z: m.pos.z } }, null);
@@ -729,10 +731,19 @@ function applyReactionS(id, room, m, dmg, charge){
   return false;
 }
 // Remove dead monsters (hp<=0), score them, emit element-keyed kill FX for the client.
+// NAGY TROLL OSZTÓDÁS (szerver-hiteles): egy Kőszilánk troll a Kőbunkó pozíciójánál
+function spawnShardAt(room, parent, ang){
+  const st=TYPE_STATS.shard, scale=parent.scale*0.6, hp=Math.max(8,Math.round(parent.maxHp*0.22));
+  const speed=Math.min((parent.speed/(TYPE_STATS.brute.speedMul||0.55))*st.speedMul, st.speedCap);
+  const m={ id:'m'+(monsterSeq++).toString(36), type:'shard', pos:{x:parent.pos.x+Math.cos(ang)*0.9, y:GROUND_Y, z:parent.pos.z+Math.sin(ang)*0.9}, hp, maxHp:hp, speed, scale, meleeCd:0, noSplit:true,
+    statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999 };
+  m.resist=RESIST_S[m.type]||null; m.el=INNATE_EL[m.type]||null; room.monsters.push(m); return m;
+}
+function splitBruteS(room, m){ if(m.type!=='brute' || m.noSplit) return; spawnShardAt(room,m,0.9); spawnShardAt(room,m,-0.9); elFx(room,{k:'split',x:m.pos.x,z:m.pos.z}); }   // a szilánkok a monsterView-n át renderelődnek
 function reapDead(room){
   if(!room.monsters.some(m=>m.hp<=0)) return;
   const dead=room.monsters.filter(m=>m.hp<=0); room.monsters=room.monsters.filter(m=>m.hp>0);
-  for(const m of dead){ room.score += 100; elFx(room,{k:'kill', id:m.id, el:(m.statusEl||null), x:m.pos.x, z:m.pos.z}); }
+  for(const m of dead){ room.score += 100; elFx(room,{k:'kill', id:m.id, el:(m.statusEl||null), x:m.pos.x, z:m.pos.z}); splitBruteS(room,m); }   // DoT/reakció-halál: a brute itt esik szét (az arrow-halál az inline úton)
 }
 // ELEM (co-op): talaj-zóna DoT léptetése — gáz (3 dps / rMax 2.2 / méreg) + tűz (5 dps / rMax 2.5 / tűz), 0.5s tick.
 // A KILL->FX a záró reapDead-en megy (sosem splice-olunk iteráció közben). Csak DoT-os zónát tartunk (steam/puddle kimarad).
