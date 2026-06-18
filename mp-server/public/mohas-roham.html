@@ -1723,6 +1723,40 @@ function resetBombs(){ for(const b of ebombs){ b.active=false; b.g.visible=false
    skinDark, bellyMat, tuskMat, woodMat, woodDark, eyeMat, rand, lerp, THREE.*
    Keeps EVERY rigged handle + field from the contract. Mesh count ~30 (well within budget). */
 
+/* ===== Troll HP-csíkok: EGY közös geometria + közös anyagok (depthTest:false -> köd/mélység nem rejti el) ===== */
+const HPBAR_W = 1.05;                                                   // a csík világ-szélessége (méret-normalizált)
+const HPBAR_GEO = new THREE.PlaneGeometry(1, 0.12); HPBAR_GEO.translate(0.5, 0, 0); // bal-szélre horgonyzott: scale.x = HP-arány
+const _hpMat = (c, o)=> new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:(o==null?0.95:o), depthTest:false, depthWrite:false, fog:false, toneMapped:false });
+const HPMAT_BG = _hpMat(0x140d0a, 0.62), HPMAT_HI = _hpMat(0x5fd06a), HPMAT_MID = _hpMat(0xe8c24a), HPMAT_LO = _hpMat(0xe05a3a);
+const HPBAR_LINGER = 4.0;                                               // sebzés után ennyi mp-ig látszik a csík
+const _hpQ = new THREE.Quaternion();
+function attachHpBar(m){
+  const grp = new THREE.Group();
+  // a fej fölé; a troll saját skálájától FÜGGETLEN világ-méret: a csoportot 1/scale-lel ellen-skálázzuk
+  grp.position.set(0, (m.headCY/m.scale) + 0.60, 0);
+  grp.scale.setScalar(1/Math.max(0.3, m.scale));
+  const bg = new THREE.Mesh(HPBAR_GEO, HPMAT_BG);
+  bg.position.set(-HPBAR_W/2, 0, 0); bg.scale.set(HPBAR_W, 1.34, 1); bg.renderOrder = 998;
+  const fill = new THREE.Mesh(HPBAR_GEO, HPMAT_HI);
+  fill.position.set(-HPBAR_W/2, 0, 0.001); fill.scale.set(HPBAR_W, 1, 1); fill.renderOrder = 999;
+  grp.add(bg); grp.add(fill); grp.visible = false;
+  m.g.add(grp);
+  m.hpbar = grp; m.hpbarFill = fill; m._hpBucket = 0; m.hpShow = 0; m._hpPrev = m.maxHp;
+}
+function updateHpBar(m, dt){
+  const grp = m.hpbar; if(!grp) return;
+  if(m.hp < m._hpPrev) m.hpShow = HPBAR_LINGER;     // sebzést kapott (bármilyen forrásból) -> mutasd
+  m._hpPrev = m.hp;
+  if(m.hpShow > 0) m.hpShow -= dt;
+  const show = m.hpShow > 0 && m.hp > 0;
+  grp.visible = show;
+  if(!show) return;
+  const frac = Math.max(0, Math.min(1, m.hp / (m.maxHp||1)));
+  m.hpbarFill.scale.x = HPBAR_W * frac;              // bal-horgonyzott zsugorodás
+  const b = frac > 0.55 ? 0 : (frac > 0.28 ? 1 : 2);
+  if(b !== m._hpBucket){ m.hpbarFill.material = (b===0?HPMAT_HI:b===1?HPMAT_MID:HPMAT_LO); m._hpBucket = b; }
+  _hpQ.copy(m.g.quaternion).invert(); grp.quaternion.copy(_hpQ).multiply(camera.quaternion);  // billboard: szülő-yaw kiütése
+}
 function makeMonster(type, scale, hp, speed){
   let T;
   if(typeof type==='string' && TROLL_TYPES[type]) T=TROLL_TYPES[type];
@@ -1848,10 +1882,11 @@ function makeMonster(type, scale, hp, speed){
   g.traverse(o=>{ if(o.isMesh) o.castShadow=false; });
   [torso, head, legs.L, legs.R, arms.L, arms.R].forEach(p=>{ if(p) p.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); });
   m.headCY=m.head.position.y*scale; m.headR=0.42*scale*(m.head.scale.x||1); // fejlövés-gömb a valós fejhez
+  attachHpBar(m);   // fej fölötti élet-csík (sebzéskor jelenik meg; co-op trolloknak is ingyen jön)
   return m;
 }
 function disposeMonster(m){
-  m.g.traverse(o=>{ if(o.isMesh && o.geometry) o.geometry.dispose(); if(o.isSprite && o.material) o.material.dispose(); });
+  m.g.traverse(o=>{ if(o.isMesh && o.geometry && o.geometry!==HPBAR_GEO) o.geometry.dispose(); if(o.isSprite && o.material) o.material.dispose(); });
   if(m.eyeMat) m.eyeMat.dispose();
   if(m.bodySkin && m.bodySkin!==skinMat) m.bodySkin.dispose();
   if(m.aura && m.aura.material) m.aura.material.dispose();
@@ -2104,7 +2139,7 @@ function pickTrollType(){
 function spawnMonster(){
   const a=(spawnAngles.length ? spawnAngles.shift() : rand(0,6.28)), r=SPAWN_R+rand(-2,3);
   const id=pickTrollType(), T=TROLL_TYPES[id];
-  const baseSc=rand(0.85,1.15)*(1+wave*0.01), baseHp=28+wave*9, baseSp=(1.5+wave*0.12)*rand(0.85,1.15);
+  const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3, baseSp=(1.5+wave*0.10)*rand(0.85,1.15);
   const sc=baseSc*T.scaleMul, hp=Math.round(baseHp*T.hpMul), sp=Math.min(baseSp*T.speedMul, T.speedCap);
   const m=makeMonster(id, sc, hp, sp);
   m.g.position.set(Math.cos(a)*r, GROUND_Y, Math.sin(a)*r);
@@ -2281,7 +2316,7 @@ function update(dt,t){
   /* --- szörnyek --- */
   aliveCount=0;
   for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i]; try {
-    if(m.dying>0){ m.dying+=dt; const k=m.dying; const g=m.g, p=g.position;
+    if(m.dying>0){ m.dying+=dt; const k=m.dying; const g=m.g, p=g.position; if(m.hpbar&&m.hpbar.visible) m.hpbar.visible=false;
       switch(m.deathStyle){
         case 'topple': {
           const f=easeOutCubic(Math.min(1,k/0.9));
@@ -2349,6 +2384,7 @@ function update(dt,t){
     // sérülés-villanás a szemeken
     if(m.hurtFlash>0){ m.hurtFlash-=dt; const f=m.hurtFlash>0?1:0; for(const e of m.eyes) e.material.emissiveIntensity=2+f*4; }
     else for(const e of m.eyes) e.material.emissiveIntensity=2;
+    updateHpBar(m, dt);   // fej fölötti élet-csík: billboard + szín + sebzés-linger
     } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update monster-loop caught — game continues; please report this]', _e); } }
   }
 
@@ -2628,7 +2664,7 @@ function coopEnsureMonster(sm){
   let m = coopRemoteById.get(netId);
   if(!m){
     const id = coopTrollTypeId(sm.type);
-    const sc = (TROLL_TYPES[id] && TROLL_TYPES[id].scaleMul) || 1.0; // FIX: típus-helyes méret (a szerver nem küld scale-t)
+    const sc = (typeof sm.scale==='number' && sm.scale>0) ? sm.scale : ((TROLL_TYPES[id] && TROLL_TYPES[id].scaleMul) || 1.0); // típus-helyes méret (a szerver most már küld scale-t)
     const hp = (typeof sm.hp==='number') ? sm.hp : (typeof sm.maxHp==='number'?sm.maxHp:40);
     m = makeMonster(id, sc, hp, (typeof sm.speed==='number'?sm.speed:2));
     m.coopRemote = true;            // <- collision loop reports this; AI/local-death gated by it

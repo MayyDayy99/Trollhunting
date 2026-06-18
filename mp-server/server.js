@@ -121,8 +121,18 @@ const MELEE_RANGE   = 2.2;    // horizontal (x,z) distance at which a troll bite
 const MELEE_DMG     = 8;      // hp removed per melee connect
 const MELEE_CD      = 1.0;    // seconds between a given monster's melee hits
 const INTERMISSION  = 3.0;    // seconds of calm between cleared wave and next
-// 5 troll types must match the client's TROLL_TYPES keys (mohas-roham.html).
-const TROLL_TYPES   = ['grunt', 'scout', 'brute', 'shaman', 'spitter'];
+// 6 troll types must match the client's TROLL_TYPES keys (mohas-roham.html).
+const TROLL_TYPES   = ['grunt', 'scout', 'brute', 'shaman', 'spitter', 'wisp'];
+// Per-type stat multipliers — EXACT copy of the client's TROLL_TYPES table so a
+// brute is tanky and a scout/wisp is fast in co-op too (server was applying NONE = bug).
+const TYPE_STATS = {
+  grunt:   { scaleMul:1.00, hpMul:1.0,  speedMul:1.0,  speedCap:4.5 },
+  scout:   { scaleMul:0.62, hpMul:0.45, speedMul:2.1,  speedCap:9.0 },
+  brute:   { scaleMul:1.70, hpMul:3.4,  speedMul:0.55, speedCap:2.2 },
+  shaman:  { scaleMul:1.05, hpMul:1.3,  speedMul:0.8,  speedCap:3.6 },
+  spitter: { scaleMul:1.05, hpMul:0.9,  speedMul:0.7,  speedCap:2.8 },
+  wisp:    { scaleMul:0.70, hpMul:0.4,  speedMul:1.8,  speedCap:7.0 },
+};
 let   monsterSeq    = 0;      // process-wide monotonic monster id source
 
 // ELEM (co-op, server-authoritative): mirrors mohas-roham.html STATUS_CFG + TROLL_TYPES.resist
@@ -246,7 +256,7 @@ function pickQuickRoom(max) {
 // Transport-free, client-safe view of a monster for the `state` frame. Drops
 // server-internal sim fields (meleeCd) the client never needs.
 function monsterView(m) {
-  return { id: m.id, type: m.type, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed,
+  return { id: m.id, type: m.type, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed, scale: m.scale,
     st: m.statusEl ? { e:m.statusEl, s:m.statusStacks, f:(m.frozenSolid>0?1:0), w:(m.wet>0?1:0) } : null };  // ELEM: kliens-vizuál (aura/szem-tint/jégburok)
 }
 
@@ -570,6 +580,7 @@ function rollTrollType(wave) {
     ['brute',   wave >= 3 ? clamp((wave - 2) * 0.55, 0, 4) : 0],
     ['shaman',  wave >= 4 ? clamp((wave - 3) * 0.3, 0, 1.6) : 0],
     ['spitter', wave >= 2 ? clamp((wave - 1) * 0.45, 0, 4) : 0],
+    ['wisp',    wave >= 2 ? clamp((wave - 1) * 0.50, 0, 5) : 0],
   ];
   let total = 0;
   for (const e of table) total += e[1];
@@ -586,15 +597,22 @@ function spawnMonster(room) {
   const N = room.wave;
   const a = Math.random() * Math.PI * 2;
   const r = SPAWN_R + (Math.random() * 5 - 2); // SPAWN_R-2 .. SPAWN_R+3
-  const hp = 28 + N * 9;
-  const speed = clamp(1.5 + N * 0.12, 1.5, 4.5);
+  const type = rollTrollType(N);
+  const st = TYPE_STATS[type] || TYPE_STATS.grunt;
+  // gentle wave QUALITY scaling (matches client spawnMonster): per-type muls applied
+  const baseHp = 24 + N * 8 + Math.max(0, N - 5) * 3;
+  const baseSp = 1.5 + N * 0.10;
+  const hp = Math.max(1, Math.round(baseHp * st.hpMul));
+  const speed = Math.min(baseSp * st.speedMul, st.speedCap);
+  const scale = (1 + N * 0.012) * st.scaleMul;
   const m = {
     id: 'm' + (monsterSeq++).toString(36),
-    type: rollTrollType(N),
+    type,
     pos: { x: Math.cos(a) * r, y: GROUND_Y, z: Math.sin(a) * r },
     hp,
     maxHp: hp,
     speed,
+    scale,
     meleeCd: 0, // per-monster melee cooldown (seconds remaining)
     // ELEM: server-authoritative status spine (mirrors the client monster fields)
     statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999,
