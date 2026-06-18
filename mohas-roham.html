@@ -56,6 +56,8 @@
     background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(4,8,16,.7) 100%);}
   #hurt{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity .05s;
     background:radial-gradient(ellipse at 50% 50%, transparent 18%, rgba(210,16,16,.82) 100%);}
+  #wither{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity .12s;
+    background:radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(54,197,255,.55) 100%);}
 
   #toast{position:fixed;left:50%;top:30%;transform:translateX(-50%) scale(.6);opacity:0;z-index:7;
     font:900 64px/1 inherit;color:#ffd27a;text-shadow:0 4px 24px rgba(0,0,0,.8);text-align:center;pointer-events:none;
@@ -102,6 +104,7 @@
 </div>
 <div id="vignette"></div>
 <div id="hurt"></div>
+<div id="wither"></div>
 <div id="toast"></div>
 
 <div id="start" class="screen">
@@ -738,7 +741,7 @@ const mist=mesh(new THREE.CircleGeometry(120,48), new THREE.MeshBasicMaterial({m
 mist.rotation.x=-Math.PI/2; mist.castShadow=false; mist.receiveShadow=false; scene.add(mist);
 
 /* ===================== Játékos / FPS kamera ===================== */
-const player={ pos:new THREE.Vector3(0,1.7,0), yaw:0, pitch:0, hp:100, maxHp:100, alive:true, vy:0, feet:0, onGround:true, jumpReady:true };
+const player={ pos:new THREE.Vector3(0,1.7,0), yaw:0, pitch:0, hp:100, maxHp:100, alive:true, vy:0, feet:0, onGround:true, jumpReady:true, witherT:0 };   // witherT: sámán-nyaláb gyengítés (sebzés/újratöltés rontás)
 camera.rotation.order='YXZ';
 function applyCamera(){
   camera.position.copy(player.pos);
@@ -1056,7 +1059,7 @@ function fireArrow(charge){
   a.g.position.copy(start); a.prev.copy(start);
   const speed=22+charge*30;
   a.vel.copy(fwd).multiplyScalar(speed);
-  a.dmg=18+charge*30;
+  a.dmg=(18+charge*30)*(player.witherT>0?TROLL_TYPES.shaman.witherDmgMul:1);   // SÁMÁN-HEX: gyengített sebzés
   a.life=0; a.active=true; a.stuck=false; a.g.visible=true;
   a.el=currentElement; a.charge=charge; a.resonant=(performance.now()*0.001-lastSwapT)<1.2; applyArrowVisual(a);   // ELEM: element + charge + rezonancia (gyors váltás után)
   orientArrow(a);
@@ -1694,7 +1697,8 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
     build(m){ m._crackMat=new THREE.MeshBasicMaterial({color:0xffb24d,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});   // izzó repedés-varratok (a pop-out alatt felvillannak)
       [[0.0,1.1,0.45,0.5],[0.2,0.85,0.42,0.4],[-0.18,1.3,0.36,0.35]].forEach(s=>{ const c=mesh(new THREE.BoxGeometry(0.05,s[3],0.05), m._crackMat, s[0],s[1],s[2]); c.rotation.z=rand(-0.5,0.5); m.g.add(c); });
       for(let i=0;i<3;i++){ const a=rand(0,6.28); m.g.add(mesh(new THREE.TetrahedronGeometry(0.12,0), skinDark, Math.cos(a)*0.4,1.0+rand(-0.2,0.4),Math.sin(a)*0.3)); } } },
-  shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x2f6f6a, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18, postureLean:0.0, shoulderW:0.9, torsoW:0.85, neckLen:0.15, tuskScale:1.2, earLen:0.5,
+  shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x2f6f6a, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18,
+    castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:8.0, beamDrop:8.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, witherDmgMul:0.65, witherReloadMul:1.35,   // ÚJ: nagy távról arkán lövedék + közelről gyengítő varázs-nyaláb (HEX) postureLean:0.0, shoulderW:0.9, torsoW:0.85, neckLen:0.15, tuskScale:1.2, earLen:0.5,
     build(m){
 const g=m.g;
       // ONE shared per-monster glow material for every mystic part (crystal/horns/runes) -> returned on m.staffMat (already disposed by disposeMonster)
@@ -1741,6 +1745,7 @@ const g=m.g;
 
       // ability/animation state the shaman AI reads every frame
       m.healTimer=rand(1.5,3.0); m.auraPulse=0;
+      m.castTimer=rand(1.5,2.6); m.casting=0; m.beaming=false; m.beamAcc=0;   // ÚJ: lövedék-telegráf + nyaláb-akkumulátor
     } },
   spitter: { id:'spitter', el:'poison', resist:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:2.8, skin:0x9fb84a, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.10, shoulderW:0.95, torsoW:1.25, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
     build(m){
@@ -1815,6 +1820,40 @@ function updateBombs(dt){
   }
 }
 function resetBombs(){ for(const b of ebombs){ b.active=false; b.g.visible=false; } }
+
+/* ===== SÁMÁN: arkán lövedék (lassan követő, kerülhető) + gyengítő varázs-nyaláb (HEX) ===== */
+const _shSp=new THREE.Vector3();
+const abolts=[];
+const arcMat=new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.6,roughness:.4,flatShading:true});
+function makeAbolt(){ const g=new THREE.Group(); g.add(mesh(new THREE.OctahedronGeometry(0.17,0), arcMat,0,0,0));
+  const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x6fe0ff,transparent:true,opacity:0.8,depthWrite:false,blending:THREE.AdditiveBlending})); gl.scale.setScalar(0.75); g.add(gl);
+  g.visible=false; scene.add(g); return { g, vel:new THREE.Vector3(), life:0, active:false, dmg:8 }; }
+for(let i=0;i<8;i++) abolts.push(makeAbolt());
+function shamanCast(m){ const b=abolts.find(x=>!x.active)||abolts[0];
+  if(m.staffCrystal) m.staffCrystal.getWorldPosition(_shSp); else _shSp.set(m.g.position.x, m.g.position.y+m.bodyCY, m.g.position.z);
+  b.g.position.copy(_shSp);
+  const dx=player.pos.x-_shSp.x, dy=(player.pos.y-0.3)-_shSp.y, dz=player.pos.z-_shSp.z, d=Math.hypot(dx,dy,dz)||1, SPD=9.5;
+  b.vel.set(dx/d*SPD, dy/d*SPD, dz/d*SPD); b.dmg=(TROLL_TYPES.shaman.castDmg0||8)+wave*0.4; b.life=0; b.active=true; b.g.visible=true;
+  EFX.flash(_shSp.x,_shSp.y,_shSp.z,0x6fe0ff,0.5,1.8,0.25); if(AUD.head) AUD.head(); }
+function updateAbolts(dt){ for(const b of abolts){ if(!b.active) continue;
+    if(player.alive){ const dx=player.pos.x-b.g.position.x, dy=(player.pos.y-0.3)-b.g.position.y, dz=player.pos.z-b.g.position.z, d=Math.hypot(dx,dy,dz)||1, SPD=9.5, k=Math.min(1,dt*1.6);
+      b.vel.x=lerp(b.vel.x,dx/d*SPD,k); b.vel.y=lerp(b.vel.y,dy/d*SPD,k); b.vel.z=lerp(b.vel.z,dz/d*SPD,k); }
+    b.g.position.addScaledVector(b.vel,dt); b.g.rotation.y+=dt*6; b.g.rotation.x+=dt*4; b.life+=dt; const bp=b.g.position;
+    if(player.alive && Math.hypot(bp.x-player.pos.x,bp.z-player.pos.z)<0.85 && Math.abs(bp.y-(player.pos.y-0.4))<1.5){
+      damagePlayer(b.dmg); applyWither(TROLL_TYPES.shaman.witherDur); EFX.flash(bp.x,bp.y,bp.z,0x6fe0ff,0.6,2.0,0.3); b.active=false; b.g.visible=false; continue; }
+    if(bp.y<=GROUND_Y+0.1 || b.life>4){ b.active=false; b.g.visible=false; } } }
+function resetAbolts(){ for(const b of abolts){ b.active=false; b.g.visible=false; } }
+// HEX gyengítő-nyaláb: egy közös cső (SP-ben egy aktív tether), kamera-tér additív
+const beamTube=(function(){ const g=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1,7), new THREE.MeshBasicMaterial({color:0x36c5ff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false,toneMapped:false})); g.visible=false; g.renderOrder=900; g.frustumCulled=false; scene.add(g); return g; })();
+const _bA=new THREE.Vector3(), _bDir=new THREE.Vector3(), _bUp=new THREE.Vector3(0,1,0);
+let _beamSeenThisFrame=false;
+function drawBeam(ax,ay,az,bx,by,bz,t){ _bA.set(ax,ay,az); _bDir.set(bx-ax,by-ay,bz-az); const len=_bDir.length()||0.001;
+  beamTube.position.set(ax+_bDir.x*0.5, ay+_bDir.y*0.5, az+_bDir.z*0.5); beamTube.scale.set(1,len,1); beamTube.quaternion.setFromUnitVectors(_bUp,_bDir.normalize());
+  beamTube.material.opacity=0.35+0.3*Math.abs(Math.sin(t*9)); beamTube.visible=true; _beamSeenThisFrame=true; }
+function applyWither(dur){ player.witherT=Math.max(player.witherT||0, dur); }
+function updateWither(dt){ if(player.witherT>0){ player.witherT-=dt; if(player.witherT<0) player.witherT=0; }
+  if(witherEl) witherEl.style.opacity=(player.witherT>0?(0.16+0.12*Math.abs(Math.sin(performance.now()*0.006))):0);
+  if(!_beamSeenThisFrame) beamTube.visible=false; _beamSeenThisFrame=false; }
 
 /* ===== SHARED BASE BODY (everything before T.build(m)) — drop-in replacement for makeMonster body =====
    r128. Uses only existing helpers/materials: mesh, std, jitter, GLOW, MOSS_T, SKIN_N, mossMat,
@@ -2154,7 +2193,7 @@ addEventListener('mouseup',e=>{
   if(e.button===dragBtn){ dragLook=false; dragBtn=-1; showLockHint(running&&!locked); } // csak a kezdő gomb állítja le a nézést
   if(e.button!==0) return;   // BAL gomb lő
   lmbHeld=false;
-  if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD; raspFired=swingFired=tapFired=seatFired=false; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload-anim
+  if(drawing){ if(charge>=MIN_CHARGE){ fireArrow(charge); shotCd=SHOT_CD*(player.witherT>0?TROLL_TYPES.shaman.witherReloadMul:1); raspFired=swingFired=tapFired=seatFired=false; } drawing=false; charge=0; powwrap.classList.remove('on'); }   // min. töltés alatt nem lő; lövés után reload-anim (HEX: lassabb újratöltés)
 });
 addEventListener('blur',()=>{ dragLook=false; dragBtn=-1; clearKeys(); if(running) pauseGame(); });
 cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
@@ -2163,7 +2202,7 @@ cv.addEventListener('click',()=>{ if(running&&!locked) ensureLock(); });
 const hpfill=document.getElementById('hpfill'), hpghost=document.getElementById('hpghost'), hpbarEl=document.getElementById('hpbar'), dmgpop=document.getElementById('dmgpop'), waveN=document.querySelector('#wave .n'),
   waveLeft=document.querySelector('#wave .left'), scoreN=document.querySelector('#score .n'),
   powwrap=document.getElementById('powwrap'), powfill=document.getElementById('powfill'), powlabel=document.getElementById('powlabel'),
-  hurtEl=document.getElementById('hurt'), toastEl=document.getElementById('toast'),
+  hurtEl=document.getElementById('hurt'), witherEl=document.getElementById('wither'), toastEl=document.getElementById('toast'),
   startScreen=document.getElementById('start'), pauseScreen=document.getElementById('pause'), overScreen=document.getElementById('over');
 let toastT=null;
 function toast(txt){ toastEl.textContent=txt; toastEl.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('show'),1400); }
@@ -2530,6 +2569,7 @@ function update(dt,t){
     } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update arrow-loop caught — game continues; please report this]', _e); } }
   }
   if(running) updateBombs(dt); // köpködő-bombák (szünetben befagynak)
+  if(running) updateAbolts(dt); updateWither(dt);   // SÁMÁN: arkán lövedékek + gyengítés-csillapodás (a nyaláb-elrejtés mindig fusson)
 
   /* --- szörnyek --- */
   aliveCount=0;
@@ -2723,11 +2763,22 @@ function trollAI(m, dt, t){
       break;
     }
     case 'shaman': {
-      if(d<5.5){ moveToward(-0.8); walkAnim(); }
-      else if(d>8){ moveToward(0.7); walkAnim(); }
+      if(coopIsRemote(m)) break;   // co-op: a szerver vezérli a sámánt (a nyaláb/lövedék FX a monster_fx-ből)
+      // pozicionálás: közel hátrál, távol közelít a varázs-sávba
+      if(d<5.0){ moveToward(-0.8); walkAnim(); }
+      else if(d>T.castRange+2){ moveToward(0.7); walkAnim(); }
       else { m.arms.L.rotation.x=0.5+Math.sin(t*2)*0.15; m.arms.R.rotation.x=0.5+Math.cos(t*2)*0.15; }
-      m.rangedTimer-=dt;   // TÁMADÁS: a sámán nem csak gyógyít — varázs-bolttal lő a játékosra (kitézés közben is)
-      if(m.rangedTimer<=0 && d<16){ m.rangedTimer=rand(1.8,2.8); m.arms.R.rotation.x=-0.7; sparks.burst(p.x,p.y+m.bodyCY,p.z,12,0x6fe0ff,5,0.4); spitterFire(m); }
+      // MÓD A: NAGY TÁVRÓL arkán lövedék (telegrafált felhúzás -> lövés)
+      if(d>T.castRange && d<T.castMax){ if(m.casting<=0){ m.castTimer-=dt; if(m.castTimer<=0) m.casting=T.castWind; }
+        if(m.casting>0){ m.casting-=dt; m.arms.R.rotation.x=-0.9; if(m.staffCrystal) m.staffCrystal.material.emissiveIntensity=1.4+2.2*(1-Math.max(0,m.casting)/T.castWind);
+          if(m.casting<=0){ shamanCast(m); m.castTimer=T.castCd*rand(0.9,1.2); } } }
+      else m.casting=0;
+      // MÓD B: KÖZELRŐL folyamatos gyengítő-nyaláb (4Hz akkumulátor -> tick-független, pontosan beamDps/mp)
+      if(d < (m.beaming?T.beamDrop:T.beamNear)){ m.beaming=true; m.beamAcc=(m.beamAcc||0)+dt; const period=1/T.beamTickHz;
+        while(m.beamAcc>=period){ m.beamAcc-=period; damagePlayer(T.beamDps*period); } applyWither(0.3);
+        if(m.staffCrystal) m.staffCrystal.getWorldPosition(_shSp); else _shSp.set(p.x,p.y+m.bodyCY,p.z);
+        drawBeam(_shSp.x,_shSp.y,_shSp.z, player.pos.x, player.pos.y-0.3, player.pos.z, t); }
+      else m.beaming=false;
       m.healTimer-=dt;
       if(m.healTimer<=0 && m.statusEl!=='poison'){ m.healTimer=T.healCd;   // MÉREG elnémítja a sámán gyógyítását
         for(const o of monsters){ if(o===m || !o.alive || o.dying>0) continue;
@@ -2985,6 +3036,8 @@ function coopHandleFx(fx){ if(!Array.isArray(fx)) return;
     else if(e.k==='chain' && e.from && e.to){ const c=(e.el==='poison')?0x9fdc4a:0xffffff; EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, c, 0.16, 0.4); EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, 0xb48cff, 0.16, 0.5); }
     else if(e.k==='zone'){ spawnZone(e.kind, e.x, e.z, {}); }
     else if(e.k==='split'){ gore.burst(e.x,GROUND_Y+1.1,e.z,26,0x6f7a72,9,0.55); gore.burst(e.x,GROUND_Y+1.1,e.z,12,0xc98a3a,7,0.6); sparks.burst(e.x,GROUND_Y+1.1,e.z,16,0xffb24d,7,0.5); EFX.ring(e.x,GROUND_Y+0.05,e.z,0xc98a3a,0.5,3.6,0.5,0.85); EFX.flash(e.x,GROUND_Y+1.0,e.z,0xffce5a,0.5,3.0,0.22); shake=Math.max(shake,0.35); }   // OSZTÓDÁS FX (a szilánkokat a monsterView hozza)
+    else if(e.k==='cast' && e.from && e.to){ EFX.bolt(e.from.x,e.from.y||GROUND_Y+2,e.from.z, e.to.x,e.to.y||GROUND_Y+1.3,e.to.z, 0x6fe0ff,0.16,0.3); EFX.flash(e.from.x,e.from.y||GROUND_Y+2,e.from.z,0x6fe0ff,0.4,1.6,0.25); }   // SÁMÁN arkán lövedék (a wither/HP a szerveré)
+    else if(e.k==='beam' && e.to){ let ax,ay,az; const sm=coopRemoteById.get(e.id); if(sm&&sm.staffCrystal){ const c=new THREE.Vector3(); sm.staffCrystal.getWorldPosition(c); ax=c.x;ay=c.y;az=c.z; } else if(e.from){ ax=e.from.x;ay=GROUND_Y+2.0;az=e.from.z; } else { ax=e.to.x;ay=GROUND_Y+2;az=e.to.z; } drawBeam(ax,ay,az, e.to.x,(e.to.y!=null?e.to.y:GROUND_Y+1.3),e.to.z, performance.now()*0.001); }   // SÁMÁN gyengítő-nyaláb (vizuál; a HP/wither a szerver state-ből jön)
     else if(e.k==='kill'){ const m=coopRemoteById.get(e.id); if(m){ if(e.el) m.statusEl=e.el; coopKillRemote(e.id, false); } }   // elem-igazított halál a távoli trollon
   }
 }
@@ -3182,6 +3235,7 @@ function coopConnect(){
           if(typeof pv.hp==='number' && coopNow()-coopReviveAt>1500){ const before=player.hp; setHp(pv.hp);
             if(pv.hp<before) playerHurtFX(before-pv.hp); // co-op: a szerver-vezérelt sérülés is látványos
             if(pv.hp<=0 && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }
+          if(typeof pv.witherT==='number') player.witherT=pv.witherT;   // SÁMÁN-HEX: a szerver vezeti a gyengítést co-opban (a sebzés/újratöltés-szorzó így hiteles)
           continue; }
         const peer = coopMakePeer(pv.id, pv.name);
         if(pv.pos){
@@ -3222,7 +3276,7 @@ function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKick
 function resetGame(){
   for(const m of monsters){ scene.remove(m.g); disposeMonster(m); } monsters.length=0;
   for(const a of arrows){ a.active=false; a.g.visible=false; }
-  resetBombs();
+  resetBombs(); resetAbolts(); beamTube.visible=false; player.witherT=0;   // SÁMÁN: lövedékek + nyaláb + gyengítés nullára
   cancelDraw();
   player.pos.set(0,1.7,0); player.yaw=0; player.pitch=0; player.hp=player.maxHp; player.alive=true; player.vy=0; player.feet=0; player.onGround=true; player.jumpReady=true;
   setHp(player.maxHp); score=0; scoreN.textContent='0'; aliveCount=0; toSpawn=0; intermission=0;
@@ -3246,7 +3300,6 @@ document.getElementById('startBtn').addEventListener('click',beginPlay);
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);
 document.getElementById('restartBtn').addEventListener('click',beginPlay);
 
-addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
 })();
 </script>
 </body>

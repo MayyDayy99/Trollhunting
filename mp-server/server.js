@@ -156,6 +156,8 @@ const RESIST_S = {
 };
 // INNATE elem típusonként — PONTOSAN tükrözi a kliens TROLL_TYPES.el-t (különben a co-op trollok rossz elemre reagálnak)
 const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, spitter:'poison', wisp:'ice', shard:null };
+// SÁMÁN képesség-konfig (a kliens TROLL_TYPES.shaman számaival EGYEZŐ): távoli arkán lövedék + közeli gyengítő-nyaláb
+const SHAMAN_S = { castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:8.0, beamDrop:8.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };
 
 // =============================================================================
 //  STATIC FILE HANDLER  (hand-rolled — keeps deps to just `ws`)
@@ -303,7 +305,7 @@ function destroyRoom(room) {
 
 /** Public, transport-free view of a player (safe to JSON.stringify). */
 function playerView(p) {
-  return { id: p.id, name: p.name, pos: p.pos, yaw: p.yaw, pitch: p.pitch, hp: p.hp, alive: p.alive };
+  return { id: p.id, name: p.name, pos: p.pos, yaw: p.yaw, pitch: p.pitch, hp: p.hp, alive: p.alive, witherT: p.witherT||0 };
 }
 
 /** Send a JSON message to one socket (guarded against dead sockets). */
@@ -538,7 +540,7 @@ function handleJoin(ws, msg) {
       ws,
       pos: { x: 0, y: 1.7, z: 0 },
       yaw: 0, pitch: 0,
-      hp: 100, alive: true,
+      hp: 100, alive: true, witherT: 0,   // SÁMÁN-HEX gyengítés (a kliens innen olvassa a sebzés/újratöltés-szorzóhoz)
       playing: false,          // false until the client clicks Start/Restart (sends 'respawn'); pre-start/dead players draw no aggro & don't run the wave sim
       token: makeId(),         // private reclaim secret (sent only in this player's welcome)
       lastSeen: Date.now(),
@@ -639,6 +641,7 @@ function spawnMonster(room) {
     meleeCd: 0, // per-monster melee cooldown (seconds remaining)
     // ELEM: server-authoritative status spine (mirrors the client monster fields)
     statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999,
+    casting:0, beaming:false, beamAcc:0, castTimer:1.5+Math.random()*1.1, healTimer:1.5+Math.random()*1.5, noSplit:false,   // SÁMÁN-AI + split állapot (ártalmatlan a többi típuson)
   };
   m.resist = RESIST_S[m.type] || null;
   m.el = INNATE_EL[m.type] || null;   // INNATE elem (co-op reakciókhoz; a vizuál a kliensé)
@@ -818,6 +821,29 @@ function stepWaves(room, dt) {
     const dist = Math.hypot(dx, dz);
     if (!Number.isFinite(dist) || dist <= 0) continue; // skip NaN/degenerate distance (defends against bad client pos)
     if (m.frozenSolid > 0 || m.rooted > 0) continue;   // ELEM: teljes fagy / bénítás = se mozgás, se harapás
+    if (m.type === 'shaman') {   // SÁMÁN: távoli arkán lövedék + közeli gyengítő-nyaláb + ally-gyógyítás (szerver-hiteles; a kliens csak rajzol)
+      const sp = m.speed*(m.slowMul||1)*dt;
+      if (dist < 5.0) { m.pos.x -= (dx/dist)*sp; m.pos.z -= (dz/dist)*sp; }                       // közel: hátrál
+      else if (dist > SHAMAN_S.castRange+2) { m.pos.x += (dx/dist)*sp; m.pos.z += (dz/dist)*sp; } // távol: közelít
+      // MÓD A: arkán lövedék (telegrafált)
+      if (dist > SHAMAN_S.castRange && dist < SHAMAN_S.castMax) {
+        if (m.casting<=0){ m.castTimer-=dt; if(m.castTimer<=0) m.casting=SHAMAN_S.castWind; }
+        if (m.casting>0){ m.casting-=dt; if(m.casting<=0){ const dmg=SHAMAN_S.castDmg0+room.wave*0.4; target.hp=clamp(target.hp-dmg,0,999); target.witherT=Math.max(target.witherT||0,SHAMAN_S.witherDur);
+          elFx(room,{k:'cast', id:m.id, target:target.id, from:{x:m.pos.x,y:GROUND_Y+2.0,z:m.pos.z}, to:{x:target.pos.x,y:target.pos.y-0.3,z:target.pos.z}});
+          if(target.hp<=0&&target.alive){ target.alive=false; broadcast(room,{t:'player_down',id:target.id}); } m.castTimer=SHAMAN_S.castCd*(0.9+Math.random()*0.3); } }
+      } else m.casting=0;
+      // MÓD B: gyengítő-nyaláb (4Hz akkumulátor -> tick-független drain; az FX is csak a 4Hz tick-en megy ki)
+      if (dist < (m.beaming?SHAMAN_S.beamDrop:SHAMAN_S.beamNear)) { m.beaming=true; m.beamAcc=(m.beamAcc||0)+dt; const period=1/SHAMAN_S.beamTickHz; let fired=false;
+        while(m.beamAcc>=period){ m.beamAcc-=period; target.hp=clamp(target.hp-SHAMAN_S.beamDps*period,0,999); target.witherT=Math.max(target.witherT||0,SHAMAN_S.witherDur); fired=true; }
+        if(fired){ elFx(room,{k:'beam', id:m.id, target:target.id, from:{x:m.pos.x,z:m.pos.z}, to:{x:target.pos.x,y:target.pos.y-0.3,z:target.pos.z}});
+          if(target.hp<=0&&target.alive){ target.alive=false; broadcast(room,{t:'player_down',id:target.id}); } }
+      } else m.beaming=false;
+      // ally-gyógyítás (méreg némítja)
+      m.healTimer=(m.healTimer||0)-dt;
+      if(m.healTimer<=0 && m.statusEl!=='poison'){ m.healTimer=SHAMAN_S.healCd;
+        for(const o of room.monsters){ if(o===m||o.hp<=0) continue; if(Math.hypot(o.pos.x-m.pos.x,o.pos.z-m.pos.z)<SHAMAN_S.healRadius && o.hp<o.maxHp) o.hp=Math.min(o.maxHp,o.hp+SHAMAN_S.healAmt); } }
+      continue;   // a sámán NEM megy a generikus walk/melee ágra
+    }
     if (dist > MELEE_RANGE) {
       // Walk toward the target on the ground plane (lassítás-szorzóval).
       const step = Math.min(m.speed * (m.slowMul||1) * dt, dist);
@@ -836,6 +862,7 @@ function stepWaves(room, dt) {
   }
   separateMonstersS(room);   // MOZGÁS: troll-vs-troll szétválás (egymásba-torlódás ellen — co-op beszorulás)
   reapDead(room);   // ELEM: DoT/reakció-halálok (pontozás + elem-igazított halál-FX a kliensnek)
+  for(const p of room.players.values()){ if(p.witherT>0) p.witherT=Math.max(0, p.witherT-dt); }   // SÁMÁN-HEX gyengítés csillapodása
 }
 // troll-vs-troll szétválás a szerveren (a kliens separateMonsters tükre; a scale-ből számolt footprint)
 function separateMonstersS(room){
