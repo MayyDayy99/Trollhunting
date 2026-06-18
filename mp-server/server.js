@@ -135,7 +135,7 @@ const TYPE_STATS = {
   brute:   { scaleMul:1.70, hpMul:3.4,  speedMul:0.55, speedCap:2.2 },
   shaman:  { scaleMul:1.05, hpMul:1.3,  speedMul:0.8,  speedCap:3.6 },
   spitter: { scaleMul:1.05, hpMul:0.9,  speedMul:0.7,  speedCap:2.8 },
-  wisp:    { scaleMul:0.70, hpMul:0.4,  speedMul:1.8,  speedCap:7.0 },
+  wisp:    { scaleMul:0.70, hpMul:0.6,  speedMul:1.55, speedCap:6.0 },
 };
 let   monsterSeq    = 0;      // process-wide monotonic monster id source
 
@@ -150,8 +150,10 @@ const STATUS_CFG_S = {
 const RESIST_S = {
   grunt:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, scout:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2},
   brute:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, shaman:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5},
-  spitter:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, wisp:{fire:1.5,ice:0.4,poison:0.8,lightning:1.0},
+  spitter:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, wisp:{fire:1.5,ice:0.35,poison:0.8,lightning:1.0},
 };
+// INNATE elem típusonként — PONTOSAN tükrözi a kliens TROLL_TYPES.el-t (különben a co-op trollok rossz elemre reagálnak)
+const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, spitter:'poison', wisp:'ice' };
 
 // =============================================================================
 //  STATIC FILE HANDLER  (hand-rolled — keeps deps to just `ws`)
@@ -414,7 +416,8 @@ function handleMessage(ws, msg) {
       let reaction = null;
       if (el !== 'base') {
         const now = Date.now() / 1000, onCd = (now - (m.lastReactT || -999)) < 0.45;
-        const rid = onCd ? null : resolveReactionS(el, m);
+        let rid = onCd ? null : resolveReactionS(el, m);
+        if (rid) { const innateOnly = reactionFromInnateOnlyS(el, m); if (innateOnly && (now - (m.lastInnateReactT || -999)) < 2.5) rid = null; else if (innateOnly) m.lastInnateReactT = now; }   // PARITY-KRITIKUS: innate-only reakció 2.5s hűtésen -> elnyomva, esik az alap-mechanikára (kliens-tükör)
         if (rid) { m.lastReactT = now; reaction = rid; const skip = applyReactionS(rid, room, m, elDmg, charge); if (!skip) applyServerStatus(m, el, charge); }
         else {   // base per-element mechanic + becsapódási splash (CSAK reakció nélkül)
           elementalSplashS(room, m, el, elDmg, charge, headshot);   // EGYETLEN splash-hívás (a régi bespoke tűz-ág megszűnt -> nincs dupla)
@@ -595,7 +598,7 @@ function rollTrollType(wave) {
   const table = [
     ['grunt',   Math.max(2.0, 6 - wave * 0.25)],
     ['scout',   wave >= 1 ? clamp(1.5 + wave * 0.35, 0, 6) : 0],
-    ['brute',   wave >= 3 ? clamp((wave - 2) * 0.55, 0, 4) : 0],
+    ['brute',   wave >= 2 ? clamp((wave - 1) * 0.5, 0, 4) : 0],   // villám-elemi előrehozva w>=2-re (kliens-tükör)
     ['shaman',  wave >= 4 ? clamp((wave - 3) * 0.3, 0, 1.6) : 0],
     ['spitter', wave >= 2 ? clamp((wave - 1) * 0.45, 0, 4) : 0],
     ['wisp',    wave >= 2 ? clamp((wave - 1) * 0.50, 0, 5) : 0],
@@ -633,9 +636,10 @@ function spawnMonster(room) {
     scale,
     meleeCd: 0, // per-monster melee cooldown (seconds remaining)
     // ELEM: server-authoritative status spine (mirrors the client monster fields)
-    statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999,
+    statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999,
   };
   m.resist = RESIST_S[m.type] || null;
+  m.el = INNATE_EL[m.type] || null;   // INNATE elem (co-op reakciókhoz; a vizuál a kliensé)
   room.monsters.push(m);
   return m;
 }
@@ -689,8 +693,10 @@ function elementalSplashSAt(room, px, pz, el, dmg, charge, head, exclude, radMul
   elFx(room,{k:'reaction',kind:'splash',el,x:px,z:pz,r:R});
 }
 function elementalSplashS(room, hit, el, dmg, charge, head){ elementalSplashSAt(room, hit.pos.x, hit.pos.z, el, dmg, charge, head, hit, 1); }   // teljes sugarú, a találat-célt kihagyva
+function reactionFromInnateOnlyS(el, m){ const sv=m.el; m.el=null; const r=resolveReactionS(el, m); m.el=sv; return r===null; }   // igaz, ha CSAK az innate elem váltotta ki
 function resolveReactionS(el, m){
-  const iced=(m.statusEl==='ice'||m.frozenSolid>0), burning=(m.statusEl==='fire'), poisoned=(m.statusEl==='poison'), wet=(m.wet>0), charged=(m.charged>0);
+  const innate=m.el||null;   // INNATE: kliens-tükör — a troll saját eleme állandó státusz-forrás
+  const iced=(m.statusEl==='ice'||m.frozenSolid>0||innate==='ice'), burning=(m.statusEl==='fire'||innate==='fire'), poisoned=(m.statusEl==='poison'||innate==='poison'), wet=(m.wet>0), charged=(m.charged>0||innate==='lightning');
   if(el==='lightning'){ if(iced) return 'overload'; if(poisoned||charged) return 'galvanic'; }
   else if(el==='ice'){ if(burning) return 'steam'; if(charged) return 'overload'; if(poisoned) return 'frostrot'; }
   else if(el==='fire'){ if(iced) return 'steam'; if(poisoned) return 'ignite'; }

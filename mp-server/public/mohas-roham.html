@@ -1151,6 +1151,13 @@ const EL = {
   lightning: { name:'VILLÁM', ui:'#b48cff', head:0xb48cff, glow:0xffffff, trail:0xa8c8ff, status:'lightning' },
 };
 const EL_ORDER=['base','fire','ice','poison','lightning'];
+// INNATE TROLL-ELEM paletta (a JÁTÉKOS EL nyíl-színeitől külön): vizuál-tint + a troll által OKOZOTT státusz. A resolveReaction is ezt olvassa (innate kombó).
+const TROLL_EL = {
+  fire:      { skin:0x7a2b1c, emissive:0xff5a2a, emInt:0.55, eye:0xffb04a, aura:0xff7a3d },
+  ice:       { skin:0x16414f, emissive:0x36c5ff, emInt:0.70, eye:0x7fe2ff, aura:0x9fe3ff },
+  poison:    { skin:0x37551f, emissive:0x9fdc4a, emInt:0.55, eye:0xc6ff4a, aura:0x9fdc4a },
+  lightning: { skin:0x3a3358, emissive:0xb48cff, emInt:0.60, eye:0xc8b4ff, aura:0xc8b4ff },
+};
 let currentElement='base';
 
 /* JÓZAN ALAP gameplay-számok — ITT HANGOLHATÓ:
@@ -1273,8 +1280,8 @@ function statusAura(m, key){
   }
 }
 function elementalDeath(m){
-  if(!m.statusEl) return;                                     // csak ha elemi státusszal halt
-  const p=m.g.position, bx=p.x, by=p.y+(m.bodyCY||1), bz=p.z, gy=GROUND_Y+0.05, k=m.statusEl;
+  const k=m.statusEl||m.el; if(!k) return;                    // elemi státusszal VAGY innate elemmel halt
+  const p=m.g.position, bx=p.x, by=p.y+(m.bodyCY||1), bz=p.z, gy=GROUND_Y+0.05;
   if(k==='fire'){                                             // ELHAMVAD: robbanás + parázs + füstoszlop + perzselt gyűrű
     EFX.flash(bx,by,bz,0xffc24d,0.8,4.5,0.4); EFX.light(bx,by,bz,0xff7a3d,5,0.5); EFX.ring(bx,gy,bz,0xff7a3d,0.5,4.5,0.6,0.8);
     for(let i=0;i<40;i++){ const a=rand(0,6.28),pp=Math.acos(rand(-1,1)),s=rand(2,8); RP.spawn(bx,by,bz,Math.sin(pp)*Math.cos(a)*s,Math.abs(Math.cos(pp)*s)+rand(0,3),Math.sin(pp)*Math.sin(a)*s,pick([0xff5a2a,0xff8a3a,0xffc24d,0xfff1c4]),rand(0.5,1.0),0.04,rand(0.5,1.0),-1.5,1.3); }
@@ -1419,8 +1426,9 @@ function freezeFull(m){ const fresh=!(m.frozenSolid>0); m.frozenSolid=Math.max(m
 function shatterShell(m){ if(m.iceShell){ m.g.remove(m.iceShell); m.iceShell.geometry.dispose(); m.iceShell.material.dispose(); m.iceShell=null; } m.frozenSolid=0; }
 /* ELEM-REACT: melyik reakció sül el, ha `el` nyíl csapódik a `m` állapotú trollba (pre-hit állapot) */
 function resolveReaction(el, m){
-  const iced=(m.statusEl==='ice'||m.frozenSolid>0), burning=(m.statusEl==='fire'), poisoned=(m.statusEl==='poison');
-  const wet=(m.wet>0), charged=(m.charged>0);
+  const innate=m.el||null;   // INNATE: a troll saját eleme állandó "státusz-forrás" -> tűz nyíl jeges trollra = gőz, előzetes nyíl nélkül is
+  const iced=(m.statusEl==='ice'||m.frozenSolid>0||innate==='ice'), burning=(m.statusEl==='fire'||innate==='fire'), poisoned=(m.statusEl==='poison'||innate==='poison');
+  const wet=(m.wet>0), charged=(m.charged>0||innate==='lightning');
   if(el==='lightning'){ if(iced) return 'overload'; if(poisoned||charged) return 'galvanic'; }
   else if(el==='ice'){ if(burning) return 'steam'; if(charged) return 'overload'; if(poisoned) return 'frostrot'; }
   else if(el==='fire'){ if(iced) return 'steam'; if(poisoned) return 'ignite'; }
@@ -1482,12 +1490,17 @@ function elementalSplashAt(px, pz, el, dmg, charge, head, exclude, radMul){
   }
 }
 function elementalSplash(hit, el, dmg, charge, head){ elementalSplashAt(hit.g.position.x, hit.g.position.z, el, dmg, charge, head, hit, 1); }   // teljes sugarú, a találat-célt kihagyva
+function reactionFromInnateOnly(el, m){ const sv=m.el; m.el=null; const r=resolveReaction(el, m); m.el=sv; return r===null; }   // igaz, ha a reakciót CSAK az innate elem váltotta ki (nem applied státusz)
 function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant){
   const now=performance.now()*0.001;
   if(el!=='base'){
     const onCd=((now-(hit.lastReactT||-999))<0.45) && !resonant;
-    const rid=onCd?null:resolveReaction(el, hit);
-    if(rid){ hit.lastReactT=now; gainUlt(12); return applyReaction(rid, pos, hit, dmg*(resonant?1.3:1), charge); }   // reakció helyettesíti az alap-mechanikát + tölti a VIHAR-t
+    let rid=onCd?null:resolveReaction(el, hit);
+    if(rid){
+      const innateOnly=reactionFromInnateOnly(el, hit);
+      if(innateOnly && (now-(hit.lastInnateReactT||-999))<2.5){ rid=null; }   // PARITY-KRITIKUS: innate-only reakció a 2.5s hűtésen -> elnyomva, esik az alap-mechanikára (kliens=szerver azonos)
+      else { hit.lastReactT=now; if(innateOnly) hit.lastInnateReactT=now; gainUlt(innateOnly?6:12); return applyReaction(rid, pos, hit, dmg*(resonant?1.3:1), charge); }   // reakció helyettesíti az alap-mechanikát + tölti a VIHAR-t (innate-only: kevesebb ult)
+    }
   }
   // --- alap (reakció nélküli) per-elem mechanika ---
   if(el!=='base') elementalSplash(hit, el, dmg, charge, head);    // becsapódási AoE — EGYETLEN splash-hívás (dupla-splash guard: a régi tűz-ág megszűnt)
@@ -1549,13 +1562,22 @@ function embellishTroll(m){
   const rune=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); rune.scale.setScalar(0.5); rune.position.set(0,1.05,0.5); g.add(rune);
 }
 
+// INNATE ELEM: a troll típus-eleme (T.el) láthatóvá tétele — bőr/szem-tint + egy olcsó additív aura. A wisp saját áttetsző passt kap, ott CSAK szem+aura.
+function elementSkin(m){
+  const e=m.type&&m.type.el; if(!e) return; const C=TROLL_EL[e]; if(!C) return; m.el=e;
+  if(m.bodySkin && m.bodySkin!==skinMat && m.typeId!=='wisp'){ m.bodySkin.color.setHex(C.skin); m.bodySkin.emissive=new THREE.Color(C.emissive); m.bodySkin.emissiveIntensity=C.emInt; }
+  if(m.eyes) m.eyes.forEach(x=>{ if(x.material&&x.material.emissive) x.material.emissive.setHex(C.eye); });
+  if(m._eyeBase==null && m.eyes&&m.eyes[0]) m._eyeBase=C.eye;   // státusz-tint visszaállítása az ELEM-színre, nem a narancsra
+  const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:C.aura,transparent:true,opacity:0.42,depthWrite:false,blending:THREE.AdditiveBlending}));
+  aura.scale.setScalar(1.6*(m.scale||1)); aura.position.y=(m.bodyCY||1.1); m.g.add(aura); m.elAura=aura;
+}
 buildElementHUD(); buildUltHud(); updateNockElement();
 
 /* ===================== Szörnyek (mohás trollok) ===================== */
 const monsters=[];
 /* ---- 5 troll-típus (art-direkciós újratervezés, erős sziluett-különbség) ---- */
 const TROLL_TYPES = {
-  wisp: { id:'wisp', resist:{fire:1.5,ice:0.4,poison:0.8,lightning:1.0}, name:'Lidérc', threat:0x7fe2ff, scaleMul:0.7, hpMul:0.4, speedMul:1.8, dmgMul:0.5, speedCap:7.0,
+  wisp: { id:'wisp', el:'ice', resist:{fire:1.5,ice:0.35,poison:0.8,lightning:1.0}, name:'Lidérc', threat:0x7fe2ff, scaleMul:0.7, hpMul:0.6, speedMul:1.55, dmgMul:0.5, speedCap:6.0,
     skin:0x16414f, eyeColor:0x7fe2ff, club:false, noTusks:true, earLen:0.52, deathSpin:1.4, postureLean:0.05,
     build(m){
       // áttetsző, rúna-fényű test (a megosztott bodySkin-t CSAK ezen a trollon módosítjuk)
@@ -1595,7 +1617,7 @@ m.head.add(mesh(new THREE.SphereGeometry(0.075, 6, 5), mossMat, -0.15, 0.22, -0.
 // a small mossy clump crusted on the right shoulder (ties club arm into the back-moss line)
 m.arms.R.add(mesh(jitter(new THREE.DodecahedronGeometry(0.13, 0), 0.04, 0.04), mossMat, 0.04, 0.16, -0.08));
     } },
-  scout: { id:'scout', resist:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2}, name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:9.0, skin:0x8fd64a, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.32, shoulderW:0.78, torsoW:0.72, neckLen:0.0, tuskScale:0.0, noTusks:true, earLen:0.85,
+  scout: { id:'scout', el:'fire', resist:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2}, name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:9.0, skin:0x8fd64a, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.32, shoulderW:0.78, torsoW:0.72, neckLen:0.0, tuskScale:0.0, noTusks:true, earLen:0.85,
     build(m){
 const g=m.g;
   // LITHE LIMBS — thin the rigged arm/leg Groups so the imp reads lean & wiry.
@@ -1637,7 +1659,7 @@ const g=m.g;
   // the least moss of the caste, per the art direction).
   m.head.add(mesh(new THREE.SphereGeometry(0.07,7,6), mossMat, 0.20,0.20,-0.05));
     } },
-  brute: { id:'brute', resist:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.2, skin:0x6f7a72, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.18, shoulderW:1.5, torsoW:1.35, neckLen:-0.10, tuskScale:2.2, earLen:0.22,
+  brute: { id:'brute', el:'lightning', resist:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.2, skin:0x6f7a72, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.18, shoulderW:1.5, torsoW:1.35, neckLen:-0.10, tuskScale:2.2, earLen:0.22,
     build(m){
 const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   // SHRINK THE HEAD so it reads buried between the shoulders (tiny sunken head = key brute silhouette).
@@ -1716,7 +1738,7 @@ const g=m.g;
       // ability/animation state the shaman AI reads every frame
       m.healTimer=rand(1.5,3.0); m.auraPulse=0;
     } },
-  spitter: { id:'spitter', resist:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:2.8, skin:0x9fb84a, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.10, shoulderW:0.95, torsoW:1.25, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
+  spitter: { id:'spitter', el:'poison', resist:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:2.8, skin:0x9fb84a, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.10, shoulderW:0.95, torsoW:1.25, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
     build(m){
 const g=m.g, head=m.head;
       // ── per-monster bile material (the ONLY new material → disposed via m.spitMat) ──
@@ -1947,9 +1969,10 @@ function makeMonster(type, scale, hp, speed){
     type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
     dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0,
     statusEl:null, statusT:0, slowMul:1, burnAcc:0, _eyeBase:null,
-    statusStacks:1, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, _fireSpreadT:0, resist:(T.resist||null) };   // ELEM: status + reaction fields
+    statusStacks:1, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999, _fireSpreadT:0, resist:(T.resist||null) };   // ELEM: status + reaction fields
   if(T.build) T.build(m);
   embellishTroll(m);   // REDESIGN: gazdagabb részlet-pass (moha/zuzmó/tüskék/spórák/szőr) minden trollon
+  elementSkin(m);      // INNATE ELEM: tint + aura a T.el alapján (co-op-safe: a típusból derül; a remote troll is makeMonster-en megy át)
   // FPS: a sok submesh (alaprig + díszítések) közül CSAK a sziluett vessen árnyékot -> 3-4× kevesebb árnyék-mesh
   g.traverse(o=>{ if(o.isMesh) o.castShadow=false; });
   [torso, head, legs.L, legs.R, arms.L, arms.R].forEach(p=>{ if(p) p.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); });
@@ -2208,7 +2231,7 @@ function pickTrollType(){
   const table=[
     ['grunt',   Math.max(2.0, 6 - w*0.25)],
     ['scout',   w>=1 ? clamp(1.5 + w*0.35, 0, 6) : 0],
-    ['brute',   w>=3 ? clamp((w-2)*0.55, 0, 4) : 0],
+    ['brute',   w>=2 ? clamp((w-1)*0.5, 0, 4) : 0],   // villám-elemi előrehozva w>=2-re (minden elem megjelenjen)
     ['shaman',  w>=4 ? (haveShaman?0.15:clamp((w-3)*0.3,0,1.6)) : 0],
     ['spitter', w>=2 ? clamp((w-1)*0.45, 0, 4) : 0],
     ['wisp',    w>=2 ? clamp((w-1)*0.50, 0, 5) : 0],
