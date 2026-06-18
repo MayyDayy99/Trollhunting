@@ -135,7 +135,7 @@ const TYPE_STATS = {
   brute:   { scaleMul:1.70, hpMul:3.4,  speedMul:0.55, speedCap:2.2 },
   shaman:  { scaleMul:1.05, hpMul:1.3,  speedMul:0.8,  speedCap:3.6 },
   spitter: { scaleMul:1.05, hpMul:0.9,  speedMul:0.7,  speedCap:2.8 },
-  wisp:    { scaleMul:0.70, hpMul:0.6,  speedMul:1.55, speedCap:6.0 },
+  wisp:    { scaleMul:0.95, hpMul:0.8,  speedMul:1.2,  speedCap:4.5 },
   shard:   { scaleMul:0.62, hpMul:0.9,  speedMul:1.15, speedCap:3.6 },
 };
 let   monsterSeq    = 0;      // process-wide monotonic monster id source
@@ -151,7 +151,7 @@ const STATUS_CFG_S = {
 const RESIST_S = {
   grunt:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, scout:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2},
   brute:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, shaman:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5},
-  spitter:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, wisp:{fire:1.5,ice:0.35,poison:0.8,lightning:1.0},
+  spitter:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, wisp:{fire:1.0,ice:0.35,poison:0.8,lightning:1.0},
   shard:{fire:0.6,ice:0.7,poison:0.9,lightning:1.3},
 };
 // INNATE elem típusonként — PONTOSAN tükrözi a kliens TROLL_TYPES.el-t (különben a co-op trollok rossz elemre reagálnak)
@@ -607,7 +607,7 @@ function rollTrollType(wave) {
     ['brute',   wave >= 2 ? clamp((wave - 1) * 0.5, 0, 4) : 0],   // villám-elemi előrehozva w>=2-re (kliens-tükör)
     ['shaman',  wave >= 4 ? clamp((wave - 3) * 0.3, 0, 1.6) : 0],
     ['spitter', wave >= 2 ? clamp((wave - 1) * 0.45, 0, 4) : 0],
-    ['wisp',    wave >= 2 ? clamp((wave - 1) * 0.50, 0, 5) : 0],
+    ['wisp',    wave >= 2 ? clamp(1.0 + (wave - 1) * 0.55, 0, 5) : 0],   // Lidérc gyakoribb (kliens-tükör)
   ];
   let total = 0;
   for (const e of table) total += e[1];
