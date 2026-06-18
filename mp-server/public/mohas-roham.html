@@ -335,9 +335,8 @@ function tree(x,z,s){
 function rock(x,z,r){ const m=new THREE.Mesh(jitter(new THREE.DodecahedronGeometry(r,0), r*0.25, r*0.25), rockMat);
   m.position.set(x,GROUND_Y+r*0.4,z); m.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
   m.castShadow=true; m.receiveShadow=true; scene.add(m);
-  // ÜTKÖZŐ: a kő lábnyoma; ha elég lapos (r<0.7) ráállható-tetőként is regisztrál (climb)
-  if(r>=0.7) solidCyl(x, z, r*0.92, {mob:true});
-  else solidCyl(x, z, r*0.9, {top:GROUND_Y+r*0.75, climb:true, mob:true});
+  // ÜTKÖZŐ: MINDEN kő mászható-tetőként regisztrál (rá lehet ugrani, ha eléred a tetejét), és átmenni egyiken sem lehet (mob)
+  solidCyl(x, z, r*0.9, {top:GROUND_Y+r*0.78, climb:true, mob:true});
   return m; }
 const swayers=[];
 function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(sc);
@@ -1443,22 +1442,22 @@ function applyReaction(id, pos, hit, dmg, charge){
   }
   return false;
 }
-// "AHOL IZZIK, OTT SEBEZ": kis becsapódási AoE minden NEM-reakciós elemi találatra. A látható gyűrű sugara == a sebző sugár.
-function elementalSplash(hit, el, dmg, charge, head){
-  const R = el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0;   // a villám LÁNCOL, nem splashel -> 0
+// "AHOL IZZIK, OTT SEBEZ": kis becsapódási AoE. A látható gyűrű sugara == a sebző sugár. radMul: fél területre a földbe-állt nyílhoz.
+function elementalSplashAt(px, pz, el, dmg, charge, head, exclude, radMul){
+  const R = (el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0) * (radMul||1);   // a villám LÁNCOL, nem splashel -> 0
   if(R<=0) return;
   const frac = (el==='fire'?0.30 : el==='ice'?0.22 : 0.20) * (head?1.5:1);
-  const px=hit.g.position.x, pz=hit.g.position.z;
   const col = el==='fire'?0xff7a3d : el==='ice'?0x9fd0ff : 0x9fdc4a;
   EFX.ring(px,GROUND_Y+0.05,pz,col,0.4,R,0.4,0.7);                 // a látható gyűrű = a sebző sugár
   EFX.flash(px,GROUND_Y+0.6,pz,col,0.35,R*0.6,0.22);
-  for(const tg of nearestTrolls(px,pz,hit,R,4)){                   // exclude=hit -> az elsődleges célt nem sebzi duplán
+  for(const tg of nearestTrolls(px,pz,exclude,R,4)){              // exclude=hit (találatnál) -> az elsődleges célt nem sebzi duplán
     const by=tg.g.position.y+(tg.bodyCY||1);
     tg.hp-=dmg*frac; tg.hurtFlash=0.12; applyStatus(tg,el,null,1);
     for(let i=0;i<4;i++) RP.spawn(tg.g.position.x,by,tg.g.position.z,rand(-2,2),rand(0,3),rand(-2,2),col,0.5,0.04,0.4,(el==='fire'?-1:1),1.1);
     if(tg.hp<=0&&tg.alive) killMonster(tg,false);
   }
 }
+function elementalSplash(hit, el, dmg, charge, head){ elementalSplashAt(hit.g.position.x, hit.g.position.z, el, dmg, charge, head, hit, 1); }   // teljes sugarú, a találat-célt kihagyva
 function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant){
   const now=performance.now()*0.001;
   if(el!=='base'){
@@ -2049,6 +2048,8 @@ addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
     applyBowAdj(); }
 });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+// ELEM: egér-GÖRGŐVEL is váltható az elem (le = következő, fel = előző; körbe)
+addEventListener('wheel',e=>{ if(!running) return; const n=EL_ORDER.length, i=EL_ORDER.indexOf(currentElement); setElement(EL_ORDER[(((i<0?0:i)+(e.deltaY>0?1:-1))%n+n)%n]); e.preventDefault(); }, {passive:false});
 function clearKeys(){ for(const k in keys) keys[k]=false; } // FIX: minden lenyomott billentyű elengedése (blur/pause -> nincs beragadt mozgás)
 
 document.addEventListener('pointerlockchange',()=>{ locked=(document.pointerLockElement===cv); showLockHint(running&&!locked&&!dragLook); });
@@ -2407,16 +2408,22 @@ function update(dt,t){
     emitArrowTrail(a);   // ELEM: element-colored flight trail
     // talaj
     if(a.g.position.y<=GROUND_Y+0.02){ a.g.position.y=GROUND_Y+0.02; a.stuck=true; a.life=0;
-      sparks.burst(a.g.position.x,0.1,a.g.position.z,8,0x8b7355,3,0.4); continue; }
+      sparks.burst(a.g.position.x,0.1,a.g.position.z,8,0x8b7355,3,0.4);
+      if(a.el!=='base'){ const sx=a.g.position.x, sz=a.g.position.z;   // földbe állt ELEMI nyíl: FÉL sugarú területi sebzés
+        if(coop) coop.send({t:'splash_at', x:sx, z:sz, el:a.el, dmg:a.dmg, charge:a.charge});
+        else elementalSplashAt(sx, sz, a.el, a.dmg, a.charge, false, null, 0.5); }
+      continue; }
     // szörny-találat (szakasz vs gömb, hogy ne fúrjon át)
-    let hit=null, head=false;
+    let hit=null, head=false, dmgMul=1;
     for(const m of monsters){ if(!m.alive) continue;
       const c=tmp.set(m.g.position.x, m.g.position.y+m.headCY, m.g.position.z);
-      if(segDist(a.prev,a.g.position,c)<m.headR){ hit=m; head=true; break; }
+      if(segDist(a.prev,a.g.position,c)<m.headR){ hit=m; head=true; dmgMul=2; break; }       // FEJ ×2
       c.set(m.g.position.x, m.g.position.y+m.bodyCY, m.g.position.z);
-      if(segDist(a.prev,a.g.position,c)<m.bodyR){ hit=m; break; }
+      if(segDist(a.prev,a.g.position,c)<m.bodyR){ hit=m; dmgMul=1; break; }                   // TÖRZS ×1
+      c.set(m.g.position.x, m.g.position.y+m.bodyCY*0.42, m.g.position.z);
+      if(segDist(a.prev,a.g.position,c)<m.bodyR*0.72){ hit=m; dmgMul=0.6; break; }             // LÁB ×0.6 (alacsonyabb, kisebb gömb, kevesebb sebzés)
     }
-    if(hit){ const dmg=a.dmg*(head?2:1);
+    if(hit){ const dmg=a.dmg*dmgMul;
       if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg, a.el, a.charge); } // CO-OP: server applies dmg/kill/score/status (+el/charge)
       else { const wasStatus=hit.statusEl; const _rz=(hit.resist&&hit.resist[a.el])?hit.resist[a.el]:1; const _dmg=dmg*(hit.frozenSolid>0?1.5:1)*_rz; hit.hp-=_dmg; hit.hurtFlash=(_rz>1.3?0.3:0.15);   // törékeny ×1.5 + per-troll resist
         if(_rz<0.6){ const _q=a.g.position; for(let i=0;i<4;i++) RP.spawn(_q.x,_q.y,_q.z,rand(-1,1),rand(0,1.5),rand(-1,1),0x8a8f99,0.3,0.02,0.3,1,1); }   // ELLENÁLL: szürke sercegés (rossz elem)
@@ -2571,7 +2578,13 @@ function trollAI(m, dt, t){
   const walkAnim=()=>{ m.walkPhase+=dt*(4+m.speed); const sw=Math.sin(m.walkPhase)*0.6;
     m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(m.walkPhase))*0.06;
     m.arms.L.rotation.x=0.5+Math.sin(m.walkPhase)*0.3; m.arms.R.rotation.x=0.5-Math.sin(m.walkPhase)*0.3; };
-  const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; p.x+=dx/d*step; p.z+=dz/d*step; const _pm=pushMob(p.x,p.z,(m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z; };   // ELEM: slowMul; + nem megy át fán/kövön (mob solids)
+  const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; const ox=p.x, oz=p.z;
+    p.x+=dx/d*step; p.z+=dz/d*step; let _pm=pushMob(p.x,p.z,(m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z;   // ELEM: slowMul; + nem megy át fán/kövön (mob solids)
+    // ANTI-BESZORULÁS (első lépés): ha az akadály miatt alig haladt, oldalazzon el mellette egy irányba, amíg ki nem szabadul
+    if(step>1e-4 && Math.hypot(p.x-ox,p.z-oz) < step*0.4){ m._stuckT=(m._stuckT||0)+dt;
+      if(m._stuckT>0.3){ if(!m._stuckSide) m._stuckSide=(((p.x*7+p.z*13)|0)&1)?1:-1; const tx=-dz/d*m._stuckSide, tz=dx/d*m._stuckSide;
+        p.x+=tx*step*1.4; p.z+=tz*step*1.4; _pm=pushMob(p.x,p.z,(m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z; } }
+    else { m._stuckT=0; m._stuckSide=0; } };
   const meleeAttack=(onHit)=>{ m.atkCd-=dt; m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,1.6,0.2); if(m.atkCd<=0){ if(player.pos.y-1.7 < p.y+1.9*m.scale){ onHit(); } else { m.atkCd=0.5; } m.arms.R.rotation.x=-0.4; } }; // függőleges hatótáv
   switch(T.id){
     case 'scout': {

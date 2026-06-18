@@ -453,6 +453,17 @@ function handleMessage(ws, msg) {
       break;
     }
 
+    case 'splash_at': {   // földbe állt ELEMI nyíl: FÉL sugarú területi sebzés a becsapódás pontján (co-op)
+      if (!player.alive || !player.playing) break;
+      const el = (typeof msg.el === 'string' && EL_STATUS[msg.el]) ? msg.el : null;
+      if (!el) break;
+      const px = clamp(+msg.x || 0, -80, 80), pz = clamp(+msg.z || 0, -80, 80);
+      const dmg = clamp(+msg.dmg || 0, 0, 999), charge = clamp(+msg.charge || 0, 0, 1);
+      elementalSplashSAt(room, px, pz, el, dmg, charge, false, null, 0.5);   // exclude=null (nincs elsődleges cél), fél sugár
+      reapDead(room);
+      break;
+    }
+
     default:
       send(ws, { t: 'error', code: 'unknown_type', message: `Unknown message type: ${msg.t}` });
   }
@@ -664,13 +675,14 @@ function applyServerStatus(m, el, charge, stacksToAdd){
   if(st==='lightning') m.charged=Math.max(m.charged||0,2.0);
 }
 // "AHOL IZZIK, OTT SEBEZ": kis becsapódási AoE a NEM-reakciós elemi találatra (a kliens elementalSplash tükre).
-function elementalSplashS(room, hit, el, dmg, charge, head){
-  const R = el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0;   // a villám láncol, nem splashel
+function elementalSplashSAt(room, px, pz, el, dmg, charge, head, exclude, radMul){
+  const R = (el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0) * (radMul||1);   // a villám láncol, nem splashel
   if(R<=0) return;
   const frac = (el==='fire'?0.30 : el==='ice'?0.22 : 0.20) * (head?1.5:1);
-  for(const tg of elNearest(room, hit.pos.x, hit.pos.z, hit, R, 4)){ tg.hp -= dmg*frac; applyServerStatus(tg, el, null, 1); }   // exclude=hit -> az elsődleges célt nem sebzi duplán
-  elFx(room,{k:'reaction',kind:'splash',el,x:hit.pos.x,z:hit.pos.z,r:R});
+  for(const tg of elNearest(room, px, pz, exclude, R, 4)){ tg.hp -= dmg*frac; applyServerStatus(tg, el, null, 1); }
+  elFx(room,{k:'reaction',kind:'splash',el,x:px,z:pz,r:R});
 }
+function elementalSplashS(room, hit, el, dmg, charge, head){ elementalSplashSAt(room, hit.pos.x, hit.pos.z, el, dmg, charge, head, hit, 1); }   // teljes sugarú, a találat-célt kihagyva
 function resolveReactionS(el, m){
   const iced=(m.statusEl==='ice'||m.frozenSolid>0), burning=(m.statusEl==='fire'), poisoned=(m.statusEl==='poison'), wet=(m.wet>0), charged=(m.charged>0);
   if(el==='lightning'){ if(iced) return 'overload'; if(poisoned||charged) return 'galvanic'; }
