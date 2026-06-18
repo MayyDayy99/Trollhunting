@@ -589,12 +589,26 @@ function flower(x,z,sc,cyan){ const g=new THREE.Group(); g.position.set(x,GROUND
   g.userData.phase=Math.random()*6.28; swayers.push(g); scene.add(g); }
 
 // ---- TUFT GRASS (instanced, dense centre falloff) ----
-(function(){ const N=620, BLADE=new THREE.ConeGeometry(0.05,0.6,4);
-  const im=new THREE.InstancedMesh(BLADE, grassMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
-  for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(1.2, ARENA_R+6, 1.7), h=rand(0.6,1.5);
-    _fp.set(Math.cos(a)*r, GROUND_Y+0.3*h, Math.sin(a)*r);
-    _fe.set((Math.random()-0.5)*0.45, rand(0,6.283), (Math.random()-0.5)*0.45); _fq.setFromEuler(_fe);
-    _fs.set(rand(0.7,1.5), h, rand(0.7,1.5)); _fm.compose(_fp,_fq,_fs); im.setMatrixAt(i,_fm); }
+// fűcsomó-geometria: 5 hajló penge EGY geometriába olvasztva (a régi 1-kúp = "tüske" helyett)
+function grassTuftGeo(){
+  const pos=[], blades=5;
+  for(let i=0;i<blades;i++){
+    const yaw=i*1.27+rand(-0.25,0.25), cx=Math.cos(yaw), cz=Math.sin(yaw);
+    const w=0.022, px=-cz*w, pz=cx*w, h=0.42+Math.random()*0.30, bend=0.10+Math.random()*0.14;
+    const mw=w*0.6, mpx=-cz*mw, mpz=cx*mw, mx=cx*bend*0.4, mz=cz*bend*0.4, my=h*0.55, tx=cx*bend, tz=cz*bend, ty=h;
+    pos.push(-px,0,-pz, px,0,pz, mpx+mx,my,mpz+mz);            // tő -> közép (1. háromszög)
+    pos.push(-px,0,-pz, mpx+mx,my,mpz+mz, -mpx+mx,my,-mpz+mz);  // tő -> közép (2. háromszög)
+    pos.push(-mpx+mx,my,-mpz+mz, mpx+mx,my,mpz+mz, tx,ty,tz);   // közép -> hegy (csúcs)
+  }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return g;
+}
+const grassBladeMat=std({color:0x4f8a45, roughness:1}); grassBladeMat.side=THREE.DoubleSide;   // a hajló pengék mindkét oldala látsszon
+(function(){ const N=760, BLADE=grassTuftGeo();
+  const im=new THREE.InstancedMesh(BLADE, grassBladeMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
+  for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(1.2, ARENA_R+6, 1.7), h=rand(0.75,1.5);
+    _fp.set(Math.cos(a)*r, GROUND_Y-0.02, Math.sin(a)*r);   // a tő a talajban
+    _fe.set(0, rand(0,6.283), (Math.random()-0.5)*0.25); _fq.setFromEuler(_fe);
+    _fs.set(rand(0.8,1.4), h, rand(0.8,1.4)); _fm.compose(_fp,_fq,_fs); im.setMatrixAt(i,_fm); }
   im.instanceMatrix.needsUpdate=true; scene.add(im);
 })();
 
@@ -2422,6 +2436,8 @@ function trollAI(m, dt, t){
       if(d<5.5){ moveToward(-0.8); walkAnim(); }
       else if(d>8){ moveToward(0.7); walkAnim(); }
       else { m.arms.L.rotation.x=0.5+Math.sin(t*2)*0.15; m.arms.R.rotation.x=0.5+Math.cos(t*2)*0.15; }
+      m.rangedTimer-=dt;   // TÁMADÁS: a sámán nem csak gyógyít — varázs-bolttal lő a játékosra (kitézés közben is)
+      if(m.rangedTimer<=0 && d<16){ m.rangedTimer=rand(1.8,2.8); m.arms.R.rotation.x=-0.7; sparks.burst(p.x,p.y+m.bodyCY,p.z,12,0x6fe0ff,5,0.4); spitterFire(m); }
       m.healTimer-=dt;
       if(m.healTimer<=0 && m.statusEl!=='poison'){ m.healTimer=T.healCd;   // MÉREG elnémítja a sámán gyógyítását
         for(const o of monsters){ if(o===m || !o.alive || o.dying>0) continue;
