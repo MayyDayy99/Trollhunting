@@ -817,7 +817,22 @@ function stepWaves(room, dt) {
       }
     }
   }
+  separateMonstersS(room);   // MOZGÁS: troll-vs-troll szétválás (egymásba-torlódás ellen — co-op beszorulás)
   reapDead(room);   // ELEM: DoT/reakció-halálok (pontozás + elem-igazított halál-FX a kliensnek)
+}
+// troll-vs-troll szétválás a szerveren (a kliens separateMonsters tükre; a scale-ből számolt footprint)
+function separateMonstersS(room){
+  const ms=room.monsters;
+  for(let i=0;i<ms.length;i++){ const a=ms[i]; if(a.hp<=0) continue; const ar=0.6*(a.scale||1);
+    for(let j=i+1;j<ms.length;j++){ const b=ms[j]; if(b.hp<=0) continue; const br=0.6*(b.scale||1);
+      const dx=b.pos.x-a.pos.x, dz=b.pos.z-a.pos.z, minD=ar+br, d2=dx*dx+dz*dz;
+      if(d2<minD*minD && d2>1e-6){ const d=Math.sqrt(d2), push=(minD-d), nx=dx/d, nz=dz/d;
+        const aFix=(a.frozenSolid>0), bFix=(b.frozenSolid>0); if(aFix&&bFix) continue;
+        if(aFix){ b.pos.x+=nx*push; b.pos.z+=nz*push; }
+        else if(bFix){ a.pos.x-=nx*push; a.pos.z-=nz*push; }
+        else { const h=push*0.5; a.pos.x-=nx*h; a.pos.z-=nz*h; b.pos.x+=nx*h; b.pos.z+=nz*h; } }
+    }
+  }
 }
 
 function tickAll() {

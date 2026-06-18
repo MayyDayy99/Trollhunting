@@ -2560,6 +2560,7 @@ function update(dt,t){
     updateHpBar(m, dt);   // fej fölötti élet-csík: billboard + szín + sebzés-linger
     } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update monster-loop caught — game continues; please report this]', _e); } }
   }
+  if(running) separateMonsters();   // troll-vs-troll szétválás (a torlódás/beszorulás ellen)
 
   /* --- hullám-vezérlés --- */
   if(running && !coopShouldSuppressLocalSpawner()){
@@ -2611,6 +2612,19 @@ const easeOutBack=(x)=>{ const c1=1.70158, c3=c1+1, u=x-1; return 1+c3*u*u*u+c1*
 const easeInOut=(x)=> x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2;
 
 /* ===================== Troll AI (típus-függő) ===================== */
+// MOZGÁS: troll-vs-troll szétválás — ne torlódjanak/csússzanak egymásba (a "beszorulás" fő oka). Csak LOKÁLIS trollokra (co-opban a szerver végzi).
+function separateMonsters(){
+  for(let i=0;i<monsters.length;i++){ const a=monsters[i]; if(!a.alive||a.dying>0||coopIsRemote(a)) continue; const ar=(a.bodyR||0.5)*0.7;
+    for(let j=i+1;j<monsters.length;j++){ const b=monsters[j]; if(!b.alive||b.dying>0||coopIsRemote(b)) continue; const br=(b.bodyR||0.5)*0.7;
+      const ax=a.g.position, bx=b.g.position, dx=bx.x-ax.x, dz=bx.z-ax.z, minD=ar+br, d2=dx*dx+dz*dz;
+      if(d2<minD*minD && d2>1e-6){ const d=Math.sqrt(d2), push=(minD-d), nx=dx/d, nz=dz/d;
+        const aFix=(a.frozenSolid>0), bFix=(b.frozenSolid>0); if(aFix&&bFix) continue;   // a befagyott troll horgony
+        if(aFix){ bx.x+=nx*push; bx.z+=nz*push; }
+        else if(bFix){ ax.x-=nx*push; ax.z-=nz*push; }
+        else { const h=push*0.5; ax.x-=nx*h; ax.z-=nz*h; bx.x+=nx*h; bx.z+=nz*h; } }
+    }
+  }
+}
 function trollAI(m, dt, t){
   if(!(running && player.alive)) return;
   const T=m.type, p=m.g.position;
