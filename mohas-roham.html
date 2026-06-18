@@ -319,6 +319,7 @@ function tree(x,z,s){
   for(let i=0;i<5;i++){ const c=mesh(new THREE.SphereGeometry(0.5+Math.random()*0.4,7,6), mossMat,
     (Math.random()-0.5)*1.4, 4.4+Math.random()*1.0, (Math.random()-0.5)*1.4); c.castShadow=true; g.add(c); }
   scene.add(g);
+  g.traverse(o=>{ o.castShadow=false; });   // FPS: a fák ne vessenek árnyékot (sok mesh, peremen — az árnyékuk amúgy is csak zaj)
   // ÜTKÖZŐ: a törzs alja a CylinderGeometry(0.3,0.6,...) miatt ~0.6 sugarú -> tömör henger a tövénél
   solidCyl(x, z, 0.55*s, {mob:true});
   flammables.push({x:x, z:z, r:0.55*s, g:g, onFire:false, zone:null});   // ELEM-ENV: a tűz felgyújthatja
@@ -992,9 +993,10 @@ function fireArrow(charge){
   AUD.twang(charge);
   coopOnShot(start, fwd, charge); // CO-OP: relay this shot to peers (no-op offline)
 }
+const _orientLook=new THREE.Vector3();
 function orientArrow(a){
-  const look=a.g.position.clone().add(a.vel);
-  a.g.lookAt(look);
+  _orientLook.copy(a.g.position).add(a.vel);   // FPS: nincs per-nyíl/per-frame Vector3 allokáció
+  a.g.lookAt(_orientLook);
 }
 
 /* ========================= 1) CINEMATIC FX-RÉTEG ========================= */
@@ -1026,14 +1028,15 @@ function makeRichPool(max, blending, fade){
     C.set(color); acol[i*3]=C.r;acol[i*3+1]=C.g;acol[i*3+2]=C.b;
     s0[i]=size0; s1[i]=(size1==null?size0*0.15:size1); life[i]=lifeS; ml[i]=lifeS;
     grv[i]=grav||0; drg[i]=drag||0; amax[i]=(a0==null?1:a0); asz[i]=size0; aal[i]=amax[i]; }
-  function update(dt){
-    for(let i=0;i<max;i++){ if(life[i]<=0){ if(aal[i]!==0){aal[i]=0;asz[i]=0;} continue; }
+  function update(dt){ let live=false;
+    for(let i=0;i<max;i++){ if(life[i]<=0){ if(aal[i]!==0){aal[i]=0;asz[i]=0;live=true;} continue; }
+      live=true;
       life[i]-=dt; const k=Math.max(0,life[i]/ml[i]);
       const df=Math.max(0,1-drg[i]*dt); vel[i*3]*=df; vel[i*3+2]*=df; vel[i*3+1]=vel[i*3+1]*df-grv[i]*dt;
       pos[i*3]+=vel[i*3]*dt; pos[i*3+1]+=vel[i*3+1]*dt; pos[i*3+2]+=vel[i*3+2]*dt;
       asz[i]=s1[i]+(s0[i]-s1[i])*k;
       aal[i]=amax[i]*(fade==='puff'?Math.sin(Math.PI*(1-k)):k); }
-    g.attributes.position.needsUpdate=true; g.attributes.size.needsUpdate=true; g.attributes.alpha.needsUpdate=true; g.attributes.acolor.needsUpdate=true; }
+    if(live){ g.attributes.position.needsUpdate=true; g.attributes.size.needsUpdate=true; g.attributes.alpha.needsUpdate=true; g.attributes.acolor.needsUpdate=true; } }   // FPS: üresjáratban ne tölts fel buffert
   return { spawn, update };
 }
 const RP=makeRichPool(2600, THREE.AdditiveBlending, 'add');   // izzó: parázs, szikra, dér, buborék, mágia
@@ -1265,12 +1268,17 @@ function buildUltHud(){
   const lab=document.createElement('div'); lab.id='ultlab'; lab.textContent='VIHAR'; lab.style.cssText='position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:6;font:800 10px/1 -apple-system,\'Segoe UI\',sans-serif;letter-spacing:.16em;color:#9db4d6;pointer-events:none';
   document.body.appendChild(w); document.body.appendChild(lab); _ultBar=bar;
 }
+let _ultLab=null, _ultChip=null, _ultChipEl=null, _lastUlt=-1, _lastElHud=null;
 function updateUltHud(){
-  if(!_ultBar) return; const full=ult>=100, def=EL[currentElement]||EL.base;
+  if(!_ultBar) return; const def=EL[currentElement]||EL.base;
+  // chip rezonancia-ragyogás minden frame (idő-függő), DE a chip-keresést cache-eljük (nincs per-frame querySelector)
+  if(_elHud){ if(_ultChipEl!==currentElement){ _ultChip=_elHud.querySelector('[data-el="'+currentElement+'"]'); _ultChipEl=currentElement; }
+    if(_ultChip){ const rem=Math.max(0,1.2-(performance.now()*0.001-lastSwapT)); _ultChip.style.boxShadow = rem>0 ? ('0 0 '+(8+rem*18).toFixed(0)+'px #ffd27a') : ('0 0 14px '+def.ui+'66'); } }
+  if(ult===_lastUlt && currentElement===_lastElHud) return;   // a sáv + címke csak változáskor (nincs per-frame getElementById/írás)
+  _lastUlt=ult; _lastElHud=currentElement; const full=ult>=100;
   _ultBar.style.width=Math.min(100,ult)+'%'; _ultBar.style.background=full?'linear-gradient(90deg,#ffd27a,#fff)':def.ui;
-  const lab=document.getElementById('ultlab'); if(lab){ lab.textContent=full?'VIHAR KÉSZ — R':'VIHAR'; lab.style.color=full?'#ffd27a':'#9db4d6'; }
-  if(_elHud){ const rem=Math.max(0,1.2-(performance.now()*0.001-lastSwapT)); const chip=_elHud.querySelector('[data-el="'+currentElement+'"]');
-    if(chip) chip.style.boxShadow = rem>0 ? ('0 0 '+(8+rem*18).toFixed(0)+'px #ffd27a') : ('0 0 14px '+def.ui+'66'); }   // rezonancia = arany ragyogás az aktív chipen
+  if(!_ultLab) _ultLab=document.getElementById('ultlab');
+  if(_ultLab){ _ultLab.textContent=full?'VIHAR KÉSZ — R':'VIHAR'; _ultLab.style.color=full?'#ffd27a':'#9db4d6'; }
 }
 function fireVihar(){   // VIHAR ultimate: az aktuális elemet 3 stackkel rászórja az EGÉSZ pályára (előkészít a reakciókhoz)
   if(ult<100 || !running) return; ult=0; const el=currentElement, def=EL[el]||EL.base; const px=player.pos.x, pz=player.pos.z;
@@ -1822,6 +1830,9 @@ function makeMonster(type, scale, hp, speed){
     statusStacks:1, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, _fireSpreadT:0, resist:(T.resist||null) };   // ELEM: status + reaction fields
   if(T.build) T.build(m);
   embellishTroll(m);   // REDESIGN: gazdagabb részlet-pass (moha/zuzmó/tüskék/spórák/szőr) minden trollon
+  // FPS: a sok submesh (alaprig + díszítések) közül CSAK a sziluett vessen árnyékot -> 3-4× kevesebb árnyék-mesh
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=false; });
+  [torso, head, legs.L, legs.R, arms.L, arms.R].forEach(p=>{ if(p) p.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); });
   m.headCY=m.head.position.y*scale; m.headR=0.42*scale*(m.head.scale.x||1); // fejlövés-gömb a valós fejhez
   return m;
 }
@@ -1850,12 +1861,12 @@ class Particles{
       this.vel[i*3]=Math.sin(p)*Math.cos(a)*s; this.vel[i*3+1]=Math.cos(p)*s+spd*(up||0.3); this.vel[i*3+2]=Math.sin(p)*Math.sin(a)*s;
       const ml=rand(0.4,0.9); this.life[i]=ml; this.ml[i]=ml; this.base[i][0]=this._c.r; this.base[i][1]=this._c.g; this.base[i][2]=this._c.b; }
   }
-  update(dt){ for(let i=0;i<this.max;i++){ if(this.life[i]<=0){ this.col[i*3]=this.col[i*3+1]=this.col[i*3+2]=0; continue; }
-    this.life[i]-=dt; this.vel[i*3+1]-=this.grav*dt;
+  update(dt){ let live=false; for(let i=0;i<this.max;i++){ if(this.life[i]<=0){ if(this.col[i*3]||this.col[i*3+1]||this.col[i*3+2]){ this.col[i*3]=this.col[i*3+1]=this.col[i*3+2]=0; live=true; } continue; }
+    live=true; this.life[i]-=dt; this.vel[i*3+1]-=this.grav*dt;
     this.pos[i*3]+=this.vel[i*3]*dt; this.pos[i*3+1]+=this.vel[i*3+1]*dt; this.pos[i*3+2]+=this.vel[i*3+2]*dt;
     const k=Math.max(0,this.life[i]/this.ml[i]), b=this.base[i];
     this.col[i*3]=b[0]*k; this.col[i*3+1]=b[1]*k; this.col[i*3+2]=b[2]*k; }
-    this.points.geometry.attributes.position.needsUpdate=true; this.points.geometry.attributes.color.needsUpdate=true; }
+    if(live){ this.points.geometry.attributes.position.needsUpdate=true; this.points.geometry.attributes.color.needsUpdate=true; } }   // FPS: üresjáratban ne tölts fel buffert
 }
 const sparks=new Particles(400,0.3,9), gore=new Particles(500,0.35,12);
 let shake=0;
@@ -2291,8 +2302,8 @@ function update(dt,t){
     if(coopIsRemote(m)){ /* CO-OP: server owns this monster's movement/attacks; skip local AI (interpolated in coopTick) */ }
     else trollAI(m, dt, t); // típus-függő mozgás/támadás (belül running&&alive gate)
     // sérülés-villanás a szemeken
-    if(m.hurtFlash>0){ m.hurtFlash-=dt; const f=m.hurtFlash>0?1:0; m.eyes.forEach(e=>e.material.emissiveIntensity=2+f*4); }
-    else m.eyes.forEach(e=>e.material.emissiveIntensity=2);
+    if(m.hurtFlash>0){ m.hurtFlash-=dt; const f=m.hurtFlash>0?1:0; for(const e of m.eyes) e.material.emissiveIntensity=2+f*4; }
+    else for(const e of m.eyes) e.material.emissiveIntensity=2;
     } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update monster-loop caught — game continues; please report this]', _e); } }
   }
 
