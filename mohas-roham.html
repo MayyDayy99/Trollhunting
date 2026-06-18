@@ -860,9 +860,34 @@ const DECK_A = climbStruct(18, GROUND_Y+3.6, 9, 3.4, 0.5, 3.4, woodMat);   // te
 // B-kilátó: rámpa (8,26)->(8,19) felfelé, majd fedélzet (8,18) tető=4.1
 rampUp(8, 26, 0, -1, 8, woodMat);
 const DECK_B = climbStruct(8, GROUND_Y+3.6, 18, 3.4, 0.5, 3.4, woodMat);
-// LOMBHÍD A<->B: lapos pallók 4.1 magasságban (climb+mob); a két fedélzet közt egyenletesen
-(function(){ const ax=18,az=9, bx=8,bz=18, span=Math.hypot(bx-ax,bz-az), N=9, ux=(bx-ax)/span, uz=(bz-az)/span;
-  for(let k=1;k<=N;k++){ const t=k/(N+1), px=ax+(bx-ax)*t, pz=az+(bz-az)*t; climbStruct(px, GROUND_Y+3.6, pz, 1.9, 0.5, 1.9, woodMat); }
+// LOMBHÍD A<->B: KÖTÉL-PALLÓ FÜGGŐHÍD — belógó oldalkötelek + korlát + keresztpallók + tartókötelek + végoszlopok.
+// A járható ütközés a pallók alatt enyhén belóg (STEP-tűréssel végigsétálható), a látvány egy igazi rope-bridge.
+(function(){
+  const A={x:18,z:9}, B={x:8,z:18}; const dxb=B.x-A.x, dzb=B.z-A.z, span=Math.hypot(dxb,dzb);
+  const ux=dxb/span, uz=dzb/span, qx=-uz, qz=ux;           // hossz- és keresztirány
+  const yaw=Math.atan2(ux,uz);                              // pallók forgatása a hossztengelyre
+  const deckTop=GROUND_Y+4.1, HALF=1.05, SAG=0.42, N=13;   // járószint, fél-szélesség, közép-belógás, palló-szám
+  const yAt=(t)=> deckTop - Math.sin(Math.PI*t)*SAG;        // katenár-szerű belógás (0 a végeken, max középen)
+  const plankMat=std({color:0x835a32, roughness:.82, bumpMap:SKIN_N, bumpScale:0.015});   // meleg palló-fa
+  const ropeMat =std({color:0x5e4326, roughness:.96});      // sodrott kötél
+  const postMat =std({color:0x6e4a2c, roughness:.9});       // végoszlop
+  const tubeFromPts=(pts,r,mat)=>{ const c=new THREE.CatmullRomCurve3(pts); const t=new THREE.Mesh(new THREE.TubeGeometry(c,22,r,5,false),mat); t.castShadow=true; scene.add(t); };
+  // 1) KERESZTPALLÓK + collision (keskeny lécek réssel, a belógást követve)
+  for(let k=0;k<N;k++){ const t=(k+0.5)/N, cx=A.x+dxb*t, cz=A.z+dzb*t, cy=yAt(t);
+    const plank=mesh(new THREE.BoxGeometry(HALF*2+0.1,0.12,0.46), plankMat, cx, cy-0.06, cz); plank.rotation.y=yaw; scene.add(plank);   // léc KERESZTBEN (szélesség=kereszt, mélység=0.46 a járásirányban)
+    solidBox(cx, cz, 0.95, 0.95, {climb:true, top:cy, bottom:GROUND_Y+2.6, mob:true});   // ÁTFEDŐ négyzet-ütközők -> folytonos járófelület a diagonális hídon (nincs rés); bottom>=OVERHEAD -> a trollok ALATTA átmennek
+  }
+  // 2) OLDALKÖTELEK: deck-szintű (a pallók pereme) + korlát (deck+0.95), mindkét oldalon, belógással
+  for(let s=-1;s<=1;s+=2){ for(const lvl of [0.0,0.95]){ const pts=[];
+    for(let i=0;i<=14;i++){ const t=i/14; pts.push(new THREE.Vector3(A.x+dxb*t+qx*s*HALF, yAt(t)+lvl, A.z+dzb*t+qz*s*HALF)); }
+    tubeFromPts(pts, lvl>0?0.035:0.05, ropeMat); } }
+  // 3) FÜGGŐLEGES TARTÓKÖTELEK (korlát -> palló) néhány osztásnál
+  for(let s=-1;s<=1;s+=2){ for(let k=1;k<N;k+=2){ const t=k/N, bx=A.x+dxb*t+qx*s*HALF, bz=A.z+dzb*t+qz*s*HALF, yb=yAt(t);
+    tubeFromPts([new THREE.Vector3(bx,yb,bz), new THREE.Vector3(bx,yb+0.95,bz)], 0.025, ropeMat); } }
+  // 4) VÉGOSZLOPOK a két fedélzeten (a korlát-kötelek lehorgonyzása)
+  for(const D of [A,B]){ for(let s=-1;s<=1;s+=2){ const cx=D.x+qx*s*HALF, cz=D.z+qz*s*HALF;
+    const post=mesh(new THREE.CylinderGeometry(0.085,0.11,1.6,7), postMat, cx, deckTop+0.4, cz); scene.add(post);
+    post.add(mesh(new THREE.SphereGeometry(0.12,6,5), postMat, 0,0.85,0)); } }
 })();
 // hero-landmark testek (csak az arénán belüliek; pozíciók a buildLandmarks placement-jeiből)
 solidCyl(11.555, 7.905, 1.55, {});      // oldWell
@@ -1592,12 +1617,14 @@ const TROLL_TYPES = {
       // ÁTDOLGOZVA: opaque SZELLEM-LÉNY (csuklyás köpeny + csont-arc + szarvak); a glow csak HALO a test körül, nem maga a test -> creature, nem részecske
       const g=m.g, head=m.head;
       if(m.bodySkin){ m.bodySkin.transparent=true; m.bodySkin.opacity=0.92; m.bodySkin.emissive=new THREE.Color(0x36c5ff); m.bodySkin.emissiveIntensity=0.40; }
+      if(m.legs){ m.legs.L.visible=false; m.legs.R.visible=false; }   // LIDÉRC LEBEG -> nincs láb; helyette lefelé csúcsosodó szellem-uszály
+      const tail=mesh(new THREE.ConeGeometry(0.34,1.25,7), wispCloth, 0,0.18,0); tail.rotation.x=Math.PI; g.add(tail);   // uszály (csúcs lefelé, a talaj felé nyúlik)
       const mantle=mesh(new THREE.ConeGeometry(0.55,1.6,7), wispCloth, 0,1.3,0); g.add(mantle);   // csuklya/köpeny a sziluettért
       [-1,1].forEach(s=>{ const hem=mesh(new THREE.ConeGeometry(0.22,0.7,6), wispCloth, s*0.32,0.6,0.05); hem.rotation.z=s*0.3; g.add(hem); });   // szaggatott szegély
       head.add(mesh(new THREE.SphereGeometry(0.19,9,7), bellyMat, 0,0.02,0.06, 1,1.05,0.7));   // csont-arclap (világos akcentus a szemek köré)
       [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.05,0.5,6), wispCloth, s*0.16,0.30,-0.04); h.rotation.x=-0.5; h.rotation.z=s*0.55; head.add(h); });   // 2 görbe szellem-szarv
-      const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x7fe2ff,transparent:true,opacity:0.45,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(0.8); core.position.set(0,1.1,0); g.add(core);   // halványabb HALO
-      for(let i=0;i<2;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.30,depthWrite:false,blending:THREE.AdditiveBlending})); sp.scale.setScalar(0.4-i*0.08); sp.position.set(rand(-0.25,0.25),0.6-i*0.2,rand(-0.2,0.2)); g.add(sp); }
+      const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(1.15); core.position.set(0,1.05,0); g.add(core);   // szellem-ragyogás a test körül (lebegő lidérc-fény)
+      for(let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.35,depthWrite:false,blending:THREE.AdditiveBlending})); sp.scale.setScalar(0.42-i*0.07); sp.position.set(rand(-0.28,0.28),0.5-i*0.18,rand(-0.22,0.22)); g.add(sp); }
     } },
   grunt: { id:'grunt', resist:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:4.5, skin:0x5f9168, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.12, shoulderW:1.12, torsoW:1.05, neckLen:-0.03, tuskScale:1.0, earLen:0.34, noTusks:false,
     build(m){
@@ -2309,6 +2336,7 @@ function spawnMonster(){
   const inx=-cave.x/R_CAVE, inz=-cave.z/R_CAVE;   // befelé (központ felé) egységvektor
   m.g.position.set(cave.x + inx*2.4 + rand(-0.9,0.9), GROUND_Y, cave.z + inz*2.4 + rand(-0.9,0.9));   // a barlang szája előtt bújik elő, majd befelé indul
   monsters.push(m); aliveCount++;
+  if(id==='wisp'){ sparks.burst(m.g.position.x, GROUND_Y+1.0, m.g.position.z, 16, 0x9becff, 5, 0.7); if(!window.__wispSeen){ window.__wispSeen=1; toast('❄ LIDÉRC felbukkan — lebegő szellem!'); } }   // LIDÉRC TELEGRÁF: cián felvillanás + egyszeri figyelmeztetés
   if(Math.random()<0.5 && AUD.growl) AUD.growl();
 }
 // HP-csík + "kárnyom" szellem-csík: a fehér sáv az ELŐZŐ értéken marad, majd lassan lecsorog az újra -> a veszteség jól látszik
@@ -2559,6 +2587,15 @@ function update(dt,t){
         if(coop) coop.send({t:'splash_at', x:sx, z:sz, el:a.el, dmg:a.dmg, charge:a.charge});
         else elementalSplashAt(sx, sz, a.el, a.dmg, a.charge, false, null, 0.5); }
       continue; }
+    // SZILÁRD TEST (fa/kő/építmény): a nyíl beleáll, nem fúr át. A magas fedélzet/híd ALATT (y<bottom) elrepül.
+    { const ax=a.g.position.x, ay=a.g.position.y, az=a.g.position.z; let solidHit=false;
+      for(const s of SOLIDS){ const bot=(s.bottom!=null?s.bottom:GROUND_Y), topH=(s.top!=null?s.top:GROUND_Y+3.6);
+        if(ay<bot || ay>topH) continue;
+        if(s.kind==='cyl'){ const ddx=ax-s.x, ddz=az-s.z; if(ddx*ddx+ddz*ddz < s.r*s.r){ solidHit=true; break; } }
+        else if(ax>s.minX && ax<s.maxX && az>s.minZ && az<s.maxZ){ solidHit=true; break; } }
+      if(solidHit){ a.stuck=true; a.life=0; a.vel.set(0,0,0); sparks.burst(ax,ay,az,8,0x8b7355,3,0.4);
+        if(a.el!=='base'){ if(coop) coop.send({t:'splash_at', x:ax, z:az, el:a.el, dmg:a.dmg, charge:a.charge}); else elementalSplashAt(ax, az, a.el, a.dmg, a.charge, false, null, 0.5); }
+        continue; } }
     // szörny-találat (szakasz vs gömb, hogy ne fúrjon át)
     let hit=null, head=false, dmgMul=1;
     for(const m of monsters){ if(!m.alive) continue;
@@ -2775,6 +2812,8 @@ function trollAI(m, dt, t){
   const T=m.type, p=m.g.position;
   const dx=player.pos.x-p.x, dz=player.pos.z-p.z, d=Math.hypot(dx,dz)||0.0001;
   m.g.rotation.y=Math.atan2(dx,dz);
+  if(T.id==='wisp'){ m.hoverPh=(m.hoverPh||0)+dt*2.0; p.y=GROUND_Y+0.55+Math.sin(m.hoverPh)*0.18;   // LIDÉRC: lebeg a talaj fölött (nem jár) -> félreismerhetetlen szellem
+    if(m.elAura) m.elAura.material.opacity=0.45+Math.abs(Math.sin(t*2.5))*0.25; }
   if(T.id==='shaman'){ const pulse=0.6+Math.abs(Math.sin(t*3))*0.6;
     if(m.staffCrystal) m.staffCrystal.material.emissiveIntensity=1.0+pulse;
     if(m.auraPulse>0) m.auraPulse=Math.max(0,m.auraPulse-dt*2);
@@ -2782,7 +2821,9 @@ function trollAI(m, dt, t){
   if(m.rooted>0 || m.frozenSolid>0){ if(m.rooted>0) m.rooted-=dt; m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.5,0.1);
     if(m.atkPhase>0){ m.atkPhase=0; m.atkKind=null; m.atkHit=false; if(m.lungeBase){ p.x=m.lungeBase.x; p.z=m.lungeBase.z; m.lungeBase=null; } m.torso.rotation.set(0,0,0); m.head.rotation.x=0; m.g.scale.set(m.scale,m.scale,m.scale); }   // bénítás lengés közben -> tiszta alapra
     return; }   // bénítás VAGY teljes fagy = mozdulatlan (frozenSolid-et a tickStatus csökkenti)
-  const walkAnim=()=>{ m.walkPhase+=dt*(4+m.speed); const sw=Math.sin(m.walkPhase)*0.6;
+  const walkAnim=()=>{
+    if(T.id==='wisp'){ const s=Math.sin(m.hoverPh||0); m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.25+s*0.14,0.1); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.25-s*0.14,0.1); return; }   // LIDÉRC: nincs láb-lépés, csak lágy kar-lebegés (a p.y-t a hover állítja)
+    m.walkPhase+=dt*(4+m.speed); const sw=Math.sin(m.walkPhase)*0.6;
     m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(m.walkPhase))*0.06;
     m.arms.L.rotation.x=0.5+Math.sin(m.walkPhase)*0.3; m.arms.R.rotation.x=0.5-Math.sin(m.walkPhase)*0.3; };
   const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; const ox=p.x, oz=p.z;
