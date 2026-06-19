@@ -32,3 +32,21 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
+
+  # ---------------------------------------------------------------------------
+  #  OPT-IN Cloudflare "quick tunnel" — publikus https URL a NEM-LOKÁLIS co-ophoz.
+  #  Nem kell fiók/domain: a Cloudflare ad egy random *.trycloudflare.com címet.
+  #    Indítás:  docker compose --profile tunnel up -d
+  #    URL:      docker compose logs cloudflared    (keresd a https://...trycloudflare.com sort)
+  #    Megosztás: küldd el ezt az URL-t — bárki megnyitja, QUICK PLAY / kód, és coopozhattok.
+  #  (A net-client https-en automatikusan wss-re vált, a tunnel a WS-t is átviszi.)
+  #  Leállítás:  docker compose --profile tunnel down   (vagy stop cloudflared)
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mohas-roham-tunnel
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate --url http://mp-server:8080
+    depends_on:
+      - mp-server
+    restart: unless-stopped
