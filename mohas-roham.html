@@ -1684,6 +1684,7 @@ const monsters=[];
 /* ---- 5 troll-típus (art-direkciós újratervezés, erős sziluett-különbség) ---- */
 const TROLL_TYPES = {
   wisp: { id:'wisp', el:'ice', resist:{fire:1.0,ice:0.35,poison:0.8,lightning:1.0}, name:'Lidérc', threat:0x7fe2ff, scaleMul:0.95, hpMul:0.8, speedMul:1.2, dmgMul:0.5, speedCap:4.5,
+    rangedCd:2.4, bandMin:6.0, bandMax:18.0, castDmg0:8, auraR:3.0, auraSpd:1.25, auraDmg:1.35,   // FEJLESZTÉS: távolsági jég-lövedék + 3m erősítő aura (server-mirror: WISP_S)
     skin:0x16414f, eyeColor:0x7fe2ff, club:false, noTusks:true, earLen:0.52, deathSpin:1.4, postureLean:0.05,
     build(m){
       // ÁTDOLGOZVA: opaque SZELLEM-LÉNY (csuklyás köpeny + csont-arc + szarvak); a glow csak HALO a test körül, nem maga a test -> creature, nem részecske
@@ -1901,10 +1902,23 @@ function makeBomb(){
   return { g, vel:new THREE.Vector3(), prev:new THREE.Vector3(), life:0, active:false, dmg:12, spin:rand(2,5) };
 }
 for(let i=0;i<24;i++) ebombs.push(makeBomb());
-function spitterFire(m){
+// LIDÉRC távolsági jég-lövedék (a köpködő-bomba mintájára, saját pool)
+const wbolts=[]; const wboltMat=std({color:0x16414f,emissive:0x7fe2ff,emissiveIntensity:1.5,roughness:.4});
+function makeWbolt(){ const g=new THREE.Group(); g.add(mesh(new THREE.IcosahedronGeometry(0.16,0),wboltMat,0,0,0)); const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.8,depthWrite:false,blending:THREE.AdditiveBlending})); gl.scale.setScalar(0.7); g.add(gl); g.visible=false; scene.add(g); return {g,vel:new THREE.Vector3(),prev:new THREE.Vector3(),life:0,active:false,dmg:10,spin:rand(2,4)}; }
+for(let i=0;i<12;i++) wbolts.push(makeWbolt());
+function wispFire(m){ const b=wbolts.find(x=>!x.active)||wbolts[0]; const p=m.g.position, sx=p.x, sy=p.y+m.bodyCY*0.9, sz=p.z;
+  const dx=player.pos.x-sx, dz=player.pos.z-sz, dist=Math.hypot(dx,dz); const T=clamp(dist/10,0.6,1.8);
+  const vy=(((player.pos.y-0.4)-sy)+0.5*GRAV*T*T)/T; b.g.position.set(sx,sy,sz); b.prev.set(sx,sy,sz); b.vel.set(dx/T,vy,dz/T);
+  b.dmg=(TROLL_TYPES.wisp.castDmg0||8)+wave*0.4; b.life=0; b.active=true; b.g.visible=true; sparks.burst(sx,sy,sz,8,0x9becff,4,0.4); }
+function updateWbolts(dt){ for(const b of wbolts){ if(!b.active) continue; b.prev.copy(b.g.position); b.vel.y-=GRAV*dt; b.g.position.addScaledVector(b.vel,dt); b.g.rotation.x+=b.spin*dt; b.life+=dt; const bp=b.g.position;
+  if(player.alive && Math.hypot(bp.x-player.pos.x,bp.z-player.pos.z)<1.1 && bp.y<player.pos.y+0.2 && bp.y>player.pos.y-2.0){ b.active=false; b.g.visible=false; damagePlayer(b.dmg); EFX.flash(bp.x,bp.y,bp.z,0x9fd0ff,0.4,1.6,0.22); continue; }
+  if(bp.y<=GROUND_Y+0.1){ b.active=false; b.g.visible=false; EFX.flash(bp.x,GROUND_Y+0.2,bp.z,0x9becff,0.3,1.4,0.2); sparks.burst(bp.x,GROUND_Y+0.1,bp.z,8,0x9becff,4,0.4); continue; }
+  if(b.life>4){ b.active=false; b.g.visible=false; } } }
+function spitterFire(m, spread){
   const b=ebombs.find(x=>!x.active) || ebombs[0];
   const p=m.g.position, sx=p.x, sy=p.y+m.bodyCY*0.9, sz=p.z;
-  const tx=player.pos.x, ty=player.pos.y-0.2, tz=player.pos.z;
+  let tx=player.pos.x, ty=player.pos.y-0.2, tz=player.pos.z;
+  if(spread){ const a=Math.atan2(tz-sz,tx-sx)+spread, dd=Math.hypot(tx-sx,tz-sz); tx=sx+Math.cos(a)*dd; tz=sz+Math.sin(a)*dd; }   // FEJLESZTÉS: 2. lövedék oldalszórása
   const dx=tx-sx, dz=tz-sz, dist=Math.hypot(dx,dz);
   const T=clamp(dist/12,0.55,1.6);
   const vy=((ty-sy)+0.5*GRAV*T*T)/T, vx=dx/T, vz=dz/T;
@@ -2520,7 +2534,9 @@ function spawnSplitShards(parent){
   const px=parent.g.position.x, pz=parent.g.position.z;
   const baseSc=parent.scale*0.6, baseHp=Math.max(8,Math.round(parent.maxHp*0.22));
   const baseSp=Math.min((parent.speed/(TROLL_TYPES.brute.speedMul||0.55))*TROLL_TYPES.shard.speedMul, TROLL_TYPES.shard.speedCap);
-  for(let i=0;i<2;i++){ const ang=(i===0?0.9:-0.9)+rand(-0.2,0.2);
+  let count=(wave>10)?4:2;   // FEJLESZTÉS: 10. hullám után 4 szilánk (egyébként 2)
+  const CAP=20; const live=monsters.filter(x=>x.alive).length; if(CAP-live < count) count=Math.max(0, Math.min(count, CAP-live));   // monster-cap a perf-hez
+  for(let i=0;i<count;i++){ const ang=(i/Math.max(1,count))*Math.PI*2 + rand(-0.25,0.25);
     const s=makeMonster('shard', baseSc, baseHp, baseSp); s.noSplit=true;
     s.g.position.set(px+Math.cos(ang)*0.6, GROUND_Y, pz+Math.sin(ang)*0.6);
     s.spawnArc=0.0001; s.spawnFrom={x:px,z:pz}; s.spawnDir={x:Math.cos(ang),z:Math.sin(ang)}; s.hurtFlash=0.2;
@@ -2750,10 +2766,11 @@ function update(dt,t){
     if(a.life>6){ a.active=false; a.g.visible=false; }
     } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update arrow-loop caught — game continues; please report this]', _e); } }
   }
-  if(running) updateBombs(dt); // köpködő-bombák (szünetben befagynak)
+  if(running) updateBombs(dt); if(running) updateWbolts(dt);   // köpködő-bombák + LIDÉRC jég-lövedékek (szünetben befagynak)
   if(running) updateAbolts(dt); updateWither(dt);   // SÁMÁN: arkán lövedékek + gyengítés-csillapodás (a nyaláb-elrejtés mindig fusson)
 
   /* --- szörnyek --- */
+  if(running) applyWispAuras();   // LIDÉRC-aura frissítése a monster-loop ELŐTT (hogy a trollAI friss buffot lásson)
   aliveCount=0;
   for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i]; try {
     if(m.dying>0){ m.dying+=dt; const k=m.dying; const g=m.g, p=g.position; if(m.hpbar&&m.hpbar.visible) m.hpbar.visible=false;
@@ -2936,6 +2953,14 @@ const ATK = {
     else { const r=easeOutCubic(remap(u,0.50,1)); m.torso.rotation.x=lerp(0.55,0,r); m.head.rotation.x=lerp(0.45,0,r); m.arms.L.rotation.x=m.arms.R.rotation.x=lerp(1.2,0.5,r); m.g.scale.set(m.scale,m.scale,m.scale); lunge(0.45*(1-r)); }
   },
 };
+// LIDÉRC-AURA (SP): minden frame újraszámolva — a közeli (3m) trollokat felerősíti + cián gyűrűvel jelöli
+function applyWispAuras(){
+  for(const m of monsters){ if(m.wispBuff){ m.wispBuff=0; if(m._buffRing) m._buffRing.visible=false; } }
+  for(const w of monsters){ if(!(w.alive && w.dying<=0 && w.typeId==='wisp' && !coopIsRemote(w))) continue; const wp=w.g.position; const aR=(w.type.auraR||3.0);
+    for(const m of monsters){ if(m===w || !m.alive || m.dying>0 || m.typeId==='wisp' || coopIsRemote(m)) continue;
+      if(Math.hypot(m.g.position.x-wp.x, m.g.position.z-wp.z) < aR){ m.wispBuff=1;
+        if(!m._buffRing){ m._buffRing=mesh(new THREE.TorusGeometry(0.7,0.06,6,16), new THREE.MeshBasicMaterial({color:0x9becff,transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}), 0,0.1,0); m._buffRing.rotation.x=Math.PI/2; m.g.add(m._buffRing); }
+        m._buffRing.visible=true; m._buffRing.material.opacity=0.4+Math.abs(Math.sin(performance.now()*0.005))*0.3; } } } }
 function trollAI(m, dt, t){
   if(!(running && player.alive)) return;
   const T=m.type, p=m.g.position;
@@ -2976,14 +3001,15 @@ function trollAI(m, dt, t){
     case 'scout': {
       m.dashCd-=dt;
       if(m.dashTimer>0){ m.dashTimer-=dt; }
-      else if(d>2.2 && d<10 && m.dashCd<=0){ m.dashTimer=0.35; m.dashCd=rand(1.4,2.4); if(AUD.growl)AUD.growl(); }
-      if(d>1.7 && m.atkPhase<=0){ moveToward(m.dashTimer>0?2.6:1.0); walkAnim(); }
-      else meleeAttack('scoutClaw',0.42,()=>{ m.atkCd=0.7; damagePlayer((10+wave*0.6)*m.dmgMul); });
+      else if(d>2.2 && d<12 && m.dashCd<=0){ m.dashTimer=0.4; m.dashCd=rand(1.2,2.0); if(AUD.growl)AUD.growl(); }
+      const rushMul = 1.0 + Math.min(0.8, wave*0.04);   // FEJLESZTÉS: hullámmal gyorsuló roham (cap +80%)
+      if(d>1.5 && m.atkPhase<=0){ moveToward((m.dashTimer>0?2.8:1.0)*rushMul*(m.wispBuff?(TROLL_TYPES.wisp.auraSpd||1.25):1)); walkAnim(); }
+      else meleeAttack('scoutClaw',0.38,()=>{ m.atkCd=0.55; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });   // gyorsabb harapás
       break;
     }
     case 'brute': {
       if(d>2.3 && m.atkPhase<=0){ moveToward(1.0); walkAnim(); }
-      else meleeAttack('bruteSlam',1.5,()=>{ m.atkCd=2.2; damagePlayer((10+wave*0.6)*m.dmgMul);
+      else meleeAttack('bruteSlam',1.5,()=>{ m.atkCd=2.2; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1));
         const kb=3.2; player.pos.x+=dx/d*kb; player.pos.z+=dz/d*kb;
         { const r=resolveMove(player.pos.x, player.pos.z, player.feet); player.pos.x=r.x; player.pos.z=r.z; }
         clampToBoundary();
@@ -3021,27 +3047,27 @@ function trollAI(m, dt, t){
       else if(d>T.bandMax){ moveToward(0.8); walkAnim(); }
       else { m.arms.L.rotation.x=0.3; m.arms.R.rotation.x=0.3; }
       m.rangedTimer-=dt;
-      if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.6; spitterFire(m); }
+      if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.6; spitterFire(m); spitterFire(m, rand(0.10,0.22)*(Math.random()<0.5?1:-1)); }   // FEJLESZTÉS: 2 lövedék
       break;
     }
     case 'grunt': {
       if(d>2.0 && m.atkPhase<=0){ moveToward(1.0); walkAnim(); }
-      else meleeAttack('gruntSmash',1.05,()=>{ m.atkCd=1.1; damagePlayer((10+wave*0.6)*m.dmgMul); });
+      else meleeAttack('gruntSmash',1.05,()=>{ m.atkCd=1.1; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });
       break;
     }
     case 'shard': {
       if(d>1.8 && m.atkPhase<=0){ moveToward(1.0); walkAnim(); }
-      else meleeAttack('shardJab',0.30,()=>{ m.atkCd=0.8; damagePlayer((10+wave*0.6)*m.dmgMul); });
+      else meleeAttack('shardJab',0.30,()=>{ m.atkCd=0.8; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });
       break;
     }
-    case 'wisp': {
-      if(d>1.7 && m.atkPhase<=0){ moveToward(1.0); walkAnim(); }
-      else meleeAttack('wispBite',0.45,()=>{ m.atkCd=0.9; damagePlayer((10+wave*0.6)*m.dmgMul); });
-      break;
-    }
+    case 'wisp': { m.rangedTimer=(m.rangedTimer==null?T.rangedCd*rand(0.5,1.0):m.rangedTimer-dt);   // FEJLESZTÉS: távolról jég-lövedék, közelről harap; aura-szorzók
+      if(d<2.2){ meleeAttack('wispBite',0.45,()=>{ m.atkCd=0.9; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }); }
+      else { if(d>T.bandMax){ moveToward(0.9*(m.wispBuff?(TROLL_TYPES.wisp.auraSpd||1.25):1)); } else if(d<T.bandMin){ moveToward(-0.7); } walkAnim();
+        if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.7; wispFire(m); } }
+      break; }
     default: {
       if(d>1.9 && m.atkPhase<=0){ moveToward(1.0); walkAnim(); }
-      else meleeAttack('gruntSmash',1.0,()=>{ m.atkCd=1.3; damagePlayer((10+wave*0.6)*m.dmgMul); });
+      else meleeAttack('gruntSmash',1.0,()=>{ m.atkCd=1.3; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });
     }
   }
 }
@@ -3315,6 +3341,9 @@ function coopHandleFx(fx){ if(!Array.isArray(fx)) return;
     else if(e.k==='cast' && e.from && e.to){ EFX.bolt(e.from.x,e.from.y||GROUND_Y+2,e.from.z, e.to.x,e.to.y||GROUND_Y+1.3,e.to.z, 0x6fe0ff,0.16,0.3); EFX.flash(e.from.x,e.from.y||GROUND_Y+2,e.from.z,0x6fe0ff,0.4,1.6,0.25); }   // SÁMÁN arkán lövedék (a wither/HP a szerveré)
     else if(e.k==='beam' && e.to){ let ax,ay,az; const sm=coopRemoteById.get(e.id); if(sm&&sm.staffCrystal){ const c=new THREE.Vector3(); sm.staffCrystal.getWorldPosition(c); ax=c.x;ay=c.y;az=c.z; } else if(e.from){ ax=e.from.x;ay=GROUND_Y+2.0;az=e.from.z; } else { ax=e.to.x;ay=GROUND_Y+2;az=e.to.z; } drawBeam(ax,ay,az, e.to.x,(e.to.y!=null?e.to.y:GROUND_Y+1.3),e.to.z, performance.now()*0.001); }   // SÁMÁN gyengítő-nyaláb (vizuál; a HP/wither a szerver state-ből jön)
     else if(e.k==='kill'){ const m=coopRemoteById.get(e.id); if(m){ if(e.el) m.statusEl=e.el; coopKillRemote(e.id, false); } }   // elem-igazított halál a távoli trollon
+    else if(e.k==='wbolt' && e.from && e.to){ EFX.bolt(e.from.x,e.from.y,e.from.z, e.to.x,e.to.y,e.to.z, 0x9becff,0.16,0.35); EFX.flash(e.from.x,e.from.y,e.from.z,0x9becff,0.4,1.6,0.25); EFX.flash(e.to.x,e.to.y,e.to.z,0x9fd0ff,0.5,1.8,0.3); }   // LIDÉRC jég-lövedék (HP a szerveré)
+    else if(e.k==='wispaura'){ EFX.ring(e.x,GROUND_Y+0.06,e.z,0x9becff,0.25,(e.r||3)*2,0.3,0.4); }   // LIDÉRC erősítő-zóna pulzus
+    else if(e.k==='sbomb' && e.from && e.to){ EFX.bolt(e.from.x,e.from.y,e.from.z, e.to.x,e.to.y,e.to.z, 0x9acb3a,0.14,0.3); gore.burst(e.to.x,GROUND_Y+0.1,e.to.z,10,0x6b8f3a,4,0.4); }   // köpködő-bomba
   }
 }
 

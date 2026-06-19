@@ -160,6 +160,9 @@ const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, sp
 function rollMonsterElS(type){ if(type==='wisp') return 'ice'; if(type==='shard'||type==='shaman') return null; return Math.random()<0.35 ? null : ['fire','ice','poison','lightning'][(Math.random()*4)|0]; }
 // SÁMÁN képesség-konfig (a kliens TROLL_TYPES.shaman számaival EGYEZŐ): távoli arkán lövedék + közeli gyengítő-nyaláb
 const SHAMAN_S = { castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:8.0, beamDrop:8.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };
+// FEJLESZTÉS (co-op mirror): a kliens TROLL_TYPES.wisp / .spitter számaival KELL egyezniük
+const WISP_S    = { bandMin:6.0, bandMax:18.0, castWind:0.6, castCd:2.4, castDmg0:8, auraR:3.0, auraSpd:1.25, auraDmg:1.35 };
+const SPITTER_S = { bandMin:8.0, bandMax:17.0, rangedCd:2.6, dmg0:10 };
 
 // =============================================================================
 //  STATIC FILE HANDLER  (hand-rolled — keeps deps to just `ws`)
@@ -744,7 +747,11 @@ function spawnShardAt(room, parent, ang){
     statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999 };
   m.resist=RESIST_S[m.type]||null; m.el=INNATE_EL[m.type]||null; room.monsters.push(m); return m;
 }
-function splitBruteS(room, m){ if(m.type!=='brute' || m.noSplit) return; spawnShardAt(room,m,0.9); spawnShardAt(room,m,-0.9); elFx(room,{k:'split',x:m.pos.x,z:m.pos.z}); }   // a szilánkok a monsterView-n át renderelődnek
+function splitBruteS(room, m){ if(m.type!=='brute' || m.noSplit) return;   // FEJLESZTÉS: 10. hullám után 4 szilánk (egyébként 2), CAP=20
+  let count=(room.wave>10)?4:2;
+  const CAP=20, live=room.monsters.filter(x=>x.hp>0).length; if(CAP-live < count) count=Math.max(0, Math.min(count, CAP-live));
+  for(let i=0;i<count;i++){ const ang=(i/Math.max(1,count))*Math.PI*2 + (Math.random()*0.5-0.25); spawnShardAt(room, m, ang); }
+  elFx(room,{k:'split',x:m.pos.x,z:m.pos.z}); }   // a szilánkok a monsterView-n át renderelődnek
 function reapDead(room){
   if(!room.monsters.some(m=>m.hp<=0)) return;
   const dead=room.monsters.filter(m=>m.hp<=0); room.monsters=room.monsters.filter(m=>m.hp>0);
@@ -804,6 +811,11 @@ function stepWaves(room, dt) {
     }
   }
 
+  // FEJLESZTÉS: LIDÉRC-aura újraszámolás (co-op authority) — minden tick elejére, mielőtt a mozgás/melee használja
+  for (const m of room.monsters) m.wispBuff = 0;
+  for (const w of room.monsters) { if (w.type!=='wisp' || w.hp<=0) continue;
+    for (const m of room.monsters) { if (m===w || m.hp<=0 || m.type==='wisp') continue;
+      if (Math.hypot(m.pos.x-w.pos.x, m.pos.z-w.pos.z) < WISP_S.auraR) m.wispBuff = 1; } }
   // ---- Status tick (DoT/slow/freeze) + movement + melee (co-op aggro) -----
   for (const m of room.monsters) {
     if (m.meleeCd > 0) m.meleeCd -= dt;
@@ -846,15 +858,49 @@ function stepWaves(room, dt) {
         for(const o of room.monsters){ if(o===m||o.hp<=0) continue; if(Math.hypot(o.pos.x-m.pos.x,o.pos.z-m.pos.z)<SHAMAN_S.healRadius && o.hp<o.maxHp) o.hp=Math.min(o.maxHp,o.hp+SHAMAN_S.healAmt); } }
       continue;   // a sámán NEM megy a generikus walk/melee ágra
     }
+    if (m.type === 'wisp') {   // FEJLESZTÉS: távolsági jég-lövedék + 3m erősítő aura (co-op authority)
+      const sp = m.speed*(m.slowMul||1)*(m.wispBuff?WISP_S.auraSpd:1)*dt;
+      if (dist > WISP_S.bandMax) { m.pos.x += (dx/dist)*sp; m.pos.z += (dz/dist)*sp; }
+      else if (dist > MELEE_RANGE && dist < WISP_S.bandMin) { m.pos.x -= (dx/dist)*sp*0.7; m.pos.z -= (dz/dist)*sp*0.7; }
+      m.auraFxAcc=(m.auraFxAcc||0)+dt; if(m.auraFxAcc>=0.33){ m.auraFxAcc=0; elFx(room,{k:'wispaura', id:m.id, x:m.pos.x, z:m.pos.z, r:WISP_S.auraR}); }   // ~3Hz throttle (a 22-slot ring pool ne fulladjon ki)
+      if (dist > MELEE_RANGE) {
+        m.castTimer = (m.castTimer||0) - dt;
+        if (m.casting>0) { m.casting-=dt; if(m.casting<=0){ const dmg=WISP_S.castDmg0+room.wave*0.4; target.hp=clamp(target.hp-dmg,0,999);
+          elFx(room,{k:'wbolt', id:m.id, from:{x:m.pos.x,y:GROUND_Y+1.2,z:m.pos.z}, to:{x:target.pos.x,y:target.pos.y-0.4,z:target.pos.z}});
+          if(target.hp<=0&&target.alive){ target.alive=false; broadcast(room,{t:'player_down',id:target.id}); } m.castTimer=WISP_S.castCd*(0.85+Math.random()*0.3); } }
+        else if (m.castTimer<=0 && dist<=WISP_S.bandMax) m.casting=WISP_S.castWind;
+        continue;
+      }
+      // dist<=MELEE_RANGE -> beleesik a generikus melee-be (nincs continue)
+    }
+    if (m.type === 'spitter') {   // FEJLESZTÉS: 2 lövedék/cadencia, landolás-közelség alapú sebzés (co-op authority)
+      const sp = m.speed*(m.slowMul||1)*dt;
+      if (dist < SPITTER_S.bandMin) { m.pos.x -= (dx/dist)*sp*0.9; m.pos.z -= (dz/dist)*sp*0.9; }
+      else if (dist > SPITTER_S.bandMax) { m.pos.x += (dx/dist)*sp*0.8; m.pos.z += (dz/dist)*sp*0.8; }
+      m.castTimer = (m.castTimer||0) - dt;
+      if (m.castTimer<=0 && dist>=SPITTER_S.bandMin-1 && dist<=SPITTER_S.bandMax+3) {
+        m.castTimer = SPITTER_S.rangedCd*(0.85+Math.random()*0.3);
+        const dmg = SPITTER_S.dmg0 + room.wave*0.5;
+        for(let k=0;k<2;k++){ const spread=(k===0?0:(Math.random()<0.5?1:-1)*(0.10+Math.random()*0.12));
+          const a=Math.atan2(target.pos.z-m.pos.z, target.pos.x-m.pos.x)+spread, dd=Math.hypot(target.pos.x-m.pos.x, target.pos.z-m.pos.z);
+          const lx=m.pos.x+Math.cos(a)*dd, lz=m.pos.z+Math.sin(a)*dd;
+          const land=nearestLivingPlayer(room, lx, lz);
+          if(land && Math.hypot(land.pos.x-lx, land.pos.z-lz) < 1.2){ land.hp=clamp(land.hp-dmg,0,999); if(land.hp<=0&&land.alive){ land.alive=false; broadcast(room,{t:'player_down',id:land.id}); } }
+          elFx(room,{k:'sbomb', id:m.id, from:{x:m.pos.x,y:GROUND_Y+1.5,z:m.pos.z}, to:{x:lx,y:GROUND_Y+0.2,z:lz}}); }
+      }
+      continue;
+    }
+    const rushMul = (m.type==='scout') ? (1.0 + Math.min(0.8, room.wave*0.04)) : 1;   // FEJLESZTÉS: scout hullámmal gyorsuló roham (cap +80%)
+    const buffSpd = m.wispBuff ? WISP_S.auraSpd : 1;                                   // FEJLESZTÉS: LIDÉRC-aura sebesség
     if (dist > MELEE_RANGE) {
-      // Walk toward the target on the ground plane (lassítás-szorzóval).
-      const step = Math.min(m.speed * (m.slowMul||1) * dt, dist);
+      // Walk toward the target on the ground plane (lassítás + roham + aura-szorzóval).
+      const step = Math.min(m.speed * (m.slowMul||1) * buffSpd * rushMul * dt, dist);
       m.pos.x += (dx / dist) * step;
       m.pos.z += (dz / dist) * step;
     } else if (m.meleeCd <= 0) {
       // In range: bite. Server owns melee damage to players.
-      m.meleeCd = MELEE_CD;
-      target.hp = clamp(target.hp - MELEE_DMG, 0, 999);
+      m.meleeCd = (m.type==='scout') ? 0.6 : MELEE_CD;   // FEJLESZTÉS: scout gyorsabb harapás
+      target.hp = clamp(target.hp - MELEE_DMG*(m.wispBuff?WISP_S.auraDmg:1), 0, 999);   // FEJLESZTÉS: LIDÉRC-aura sebzés (CSAK a generikus melee-ben — nincs dupla)
       if (target.hp <= 0 && target.alive) {
         target.alive = false;
         broadcast(room, { t: 'player_down', id: target.id });
