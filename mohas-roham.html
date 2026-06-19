@@ -90,6 +90,10 @@
   .card button{font:800 22px/1 inherit;letter-spacing:.05em;color:#061018;padding:16px 40px;border:none;border-radius:14px;
     cursor:pointer;background:linear-gradient(90deg,#5fe0ff,#36c5ff);box-shadow:0 8px 28px rgba(54,197,255,.5);transition:transform .1s, filter .15s;}
   .card button:hover{filter:brightness(1.1);} .card button:active{transform:scale(.95);}
+  #coopWaitList li{display:flex;align-items:center;gap:8px;padding:3px 0;font:700 15px/1.3 inherit;color:#c3d4f0;}
+  #coopWaitList li .pd{width:8px;height:8px;border-radius:50%;background:#5fe0ff;flex:none;box-shadow:0 0 6px rgba(95,224,255,.7);}
+  #coopWaitList li.me{color:#ffe9c0;} #coopWaitList li.me .pd{background:#ffd27a;}
+  #coopWaitList li .tag{margin-left:auto;font:700 10px/1 inherit;letter-spacing:.1em;color:#8fa6c9;text-transform:uppercase;}
   /* ===== FEJLESZTÉS-BOLT (Kovácsműhely) ===== */
   /* lágy felúszás (a display:none->flex újraindítja a CSS-animációt): a háttér beúszik, a kártya alulról emelkedik */
   #shop:not(.hide){ animation: shopFade .34s ease-out both; }
@@ -212,6 +216,18 @@
   </div>
 </div>
 
+<div id="coopWait" class="screen hide">
+  <div class="card">
+    <div class="eyebrow">CO-OP · VÁRÓTEREM</div>
+    <h1>VÁRÓTEREM</h1>
+    <p>Szoba: <b id="coopWaitCode" style="color:#7fe2ff;letter-spacing:.18em">----</b></p>
+    <div class="keys">A csapat együtt indul. Bárki megnyomhatja a STARTOT.</div>
+    <div class="brief-h" style="text-align:left">Csapat (<span id="coopWaitCount">1</span>)</div>
+    <ul id="coopWaitList" style="list-style:none;margin:6px 0 18px;padding:0;text-align:left;display:inline-block;"></ul>
+    <button id="coopStartBtn">START ▶</button>
+    <div class="brief-hint" style="margin-top:14px">mindenki egyszerre indul</div>
+  </div>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <!-- CO-OP: expose connectCoop to the (non-module) game IIFE without changing single-player. net-client.js never runs unless the game opts in via ?room. -->
 <script type="module">
@@ -3140,6 +3156,32 @@ var coopPeers = new Map();                        // peerId -> { g, buf, has, na
 var coopRemoteById = new Map();                   // server monster netId -> local monster obj (also in monsters[])
 var coopWaveNum = 0;                              // last server wave (for HUD)
 var coopPeerArrows = [];                          // tiny tracer pool for peer shots
+// ===== VÁRÓSZOBA (szinkron start): bárki nyomhat START-ot, mindenki egyszerre indul =====
+var coopWaitEl=null, coopWaitListEl=null, coopWaitCountEl=null, coopWaitCodeEl=null, coopWaitWired=false;
+var coopWaitRoster=[];        // legutóbbi szerver-roster [{id,name,playing}]
+var coopInWaitRoom=false;     // épp a várószoba-overlay látszik?
+function coopWireWait(){ if(coopWaitWired) return; coopWaitWired=true;
+  coopWaitEl=document.getElementById('coopWait'); coopWaitListEl=document.getElementById('coopWaitList');
+  coopWaitCountEl=document.getElementById('coopWaitCount'); coopWaitCodeEl=document.getElementById('coopWaitCode');
+  const b=document.getElementById('coopStartBtn');
+  if(b) b.addEventListener('click', function(){ if(coop){ coop.send({t:'start'}); b.disabled=true; b.textContent='INDÍTÁS…'; } });   // bárki indíthat; a szerver szinkronizál (NINCS helyi beginPlay)
+}
+function coopRenderWait(){ if(!coopWaitListEl) return;
+  if(coopWaitCodeEl) coopWaitCodeEl.textContent=((coop&&coop.room)||_coopRoom||'----');
+  if(coopWaitCountEl) coopWaitCountEl.textContent=String(coopWaitRoster.length||1);
+  const frag=document.createDocumentFragment();
+  for(const p of coopWaitRoster){ const li=document.createElement('li'); if(p.id===coopMyId) li.className='me';
+    const dot=document.createElement('span'); dot.className='pd'; li.appendChild(dot);
+    li.appendChild(document.createTextNode(p.id===coopMyId?'Te':(p.name||'Archer')));
+    if(p.playing){ const t=document.createElement('span'); t.className='tag'; t.textContent='játszik'; li.appendChild(t); }
+    frag.appendChild(li); }
+  coopWaitListEl.replaceChildren(frag);
+}
+function coopShowWait(){ coopWireWait(); coopInWaitRoom=true; coopRenderWait();
+  startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
+  if(coopWaitEl){ const b=document.getElementById('coopStartBtn'); if(b){ b.disabled=false; b.textContent='START ▶'; } coopWaitEl.classList.remove('hide'); }
+  if(document.pointerLockElement) document.exitPointerLock(); }
+function coopHideWait(){ coopInWaitRoom=false; if(coopWaitEl) coopWaitEl.classList.add('hide'); }
 const _coopParams = new URLSearchParams(location.search);
 const _coopRoom   = _coopParams.get('room');      // null => single-player
 
@@ -3546,10 +3588,14 @@ function coopConnect(){
   if(!_coopRoom || coop) return;
   const connectCoop = window.__coopConnect;
   if(!connectCoop){ console.warn('[coop] connectCoop unavailable; staying single-player'); return; }
+  startScreen.classList.add('hide');   // FEJLESZTÉS: co-opban a várószoba veszi át a #start helyét (a welcome-ig se villanjon a sima Start)
   coop = connectCoop({
     room: _coopRoom==='NEW' ? undefined : _coopRoom,
     name: 'Archer',
-    onWelcome: (info)=>{ const reconnected = coopWelcomed; coopWelcomed=true; coopMyId=info.id; coopHost=info.host||coopHost; coopResync(info); if(typeof info.wave==='number') coopWaveNum=info.wave; coopSetStatus(true); toast((reconnected?'CO-OP újracsatlakozva: ':'CO-OP: ')+info.room); }, // v2: pid -> stabil id, ezért coopWelcomed-del detektálunk
+    onWelcome: (info)=>{ const reconnected = coopWelcomed; coopWelcomed=true; coopMyId=info.id; coopHost=info.host||coopHost; coopResync(info); if(typeof info.wave==='number') coopWaveNum=info.wave; coopSetStatus(true); toast((reconnected?'CO-OP újracsatlakozva: ':'CO-OP: ')+info.room);
+      if(Array.isArray(info.players)) coopWaitRoster=info.players.map(p=>({id:p.id,name:p.name,playing:!!p.playing}));
+      if(!coopStarted && !running){ if(info.phase==='playing'){ coopHideWait(); beginPlay(); } else { coopShowWait(); } }   // FÁZIS-KAPU: 'lobby'->várószoba; 'playing'->late-join EGYBŐL beginPlay (különben üres aréna/láthatatlan troll)
+    }, // v2: pid -> stabil id, ezért coopWelcomed-del detektálunk
     onState: (s)=>{
       coopApplyHud(s);
       if(Array.isArray(s.players)) for(const pv of s.players){
@@ -3578,6 +3624,10 @@ function coopConnect(){
     onMonsterFx:  (fx)=>{ coopHandleFx(fx); },   // ELEM: szerver reakció/lánc/zóna/elemi-halál FX
     onSpawnWave:  (w)=>{ if(typeof w.wave==='number'){ coopWaveNum=w.wave; wave=w.wave; if(waveN) waveN.textContent='HULLÁM '+w.wave; AUD.wave(); toast('HULLÁM '+w.wave); } },
     onPlayerDown: (id)=>{ if(id===coopMyId && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }, // FIX: szerver-vezérelt elesés
+    onRoomState: (rs)=>{ if(Array.isArray(rs.players)) coopWaitRoster=rs.players.map(p=>({id:p.id,name:p.name,playing:!!p.playing}));
+      if(coopInWaitRoom) coopRenderWait();
+      if(rs.phase==='lobby' && !running){ coopStarted=false; coopDowned=false; coopShowWait(); } },   // futam vége (mind meghalt) -> vissza a várószobába, újra-STARTolható
+    onRoomStart: ()=>{ coopHideWait(); beginPlay(); },   // SZINKRON 'go': minden várakozó egyszerre kezd (beginPlay guard-olt -> egyszer fut)
     onOpen:       ()=>{ /* socket up; "connected" is confirmed on welcome (re-join in flight) */ },
     onClose:      ()=>{ coopSetStatus(false); /* net-client auto-reconnects; welcome re-greens the dot */ },
   });
@@ -3607,7 +3657,9 @@ function resetGame(){
   if(coop) coopOnReset(); // FIX: co-op könyvelés ürítése + revive új játéknál
 }
 function beginPlay(){
-  AUD.unlock(); resetGame(); ult=0; running=true; coopStarted=true;
+  if(coopActive() && running) return;                                             // idempotens: welcome+room_start egy frame-ben ne indítson kétszer (halál utáni restart OK, mert running=false)
+  if(coopActive() && coopInWaitRoom){ if(coop) coop.send({t:'start'}); return; }   // várószobás manuális Start -> a SZERVER szinkronizál mindenkit (nem helyi indítás)
+  AUD.unlock(); resetGame(); ult=0; running=true; coopStarted=true; coopHideWait();
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
   if(!window.__elHintShown){ window.__elHintShown=true; setTimeout(()=>{ if(running) toast('1–5: VÁLTS ELEMI NYILAT — TŰZ · JÉG · MÉREG · VILLÁM'); }, 1900); }  // felfedezhetőség: az elemi FX csak 2–5 nyíllal látszik

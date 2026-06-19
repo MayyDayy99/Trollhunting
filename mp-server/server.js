@@ -298,6 +298,7 @@ function createRoom(code, max) {
     spawnTimer: 0,    // seconds until the next queued monster appears
     waveTimer: 0,     // intermission countdown between cleared waves
     intermission: false,
+    phase: 'lobby',   // FEJLESZTÉS: 'lobby' (pre-game várószoba) | 'playing' (szinkron futam él)
   };
   rooms.set(code, room);
   log(`room created: ${code} (max ${room.max})`);
@@ -313,6 +314,10 @@ function destroyRoom(room) {
 function playerView(p) {
   return { id: p.id, name: p.name, pos: p.pos, yaw: p.yaw, pitch: p.pitch, hp: p.hp, alive: p.alive, witherT: p.witherT||0 };
 }
+// FEJLESZTÉS: várószoba-roster + fázis (a kliens overlay rajzolja); broadcast join/leave/start/idle-kor
+function roomStateMsg(room){ return { t:'room_state', room:room.code, phase:room.phase, max:room.max, wave:room.wave,
+  players:[...room.players.values()].map(p=>({ id:p.id, name:p.name, playing:!!p.playing })) }; }
+function broadcastRoomState(room){ broadcast(room, roomStateMsg(room)); }
 
 /** Send a JSON message to one socket (guarded against dead sockets). */
 function send(ws, obj) {
@@ -453,11 +458,24 @@ function handleMessage(ws, msg) {
     }
 
     // ---- RESPAWN: client clicked Start/Restart -> become an ACTIVE player (server owns liveness) ----
+    case 'start': {
+      // SZINKRON START: a várószobában BÁRKI elindíthatja -> mindenki egyszerre élesedik. Guard ELŐL = idempotens (két START egy tick-ben / mid-run nyomás = no-op, nem törli a hullámot).
+      if (room.phase === 'playing') break;
+      room.phase = 'playing';
+      for (const p of room.players.values()) { p.playing = true; p.hp = 100; p.alive = true; p.witherT = 0; }
+      room.wave = 0; room.monsters = []; room.waveToSpawn = 0; room.spawnTimer = 0; room.intermission = false; room.waveTimer = 0; room.zones = []; room.score = 0;
+      startWave(room, 1);                                            // wave=1 + spawn_wave broadcast
+      broadcast(room, { t: 'room_start', room: room.code, wave: 1 });   // a szinkron 'go' -> minden kliens beginPlay()
+      broadcastRoomState(room);
+      log(`room ${room.code}: SYNC START by ${player.name} -> ${room.players.size} players`);
+      break;
+    }
+
     case 'respawn': {
       const othersActive = [...room.players.values()].some(p => p !== player && p.playing && p.alive && p.hp > 0);
-      player.playing = true; player.hp = 100; player.alive = true;
-      // Starting/restarting while nobody else is mid-game => fresh session from wave 1.
-      if (!othersActive) { room.wave = 0; room.monsters = []; room.waveToSpawn = 0; room.spawnTimer = 0; room.intermission = false; room.waveTimer = 0; }
+      player.playing = true; player.hp = 100; player.alive = true; player.witherT = 0;
+      // Starting/restarting while nobody else is mid-game => fresh session from wave 1. (NEM wipe, ha a szoba 'playing' -> nem törli a friss START hullámát)
+      if (!othersActive && room.phase !== 'playing') { room.wave = 0; room.monsters = []; room.waveToSpawn = 0; room.spawnTimer = 0; room.intermission = false; room.waveTimer = 0; }
       break;
     }
 
@@ -581,9 +599,11 @@ function handleJoin(ws, msg) {
     wave: room.wave,
     score: room.score,
     max: room.max,
+    phase: room.phase,     // FEJLESZTÉS: 'lobby' -> a kliens várószobát mutat; 'playing' -> late-join egyből a futó hullámba
     tickHz: TICK_HZ,
     authority: 'server-coop',
   });
+  broadcastRoomState(room);   // FEJLESZTÉS: friss roster mindenkinek (új join ÉS reclaim után — a rebind itt már megtörtént)
 }
 
 function handleLeave(ws) {
@@ -598,6 +618,7 @@ function handleLeave(ws) {
   broadcast(room, { t: 'peer_left', id: player.id }, null);
 
   if (room.players.size === 0) destroyRoom(room);
+  else broadcastRoomState(room);   // FEJLESZTÉS: várószoba-roster frissítése a kilépő után
 }
 
 // =============================================================================
@@ -792,21 +813,17 @@ function stepWaves(room, dt) {
   const activeCount = [...room.players.values()].filter(p => p.playing && p.alive && p.hp > 0).length;
   if (activeCount === 0) {
     if (room.wave !== 0 || room.monsters.length) { room.wave = 0; room.monsters = []; room.waveToSpawn = 0; room.spawnTimer = 0; room.intermission = false; room.waveTimer = 0; }
+    if (room.phase !== 'lobby') { room.phase = 'lobby'; broadcastRoomState(room); }   // FEJLESZTÉS: futam vége (mind meghalt/kilépett) -> vissza várószobába, a köv. START újraindít
     return;
   }
 
-  // ---- Wave lifecycle ----------------------------------------------------
-  if (room.wave === 0) {
-    // Kick off wave 1 as soon as the room has a player.
-    startWave(room, 1);
-  } else if (room.waveToSpawn === 0 && room.monsters.length === 0) {
-    // Wave cleared: brief intermission, then advance to the next wave.
-    if (!room.intermission) {
-      room.intermission = true;
-      room.waveTimer = INTERMISSION;
-    } else {
-      room.waveTimer -= dt;
-      if (room.waveTimer <= 0) startWave(room, room.wave + 1);
+  // ---- Wave lifecycle (CSAK 'playing' fázisban — 'lobby'-ban nincs auto-wave a szinkron START előtt) ----
+  if (room.phase === 'playing') {
+    if (room.wave === 0) {
+      startWave(room, 1);   // safety net: START flippelt, de a wave még nem indult
+    } else if (room.waveToSpawn === 0 && room.monsters.length === 0) {
+      if (!room.intermission) { room.intermission = true; room.waveTimer = INTERMISSION; }
+      else { room.waveTimer -= dt; if (room.waveTimer <= 0) startWave(room, room.wave + 1); }
     }
   }
 
@@ -991,6 +1008,14 @@ const server = http.createServer((req, res) => {
     for (const room of rooms.values()) { const n = room.players.size; if (n > 0 && n < room.max && (!best || n > best.players.size)) best = room; }
     const code = best ? best.code : makeRoomCode();
     res.end(JSON.stringify({ room: code, host: INVITE_HOST, players: best ? best.players.size : 0, max: best ? best.max : MAX_PLAYERS_DEFAULT }));
+    return;
+  }
+  if (reqPath === '/api/rooms') {   // FEJLESZTÉS: party-böngésző — ÖSSZES aktív szoba (üres husk kihagyva); a phase-t közvetlenül jelentjük
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+    const list = [...rooms.values()].filter(r => r.players.size > 0)
+      .map(r => ({ code: r.code, players: r.players.size, max: r.max, phase: r.phase, wave: r.wave }))
+      .sort((a, b) => b.players - a.players);
+    res.end(JSON.stringify({ rooms: list }));
     return;
   }
 

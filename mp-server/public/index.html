@@ -64,6 +64,22 @@
   .linkrow{display:flex;gap:8px;margin:16px 0 6px;}
   .linkrow input{font:600 13px/1 inherit;letter-spacing:.02em;text-transform:none;text-align:left;cursor:text;}
   .copied{color:#9bff8f;font:800 12px/1.4 inherit;min-height:16px;margin-top:4px;}
+  /* ---- élő party-böngésző (aktív szobák) ---- */
+  .browse{margin-top:10px;text-align:left;}
+  .browse h2{font:800 12px/1 inherit;letter-spacing:.2em;text-transform:uppercase;color:#8fa6c9;margin:0 0 8px;display:flex;align-items:center;gap:8px;}
+  .browse .dot{width:7px;height:7px;border-radius:50%;background:#9bff8f;box-shadow:0 0 8px #9bff8f;animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.45;}50%{opacity:1;}}
+  .roomlist{display:flex;flex-direction:column;gap:8px;max-height:208px;overflow-y:auto;}
+  .roomrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(8,14,28,.5);border:1px solid var(--line);}
+  .roomrow .rc{font:900 18px/1 inherit;letter-spacing:.14em;color:var(--ink);min-width:62px;}
+  .roomrow .meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+  .roomrow .cnt{font:700 12px/1 inherit;color:var(--muted);}
+  .badge{display:inline-block;align-self:flex-start;font:800 10px/1 inherit;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;border-radius:999px;border:1px solid var(--line);}
+  .badge.wait{color:var(--gold);border-color:rgba(255,210,122,.4);}
+  .badge.play{color:#9bff8f;border-color:rgba(155,255,143,.4);}
+  .roomrow button{padding:9px 16px;font:800 13px/1 inherit;}
+  .roomrow button[disabled]{opacity:.4;cursor:not-allowed;}
+  .browse .empty{color:var(--muted);font:600 13px/1.6 inherit;text-align:center;padding:14px 0;}
 </style>
 </head>
 <body>
@@ -86,6 +102,14 @@
       </div>
       <button id="create" class="alt" style="width:100%">CREATE A ROOM ✦</button>
       <div id="homeErr" class="err"></div>
+
+      <div class="or">aktív partik</div>
+      <div class="browse">
+        <h2><span class="dot"></span> Csatlakozz egy futó szobához</h2>
+        <div id="roomList" class="roomlist">
+          <div class="empty">nincs aktív parti — hozz létre egyet</div>
+        </div>
+      </div>
 
       <div class="note">
         Co-op is <b>opt-in</b>. Every room launches the game with <code>?room=CODE</code>.
@@ -247,6 +271,37 @@
     // (If navigation is somehow blocked, restore the button.)
     btn.disabled = false; btn.textContent = original;
   });
+
+  // ---- PARTY-BÖNGÉSZŐ: aktív szobák élő listája (poll /api/rooms) ----------
+  const PHASE_LABEL = { lobby: 'VÁR', waiting: 'VÁR', playing: 'FOLYAMATBAN' };
+  const roomListEl = $('roomList');
+  function renderRooms(list) {
+    if (!Array.isArray(list) || list.length === 0) {
+      roomListEl.innerHTML = '<div class="empty">nincs aktív parti — hozz létre egyet</div>';
+      return;
+    }
+    roomListEl.innerHTML = '';
+    for (const r of list) {
+      const full = r.players >= r.max, wait = r.phase !== 'playing', safe = cleanCode(r.code);
+      const row = document.createElement('div'); row.className = 'roomrow';
+      row.innerHTML =
+        '<div class="rc">' + safe + '</div>' +
+        '<div class="meta"><span class="badge ' + (wait ? 'wait' : 'play') + '">' + (PHASE_LABEL[r.phase] || 'VÁR') + '</span>' +
+        '<span class="cnt">' + r.players + '/' + r.max + ' játékos</span></div>';
+      const btn = document.createElement('button');
+      btn.textContent = full ? 'TELE' : 'JOIN ▶'; btn.disabled = full;
+      if (!full) btn.addEventListener('click', () => launch(safe));   // UGYANAZ a navigáció, mint a JOIN/QUICK/CREATE
+      row.appendChild(btn); roomListEl.appendChild(row);
+    }
+  }
+  let roomPollTimer = null;
+  async function pollRooms() {
+    try { const res = await fetch('./api/rooms', { headers: { 'Accept': 'application/json' } });
+      if (res.ok) { const data = await res.json(); renderRooms(data && data.rooms); } } catch (_) { /* tartsd a régi listát átmeneti hibánál */ }
+  }
+  function startRoomPoll() { if (roomPollTimer === null) { pollRooms(); roomPollTimer = setInterval(pollRooms, 2500); } }
+  function stopRoomPoll() { if (roomPollTimer !== null) { clearInterval(roomPollTimer); roomPollTimer = null; } }
+  startRoomPoll();
 
   // ---- REVEAL controls ----------------------------------------------------
   $('enterBtn').addEventListener('click', () => { if (currentCode) launch(currentCode); });

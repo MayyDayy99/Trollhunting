@@ -72,6 +72,8 @@ export function connectCoop(opts = {}) {
     onChat:       opts.onChat       || (() => {}),
     onSpawnWave:  opts.onSpawnWave  || (() => {}),
     onPlayerDown: opts.onPlayerDown || (() => {}),
+    onRoomState:  opts.onRoomState  || (() => {}),   // FEJLESZTÉS: várószoba-roster + fázis
+    onRoomStart:  opts.onRoomStart  || (() => {}),   // FEJLESZTÉS: szinkron 'go' -> beginPlay()
     onError:      opts.onError      || ((e) => console.warn('[coop] error', e)),
     onOpen:       opts.onOpen       || (() => {}),
     onClose:      opts.onClose      || (() => {}),
@@ -141,6 +143,8 @@ export function connectCoop(opts = {}) {
       case 'monster_fx':   if (opts.onMonsterFx) opts.onMonsterFx(msg.fx); break;   // ELEM: render-only FX (reactions/chains/zones/elemi halál)
       case 'player_down':  hooks.onPlayerDown(msg.id); break;
       case 'chat':         hooks.onChat(msg); break;
+      case 'room_state':   hooks.onRoomState(msg); break;   // FEJLESZTÉS: várószoba roster+fázis
+      case 'room_start':   hooks.onRoomStart(msg); break;   // FEJLESZTÉS: szinkron start
       case 'error':        hooks.onError(msg); break;
       default:             /* unknown / future message types ignored */ break;
     }
@@ -173,6 +177,10 @@ export function connectCoop(opts = {}) {
     send({ t: 'chat', text: String(text || '') });
   }
 
+  function sendStart() {   // FEJLESZTÉS: várószoba START — bárki indíthat, a szerver szinkronizál
+    send({ t: 'start' });
+  }
+
   function close() {
     closedByUser = true;
     if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
@@ -182,7 +190,7 @@ export function connectCoop(opts = {}) {
   open();
 
   return {
-    sendInput, sendShot, sendHit, sendChat, send, close,
+    sendInput, sendShot, sendHit, sendChat, sendStart, send, close,
     isOpen: () => !!ws && ws.readyState === WebSocket.OPEN && joined,
     get id() { return selfId; },
     get room() { return roomCode; },
