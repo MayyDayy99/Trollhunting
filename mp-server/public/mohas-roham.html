@@ -2981,13 +2981,9 @@ const ATK = {
   },
 };
 // LIDÉRC-AURA (SP): minden frame újraszámolva — a közeli (3m) trollokat felerősíti + cián gyűrűvel jelöli
-function applyWispAuras(){
+function applyWispAuras(){   // LIDÉRC erősítő-aura KIVÉVE (túl OP volt) — már nem osztunk buffot, csak takarítjuk a maradékot (a wispBuff így mindig 0 marad -> a szorzók ×1)
   for(const m of monsters){ if(m.wispBuff){ m.wispBuff=0; if(m._buffRing) m._buffRing.visible=false; } }
-  for(const w of monsters){ if(!(w.alive && w.dying<=0 && w.typeId==='wisp' && !coopIsRemote(w))) continue; const wp=w.g.position; const aR=(w.type.auraR||3.0);
-    for(const m of monsters){ if(m===w || !m.alive || m.dying>0 || m.typeId==='wisp' || coopIsRemote(m)) continue;
-      if(Math.hypot(m.g.position.x-wp.x, m.g.position.z-wp.z) < aR){ m.wispBuff=1;
-        if(!m._buffRing){ m._buffRing=mesh(new THREE.TorusGeometry(0.7,0.06,6,16), new THREE.MeshBasicMaterial({color:0x9becff,transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}), 0,0.1,0); m._buffRing.rotation.x=Math.PI/2; m.g.add(m._buffRing); }
-        m._buffRing.visible=true; m._buffRing.material.opacity=0.4+Math.abs(Math.sin(performance.now()*0.005))*0.3; } } } }
+}
 function trollAI(m, dt, t){
   if(!(running && player.alive)) return;
   const T=m.type, p=m.g.position;

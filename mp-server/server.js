@@ -383,7 +383,8 @@ function handleMessage(ws, msg) {
       }
       if (Number.isFinite(+msg.yaw))   player.yaw = +msg.yaw;
       if (Number.isFinite(+msg.pitch)) player.pitch = +msg.pitch;
-      if (typeof msg.hp === 'number')  player.hp = Math.min(player.hp, clamp(+msg.hp, 0, 999)); // client may only report hp LOSS, never resurrect
+      // HP is FULLY server-authoritative (monster melee/ranged dmg + the orb 'heal' message). The client never reports hp,
+      // and we must NOT let a stale client hp here undo a server-side heal (that was the "potion subtracts HP" bug). Ignore msg.hp.
       // alive is SERVER-authoritative (melee death + rejoin/respawn revive); ignore client msg.alive.
       // Relay immediately for snappy peer movement (also folded into `state`).
       broadcast(room, { t: 'player_state', id: player.id, pos: player.pos,
@@ -845,11 +846,8 @@ function stepWaves(room, dt) {
     }
   }
 
-  // FEJLESZTÉS: LIDÉRC-aura újraszámolás (co-op authority) — minden tick elejére, mielőtt a mozgás/melee használja
+  // LIDÉRC erősítő-aura KIVÉVE (túl OP volt) — már nem osztunk buffot; wispBuff mindig 0 marad (a sebesség/sebzés szorzók ×1)
   for (const m of room.monsters) m.wispBuff = 0;
-  for (const w of room.monsters) { if (w.type!=='wisp' || w.hp<=0) continue;
-    for (const m of room.monsters) { if (m===w || m.hp<=0 || m.type==='wisp') continue;
-      if (Math.hypot(m.pos.x-w.pos.x, m.pos.z-w.pos.z) < WISP_S.auraR) m.wispBuff = 1; } }
   // ---- Status tick (DoT/slow/freeze) + movement + melee (co-op aggro) -----
   for (const m of room.monsters) {
     if (m.meleeCd > 0) m.meleeCd -= dt;
@@ -895,11 +893,10 @@ function stepWaves(room, dt) {
         for(const o of room.monsters){ if(o===m||o.hp<=0) continue; if(Math.hypot(o.pos.x-m.pos.x,o.pos.z-m.pos.z)<SHAMAN_S.healRadius && o.hp<o.maxHp) o.hp=Math.min(o.maxHp,o.hp+SHAMAN_S.healAmt); } }
       continue;   // a sámán NEM megy a generikus walk/melee ágra
     }
-    if (m.type === 'wisp') {   // FEJLESZTÉS: távolsági jég-lövedék + 3m erősítő aura (co-op authority)
-      const sp = m.speed*(m.slowMul||1)*(m.wispBuff?WISP_S.auraSpd:1)*dt;
+    if (m.type === 'wisp') {   // FEJLESZTÉS: távolsági jég-lövedék (az erősítő-aura KIVÉVE — túl OP volt)
+      const sp = m.speed*(m.slowMul||1)*dt;
       if (dist > WISP_S.bandMax) { m.pos.x += (dx/dist)*sp; m.pos.z += (dz/dist)*sp; }
       else if (dist > MELEE_RANGE && dist < WISP_S.bandMin) { m.pos.x -= (dx/dist)*sp*0.7; m.pos.z -= (dz/dist)*sp*0.7; }
-      m.auraFxAcc=(m.auraFxAcc||0)+dt; if(m.auraFxAcc>=0.33){ m.auraFxAcc=0; elFx(room,{k:'wispaura', id:m.id, x:m.pos.x, z:m.pos.z, r:WISP_S.auraR}); }   // ~3Hz throttle (a 22-slot ring pool ne fulladjon ki)
       if (dist > MELEE_RANGE) {
         m.castTimer = (m.castTimer||0) - dt;
         if (m.casting>0) { m.casting-=dt; if(m.casting<=0){ const dmg=WISP_S.castDmg0+room.wave*0.4;
