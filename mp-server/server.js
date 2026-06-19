@@ -160,10 +160,11 @@ const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, sp
 const EL_NULL_CHANCE = 0.20;   // EGYEZZEN a kliens mohas-roham.html EL_NULL_CHANCE-ével (byte-azonos)
 function rollMonsterElS(type){ return Math.random()<EL_NULL_CHANCE ? null : ['fire','ice','poison','lightning'][(Math.random()*4)|0]; }   // MIRROR: teljesen random elem minden típusra
 // SÁMÁN képesség-konfig (a kliens TROLL_TYPES.shaman számaival EGYEZŐ): távoli arkán lövedék + közeli gyengítő-nyaláb
-const SHAMAN_S = { castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:5.0, beamDrop:5.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };   // FIX: a gyengítő-nyaláb tartománya 8->5 (a "negyed pályáról sebez" ellen; közelharc-érzet + a vizuállal egyezik)
+// FIX (co-op „valami távolról sebez" ellen): a ranged támadások KÖZELEBBRŐL jönnek + TELEGRÁF + windup alatt BEFAGYASZTOTT célpont -> el lehet lépni (mint SP-ben a repülő lövedék).
+const SHAMAN_S = { castRange:12.0, castMax:15.0, castWind:1.1, castBlast:2.6, castCd:3.2, castDmg0:8, beamNear:5.0, beamDrop:5.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };   // castMax 22->15 (ne "negyed pályáról" lőjön); castBlast=dodge-sugár
 // FEJLESZTÉS (co-op mirror): a kliens TROLL_TYPES.wisp / .spitter számaival KELL egyezniük
-const WISP_S    = { bandMin:6.0, bandMax:18.0, castWind:0.6, castCd:2.4, castDmg0:8, auraR:3.0, auraSpd:1.25, auraDmg:1.35 };
-const SPITTER_S = { bandMin:8.0, bandMax:17.0, rangedCd:2.6, dmg0:10 };
+const WISP_S    = { bandMin:6.0, bandMax:13.0, castWind:0.8, castBlast:2.4, castCd:2.4, castDmg0:8, auraR:3.0, auraSpd:1.25, auraDmg:1.35 };   // bandMax 18->13; castWind 0.6->0.8 (kerülhető)
+const SPITTER_S = { bandMin:8.0, bandMax:13.0, castWind:0.7, landR:1.4, rangedCd:2.6, dmg0:10 };   // bandMax 17->13; ÚJ castWind windup + landR landolás-dodge-sugár
 
 // =============================================================================
 //  STATIC FILE HANDLER  (hand-rolled — keeps deps to just `ws`)
@@ -482,6 +483,13 @@ function handleMessage(ws, msg) {
     case 'chat': {
       const text = String(msg.text || '').slice(0, 280);
       if (text) broadcast(room, { t: 'chat', id: player.id, name: player.name, text }, null);
+      break;
+    }
+
+    case 'heal': {   // HP-gömb: szerver-hiteles gyógyulás (a kliens lokálisan elnyeli a gömböt; a HP-t a szerver adja, különben a state visszaállítaná + hamis hurt-flasht villantana)
+      if (!player.alive || player.hp <= 0 || !player.playing) break;
+      const amt = Math.max(0, Math.min(40, +msg.amt || 0));   // anti-cheat: max 40 / kérés
+      if (amt > 0) player.hp = clamp(player.hp + amt, 0, 100);
       break;
     }
 
@@ -867,10 +875,13 @@ function stepWaves(room, dt) {
       else if (dist > SHAMAN_S.castRange+2) { m.pos.x += (dx/dist)*sp; m.pos.z += (dz/dist)*sp; } // távol: közelít
       // MÓD A: arkán lövedék (telegrafált)
       if (dist > SHAMAN_S.castRange && dist < SHAMAN_S.castMax) {
-        if (m.casting<=0){ m.castTimer-=dt; if(m.castTimer<=0) m.casting=SHAMAN_S.castWind; }
-        if (m.casting>0){ m.casting-=dt; if(m.casting<=0){ const dmg=SHAMAN_S.castDmg0+room.wave*0.4; target.hp=clamp(target.hp-dmg,0,999); target.witherT=Math.max(target.witherT||0,SHAMAN_S.witherDur);
-          elFx(room,{k:'cast', id:m.id, target:target.id, from:{x:m.pos.x,y:GROUND_Y+2.0,z:m.pos.z}, to:{x:target.pos.x,y:target.pos.y-0.3,z:target.pos.z}});
-          if(target.hp<=0&&target.alive){ target.alive=false; broadcast(room,{t:'player_down',id:target.id}); } m.castTimer=SHAMAN_S.castCd*(0.9+Math.random()*0.3); } }
+        if (m.casting<=0){ m.castTimer-=dt; if(m.castTimer<=0){ m.casting=SHAMAN_S.castWind; m.aimX=target.pos.x; m.aimZ=target.pos.z;   // BEFAGYASZTOTT célpont (ahol a játékos MOST áll)
+          elFx(room,{k:'warn', x:m.aimX, z:m.aimZ, dur:SHAMAN_S.castWind, col:0x6fe0ff}); } }   // TELEGRÁF: becsapódás-jelző -> el lehet lépni
+        if (m.casting>0){ m.casting-=dt; if(m.casting<=0){ const dmg=SHAMAN_S.castDmg0+room.wave*0.4;
+          const land=nearestLivingPlayer(room, m.aimX, m.aimZ);   // DODGE: csak az kapja, aki a befagyasztott pont blast-körén belül maradt
+          if(land && Math.hypot(land.pos.x-m.aimX, land.pos.z-m.aimZ) < SHAMAN_S.castBlast){ land.hp=clamp(land.hp-dmg,0,999); land.witherT=Math.max(land.witherT||0,SHAMAN_S.witherDur); if(land.hp<=0&&land.alive){ land.alive=false; broadcast(room,{t:'player_down',id:land.id}); } }
+          elFx(room,{k:'cast', id:m.id, from:{x:m.pos.x,y:GROUND_Y+2.0,z:m.pos.z}, to:{x:m.aimX,y:GROUND_Y+0.3,z:m.aimZ}});   // a strike a BEFAGYASZTOTT pontra megy (vizuál = sebzés helye)
+          m.castTimer=SHAMAN_S.castCd*(0.9+Math.random()*0.3); } }
       } else m.casting=0;
       // MÓD B: gyengítő-nyaláb (4Hz akkumulátor -> tick-független drain; az FX is csak a 4Hz tick-en megy ki)
       if (dist < (m.beaming?SHAMAN_S.beamDrop:SHAMAN_S.beamNear)) { m.beaming=true; m.beamAcc=(m.beamAcc||0)+dt; const period=1/SHAMAN_S.beamTickHz; let fired=false;
@@ -891,10 +902,12 @@ function stepWaves(room, dt) {
       m.auraFxAcc=(m.auraFxAcc||0)+dt; if(m.auraFxAcc>=0.33){ m.auraFxAcc=0; elFx(room,{k:'wispaura', id:m.id, x:m.pos.x, z:m.pos.z, r:WISP_S.auraR}); }   // ~3Hz throttle (a 22-slot ring pool ne fulladjon ki)
       if (dist > MELEE_RANGE) {
         m.castTimer = (m.castTimer||0) - dt;
-        if (m.casting>0) { m.casting-=dt; if(m.casting<=0){ const dmg=WISP_S.castDmg0+room.wave*0.4; target.hp=clamp(target.hp-dmg,0,999);
-          elFx(room,{k:'wbolt', id:m.id, from:{x:m.pos.x,y:GROUND_Y+1.2,z:m.pos.z}, to:{x:target.pos.x,y:target.pos.y-0.4,z:target.pos.z}});
-          if(target.hp<=0&&target.alive){ target.alive=false; broadcast(room,{t:'player_down',id:target.id}); } m.castTimer=WISP_S.castCd*(0.85+Math.random()*0.3); } }
-        else if (m.castTimer<=0 && dist<=WISP_S.bandMax) m.casting=WISP_S.castWind;
+        if (m.casting>0) { m.casting-=dt; if(m.casting<=0){ const dmg=WISP_S.castDmg0+room.wave*0.4;
+          const land=nearestLivingPlayer(room, m.aimX, m.aimZ);   // DODGE: befagyasztott pont blast-köre
+          if(land && Math.hypot(land.pos.x-m.aimX, land.pos.z-m.aimZ) < WISP_S.castBlast){ land.hp=clamp(land.hp-dmg,0,999); if(land.hp<=0&&land.alive){ land.alive=false; broadcast(room,{t:'player_down',id:land.id}); } }
+          elFx(room,{k:'wbolt', id:m.id, from:{x:m.pos.x,y:GROUND_Y+1.2,z:m.pos.z}, to:{x:m.aimX,y:GROUND_Y+0.4,z:m.aimZ}});
+          m.castTimer=WISP_S.castCd*(0.85+Math.random()*0.3); } }
+        else if (m.castTimer<=0 && dist<=WISP_S.bandMax){ m.casting=WISP_S.castWind; m.aimX=target.pos.x; m.aimZ=target.pos.z; elFx(room,{k:'warn', x:m.aimX, z:m.aimZ, dur:WISP_S.castWind, col:0x9becff}); }   // BEFAGYASZTOTT célpont + TELEGRÁF
         continue;
       }
       // dist<=MELEE_RANGE -> beleesik a generikus melee-be (nincs continue)
@@ -904,15 +917,18 @@ function stepWaves(room, dt) {
       if (dist < SPITTER_S.bandMin) { m.pos.x -= (dx/dist)*sp*0.9; m.pos.z -= (dz/dist)*sp*0.9; }
       else if (dist > SPITTER_S.bandMax) { m.pos.x += (dx/dist)*sp*0.8; m.pos.z += (dz/dist)*sp*0.8; }
       m.castTimer = (m.castTimer||0) - dt;
-      if (m.castTimer<=0 && dist>=SPITTER_S.bandMin-1 && dist<=SPITTER_S.bandMax+3) {
-        m.castTimer = SPITTER_S.rangedCd*(0.85+Math.random()*0.3);
-        const dmg = SPITTER_S.dmg0 + room.wave*0.5;
+      if (m.casting>0){ m.casting-=dt; if(m.casting<=0){ const dmg=SPITTER_S.dmg0+room.wave*0.5;
+        for(let k=0;k<2;k++){ const lx=m.aim[k].x, lz=m.aim[k].z;   // BEFAGYASZTOTT landolás-pontok (a windup elejéről)
+          const land=nearestLivingPlayer(room, lx, lz);
+          if(land && Math.hypot(land.pos.x-lx, land.pos.z-lz) < SPITTER_S.landR){ land.hp=clamp(land.hp-dmg,0,999); if(land.hp<=0&&land.alive){ land.alive=false; broadcast(room,{t:'player_down',id:land.id}); } }
+          elFx(room,{k:'sbomb', id:m.id, from:{x:m.pos.x,y:GROUND_Y+1.5,z:m.pos.z}, to:{x:lx,y:GROUND_Y+0.2,z:lz}}); }
+        m.castTimer=SPITTER_S.rangedCd*(0.85+Math.random()*0.3); } }
+      else if (m.castTimer<=0 && dist>=SPITTER_S.bandMin-1 && dist<=SPITTER_S.bandMax+3) {
+        m.casting=SPITTER_S.castWind; m.aim=[];   // START windup: 2 landolás-pont befagyasztása + telegráf
         for(let k=0;k<2;k++){ const spread=(k===0?0:(Math.random()<0.5?1:-1)*(0.10+Math.random()*0.12));
           const a=Math.atan2(target.pos.z-m.pos.z, target.pos.x-m.pos.x)+spread, dd=Math.hypot(target.pos.x-m.pos.x, target.pos.z-m.pos.z);
-          const lx=m.pos.x+Math.cos(a)*dd, lz=m.pos.z+Math.sin(a)*dd;
-          const land=nearestLivingPlayer(room, lx, lz);
-          if(land && Math.hypot(land.pos.x-lx, land.pos.z-lz) < 1.2){ land.hp=clamp(land.hp-dmg,0,999); if(land.hp<=0&&land.alive){ land.alive=false; broadcast(room,{t:'player_down',id:land.id}); } }
-          elFx(room,{k:'sbomb', id:m.id, from:{x:m.pos.x,y:GROUND_Y+1.5,z:m.pos.z}, to:{x:lx,y:GROUND_Y+0.2,z:lz}}); }
+          const lx=m.pos.x+Math.cos(a)*dd, lz=m.pos.z+Math.sin(a)*dd; m.aim.push({x:lx,z:lz});
+          elFx(room,{k:'warn', x:lx, z:lz, dur:SPITTER_S.castWind, col:0x9acb3a}); }
       }
       continue;
     }

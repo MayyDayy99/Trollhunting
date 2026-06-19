@@ -181,6 +181,10 @@ export function connectCoop(opts = {}) {
     send({ t: 'start' });
   }
 
+  function sendHeal(amt) {   // HP-gömb: szerver-hiteles gyógyulás kérése (a lokális setHp-t a szerver-state felülírná)
+    send({ t: 'heal', amt: +amt || 0 });
+  }
+
   function close() {
     closedByUser = true;
     if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
@@ -190,7 +194,7 @@ export function connectCoop(opts = {}) {
   open();
 
   return {
-    sendInput, sendShot, sendHit, sendChat, sendStart, send, close,
+    sendInput, sendShot, sendHit, sendChat, sendStart, sendHeal, send, close,
     isOpen: () => !!ws && ws.readyState === WebSocket.OPEN && joined,
     get id() { return selfId; },
     get room() { return roomCode; },

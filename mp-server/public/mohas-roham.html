@@ -2526,7 +2526,8 @@ function updateHpOrbs(dt,t){
       if(running && player.alive && player.hp < player.maxHp){
         const dx=player.pos.x-o.x, dz=player.pos.z-o.z;
         if(Math.hypot(dx,dz) < ORB_R && Math.abs(player.feet-o.baseY) < 2.2){
-          setHp(player.hp + ORB_HEAL); o.alive=false; o.respawn=ORB_RESPAWN; o.g.visible=false;
+          if(coopActive()){ if(coop) coop.sendHeal(ORB_HEAL); } else setHp(player.hp + ORB_HEAL);   // FIX: co-opban szerver-hiteles gyógyulás (a lokális setHp-t a szerver-state visszaállítaná + hamis hurt-flasht villantana -> úgy nézne ki, mintha LEVONNA)
+          o.alive=false; o.respawn=ORB_RESPAWN; o.g.visible=false;
           const oy=o.baseY+1.0;
           EFX.ring(o.x,o.baseY+0.05,o.z,0x6fff8f,0.4,2.0,0.5,0.85); EFX.flash(o.x,oy,o.z,0x9fff9f,0.5,2.2,0.3); EFX.light(o.x,oy,o.z,0x6fff8f,3.5,0.4);
           for(let i=0;i<22;i++){ const a=rand(0,6.28),s=rand(1,3.5); RP.spawn(o.x,oy,o.z,Math.cos(a)*s,rand(1,3),Math.sin(a)*s,pick([0x7fff9f,0xcaffd0,0xffffff]),rand(0.5,0.9),0.04,rand(0.5,0.9),-0.5,1.2); }
@@ -3402,6 +3403,7 @@ function coopHandleFx(fx){ if(!Array.isArray(fx)) return;
     else if(e.k==='kill'){ const m=coopRemoteById.get(e.id); if(m){ if(e.el) m.statusEl=e.el; coopKillRemote(e.id, false); } }   // elem-igazított halál a távoli trollon
     else if(e.k==='wbolt' && e.from && e.to){ EFX.bolt(e.from.x,e.from.y,e.from.z, e.to.x,e.to.y,e.to.z, 0x9becff,0.16,0.35); EFX.flash(e.from.x,e.from.y,e.from.z,0x9becff,0.4,1.6,0.25); EFX.flash(e.to.x,e.to.y,e.to.z,0x9fd0ff,0.5,1.8,0.3); }   // LIDÉRC jég-lövedék (HP a szerveré)
     else if(e.k==='wispaura'){ EFX.ring(e.x,GROUND_Y+0.06,e.z,0x9becff,0.25,(e.r||3)*2,0.3,0.4); }   // LIDÉRC erősítő-zóna pulzus
+    else if(e.k==='warn'){ const c=e.col||0xff6a3d, d=Math.min(1.2, e.dur||0.8); EFX.ring(e.x,GROUND_Y+0.06,e.z, c, 2.8, 0.5, d, 0.9); EFX.ring(e.x,GROUND_Y+0.06,e.z, 0xffffff, 1.0, 0.2, d, 0.5); EFX.light(e.x,GROUND_Y+0.4,e.z, c, 2.2, d); }   // TELEGRÁF: becsapódás-jelző (befelé húzódó gyűrű a windup alatt) -> a ranged támadás KIKERÜLHETŐ, ha ellépsz a pontról
     else if(e.k==='sbomb' && e.from && e.to){ EFX.bolt(e.from.x,e.from.y,e.from.z, e.to.x,e.to.y,e.to.z, 0x9acb3a,0.14,0.3); gore.burst(e.to.x,GROUND_Y+0.1,e.to.z,10,0x6b8f3a,4,0.4); }   // köpködő-bomba
   }
 }
