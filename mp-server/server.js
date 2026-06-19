@@ -915,14 +915,14 @@ function stepWaves(room, dt) {
       else if (dist > SPITTER_S.bandMax) { m.pos.x += (dx/dist)*sp*0.8; m.pos.z += (dz/dist)*sp*0.8; }
       m.castTimer = (m.castTimer||0) - dt;
       if (m.casting>0){ m.casting-=dt; if(m.casting<=0){ const dmg=SPITTER_S.dmg0+room.wave*0.5;
-        for(let k=0;k<2;k++){ const lx=m.aim[k].x, lz=m.aim[k].z;   // BEFAGYASZTOTT landolás-pontok (a windup elejéről)
+        for(let k=0;k<m.aim.length;k++){ const lx=m.aim[k].x, lz=m.aim[k].z;   // BEFAGYASZTOTT landolás-pontok (1 vagy 2 — wave>10 fölött 2)
           const land=nearestLivingPlayer(room, lx, lz);
           if(land && Math.hypot(land.pos.x-lx, land.pos.z-lz) < SPITTER_S.landR){ land.hp=clamp(land.hp-dmg,0,999); if(land.hp<=0&&land.alive){ land.alive=false; broadcast(room,{t:'player_down',id:land.id}); } }
           elFx(room,{k:'sbomb', id:m.id, from:{x:m.pos.x,y:GROUND_Y+1.5,z:m.pos.z}, to:{x:lx,y:GROUND_Y+0.2,z:lz}}); }
         m.castTimer=SPITTER_S.rangedCd*(0.85+Math.random()*0.3); } }
       else if (m.castTimer<=0 && dist>=SPITTER_S.bandMin-1 && dist<=SPITTER_S.bandMax+3) {
-        m.casting=SPITTER_S.castWind; m.aim=[];   // START windup: 2 landolás-pont befagyasztása + telegráf
-        for(let k=0;k<2;k++){ const spread=(k===0?0:(Math.random()<0.5?1:-1)*(0.10+Math.random()*0.12));
+        m.casting=SPITTER_S.castWind; m.aim=[]; const NB=(room.wave>10)?2:1;   // START windup: a 2. golyó CSAK wave 10 felett (mint a brute-osztódás)
+        for(let k=0;k<NB;k++){ const spread=(k===0?0:(Math.random()<0.5?1:-1)*(0.10+Math.random()*0.12));
           const a=Math.atan2(target.pos.z-m.pos.z, target.pos.x-m.pos.x)+spread, dd=Math.hypot(target.pos.x-m.pos.x, target.pos.z-m.pos.z);
           const lx=m.pos.x+Math.cos(a)*dd, lz=m.pos.z+Math.sin(a)*dd; m.aim.push({x:lx,z:lz});
           elFx(room,{k:'warn', x:lx, z:lz, dur:SPITTER_S.castWind, col:0x9acb3a}); }

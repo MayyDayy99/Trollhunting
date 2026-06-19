@@ -3070,7 +3070,7 @@ function trollAI(m, dt, t){
       else if(d>T.bandMax){ moveToward(0.8); walkAnim(); }
       else { m.arms.L.rotation.x=0.3; m.arms.R.rotation.x=0.3; }
       m.rangedTimer-=dt;
-      if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.6; spitterFire(m); spitterFire(m, rand(0.10,0.22)*(Math.random()<0.5?1:-1)); }   // FEJLESZTÉS: 2 lövedék
+      if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.6; spitterFire(m); if(wave>10) spitterFire(m, rand(0.10,0.22)*(Math.random()<0.5?1:-1)); }   // FEJLESZTÉS: a 2. lövedék CSAK wave 10 felett (mint a brute-osztódás)
       break;
     }
     case 'grunt': {
