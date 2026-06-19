@@ -937,6 +937,11 @@ const DECK_B = climbStruct(8, GROUND_Y+3.6, 18, 3.4, 0.5, 3.4, woodMat);
   for(const D of [A,B]){ for(let s=-1;s<=1;s+=2){ const cx=D.x+qx*s*HALF, cz=D.z+qz*s*HALF;
     const post=mesh(new THREE.CylinderGeometry(0.085,0.11,1.6,7), postMat, cx, deckTop+0.4, cz); scene.add(post);
     post.add(mesh(new THREE.SphereGeometry(0.12,6,5), postMat, 0,0.85,0)); } }
+  // 5) KORLÁT-ÜTKÖZŐ (láthatatlan, collision-only): sűrű poszt-sor a két él mentén, a látható korlátnál picit kijjebb (RAIL=1.2),
+  //    hogy a tested a kötélnél fogjon meg -> nem esel le, bátran szaladhatsz/lőhetsz. NEM mászható (groundAt kihagyja -> nem állsz rá),
+  //    bottom>=OVERHEAD -> a magas híd ALATT a játékos/troll szabadon átmegy a talajon.
+  { const RAIL=HALF+0.15, M=20; for(let s=-1;s<=1;s+=2){ for(let i=0;i<=M;i++){ const t=0.03+0.94*(i/M);
+    solidCyl(A.x+dxb*t+qx*s*RAIL, A.z+dzb*t+qz*s*RAIL, 0.18, {top:GROUND_Y+5.5, bottom:GROUND_Y+2.6}); } } }
 })();
 // hero-landmark testek (csak az arénán belüliek; pozíciók a buildLandmarks placement-jeiből)
 solidCyl(11.555, 7.905, 1.55, {});      // oldWell
