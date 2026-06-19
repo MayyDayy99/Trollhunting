@@ -3015,7 +3015,11 @@ function warmup(done){
     // ELEMI NYÍL előmelegítés (ez okozta az első elemi lövés laggját): mind a 4 elem-fej + nyom + a nockolt elem-fej leforduljon MOST
     for(let i=0;i<4;i++){ const a=arrows[i]; if(!a) break; a.el=['fire','ice','poison','lightning'][i]; applyArrowVisual(a); a.g.position.set(wx-3+i,wy,wz); a.g.visible=true; emitArrowTrail(a); }
     { const cur=currentElement; for(const el of ['fire','ice','poison','lightning']){ currentElement=el; nockArrow.visible=true; updateNockElement(); animateNock(0); } currentElement=cur; nockArrow.visible=false; updateNockElement(); }
+    if(dummies[0]) freezeEncase(dummies[0]);   // jég-héj (full-freeze) anyaga is melegedjen be
   }catch(_e){}
+  // FONTOS: a próbabábuk az arénán KÍVÜL vannak -> renderer.render() FRUSTUM-CULLINGOLNÁ őket, így a shaderük NEM fordulna le (ezt mérve igazoltam: render után 24, compile után 28 program).
+  // a renderer.compile() a pozíciótól FÜGGETLENÜL lefordít minden, a scene-ben lévő anyagot -> nincs első-feltűnéskori akadás.
+  try{ renderer.compile(scene, camera); }catch(_e){}
   const TOTAL=8, loadbar=document.getElementById('loadbar'), loadingEl=document.getElementById('loading'); let n=0;
   (function step(){ try{ renderer.render(scene,camera); }catch(_e){} n++; if(loadbar) loadbar.style.width=Math.round(n/TOTAL*100)+'%';
     if(n<TOTAL){ setTimeout(step, 16); return; }   // setTimeout (nem rAF): akkor is lefut, ha a rAF fojtott/szünetel -> nem ragad be a töltőképernyő
