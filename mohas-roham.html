@@ -91,6 +91,11 @@
     cursor:pointer;background:linear-gradient(90deg,#5fe0ff,#36c5ff);box-shadow:0 8px 28px rgba(54,197,255,.5);transition:transform .1s, filter .15s;}
   .card button:hover{filter:brightness(1.1);} .card button:active{transform:scale(.95);}
   /* ===== FEJLESZTÉS-BOLT (Kovácsműhely) ===== */
+  /* lágy felúszás (a display:none->flex újraindítja a CSS-animációt): a háttér beúszik, a kártya alulról emelkedik */
+  #shop:not(.hide){ animation: shopFade .34s ease-out both; }
+  #shop:not(.hide) .shopwrap{ animation: shopRise .42s cubic-bezier(.2,.9,.25,1) both; }
+  @keyframes shopFade{ from{opacity:0} to{opacity:1} }
+  @keyframes shopRise{ from{opacity:0; transform:translateY(34px) scale(.93)} to{opacity:1; transform:none} }
   #shop .shopwrap{max-width:980px;width:94%;padding:22px 24px;}
   .shop-top{display:flex;justify-content:space-between;align-items:baseline;}
   .shop-title{font:900 26px/1 inherit;letter-spacing:.08em;background:linear-gradient(90deg,#7fe2ff,#fff,#ffd27a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
