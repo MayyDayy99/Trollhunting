@@ -1827,7 +1827,7 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
       [[0.0,1.1,0.45,0.5],[0.2,0.85,0.42,0.4],[-0.18,1.3,0.36,0.35]].forEach(s=>{ const c=mesh(new THREE.BoxGeometry(0.05,s[3],0.05), m._crackMat, s[0],s[1],s[2]); c.rotation.z=rand(-0.5,0.5); m.g.add(c); });
       for(let i=0;i<3;i++){ const a=rand(0,6.28); m.g.add(mesh(new THREE.TetrahedronGeometry(0.12,0), skinDark, Math.cos(a)*0.4,1.0+rand(-0.2,0.4),Math.sin(a)*0.3)); } } },
   shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x2f6f6a, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18,
-    castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:8.0, beamDrop:8.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, witherDmgMul:0.65, witherReloadMul:1.35,   // ÚJ: nagy távról arkán lövedék + közelről gyengítő varázs-nyaláb (HEX) postureLean:0.0, shoulderW:0.9, torsoW:0.80, neckLen:0.20, tuskScale:1.2, earLen:0.5,
+    castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:5.0, beamDrop:5.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, witherDmgMul:0.65, witherReloadMul:1.35,   // ÚJ: nagy távról arkán lövedék + közelről gyengítő varázs-nyaláb (HEX) postureLean:0.0, shoulderW:0.9, torsoW:0.80, neckLen:0.20, tuskScale:1.2, earLen:0.5,
     build(m){
 const g=m.g;
       // ONE shared per-monster glow material for every mystic part (crystal/horns/runes) -> returned on m.staffMat (already disposed by disposeMonster)
@@ -3608,7 +3608,7 @@ function coopConnect(){
         const peer = coopMakePeer(pv.id, pv.name);
         if(pv.pos){
           const yaw = (typeof pv.yaw==='number') ? pv.yaw + Math.PI : (peer.buf.length?peer.buf[peer.buf.length-1].yaw:0); // server yaw -> face roughly correct
-          coopPushSnap(peer.buf, pv.pos.x, (pv.pos.y!=null?pv.pos.y:1.7)-1.0, pv.pos.z, yaw);
+          coopPushSnap(peer.buf, pv.pos.x, (pv.pos.y!=null?pv.pos.y:1.7)-1.7, pv.pos.z, yaw);   // FIX: az avatar origója a LÁBÁNÁL van -> a kamera-magasságot (1.7) kell levonni, hogy a földön álljon (nem lebeg)
           peer.has=true;
         }
       }

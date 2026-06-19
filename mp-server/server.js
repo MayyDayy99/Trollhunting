@@ -160,7 +160,7 @@ const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, sp
 const EL_NULL_CHANCE = 0.20;   // EGYEZZEN a kliens mohas-roham.html EL_NULL_CHANCE-ével (byte-azonos)
 function rollMonsterElS(type){ return Math.random()<EL_NULL_CHANCE ? null : ['fire','ice','poison','lightning'][(Math.random()*4)|0]; }   // MIRROR: teljesen random elem minden típusra
 // SÁMÁN képesség-konfig (a kliens TROLL_TYPES.shaman számaival EGYEZŐ): távoli arkán lövedék + közeli gyengítő-nyaláb
-const SHAMAN_S = { castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:8.0, beamDrop:8.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };
+const SHAMAN_S = { castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:5.0, beamDrop:5.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };   // FIX: a gyengítő-nyaláb tartománya 8->5 (a "negyed pályáról sebez" ellen; közelharc-érzet + a vizuállal egyezik)
 // FEJLESZTÉS (co-op mirror): a kliens TROLL_TYPES.wisp / .spitter számaival KELL egyezniük
 const WISP_S    = { bandMin:6.0, bandMax:18.0, castWind:0.6, castCd:2.4, castDmg0:8, auraR:3.0, auraSpd:1.25, auraDmg:1.35 };
 const SPITTER_S = { bandMin:8.0, bandMax:17.0, rangedCd:2.6, dmg0:10 };
