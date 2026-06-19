@@ -904,10 +904,10 @@ function rampUp(x0, z0, dx, dz, steps, mat){
   return { x:x0+dx*GAP*(steps-1), z:z0+dz*GAP*(steps-1), top:RISE*(steps-1)+H };   // a legfelső lépcső teteje
 }
 // A-kilátó: rámpa (26,9)->(19,9) felfelé, majd fedélzet (18,9) tető=4.1
-rampUp(26, 9, -1, 0, 8, woodMat);
-const DECK_A = climbStruct(18, GROUND_Y+3.6, 9, 3.4, 0.5, 3.4, woodMat);   // tető 4.1 (a 8. lépcső teteje 3.65 -> +0.45 felléphető)
+rampUp(27, 9, -1, 0, 9, woodMat);   // FIX: 9 lépcső 27-ről -> a felső lépcsők (3.65 @ x20, 4.1 @ x19) a deck PLAYER_R-falzónáján KÍVÜL/átfedésben vannak, így nem akad el a deck előtt
+const DECK_A = climbStruct(18, GROUND_Y+3.6, 9, 3.4, 0.5, 3.4, woodMat);   // tető 4.1 (a 9. lépcső teteje már 4.1 -> sík átlépés a deckre)
 // B-kilátó: rámpa (8,26)->(8,19) felfelé, majd fedélzet (8,18) tető=4.1
-rampUp(8, 26, 0, -1, 8, woodMat);
+rampUp(8, 27, 0, -1, 9, woodMat);   // FIX: ld. DECK_A — 9 lépcső 27-ről, hogy a deck előtt ne akadjon el
 const DECK_B = climbStruct(8, GROUND_Y+3.6, 18, 3.4, 0.5, 3.4, woodMat);
 // LOMBHÍD A<->B: KÖTÉL-PALLÓ FÜGGŐHÍD — belógó oldalkötelek + korlát + keresztpallók + tartókötelek + végoszlopok.
 // A járható ütközés a pallók alatt enyhén belóg (STEP-tűréssel végigsétálható), a látvány egy igazi rope-bridge.
