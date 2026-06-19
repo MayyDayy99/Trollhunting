@@ -157,7 +157,8 @@ const RESIST_S = {
 // INNATE elem típusonként — PONTOSAN tükrözi a kliens TROLL_TYPES.el-t (különben a co-op trollok rossz elemre reagálnak)
 const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, spitter:'poison', wisp:'ice', shard:null };
 // RANDOM ELEM: spawnonként sorsolt innate elem a TÍPUSTÓL FÜGGETLENÜL (kliens-tükör). Lidérc=jég identitás; sámán/szilánk semleges.
-function rollMonsterElS(type){ if(type==='wisp') return 'ice'; if(type==='shard'||type==='shaman') return null; return Math.random()<0.35 ? null : ['fire','ice','poison','lightning'][(Math.random()*4)|0]; }
+const EL_NULL_CHANCE = 0.20;   // EGYEZZEN a kliens mohas-roham.html EL_NULL_CHANCE-ével (byte-azonos)
+function rollMonsterElS(type){ return Math.random()<EL_NULL_CHANCE ? null : ['fire','ice','poison','lightning'][(Math.random()*4)|0]; }   // MIRROR: teljesen random elem minden típusra
 // SÁMÁN képesség-konfig (a kliens TROLL_TYPES.shaman számaival EGYEZŐ): távoli arkán lövedék + közeli gyengítő-nyaláb
 const SHAMAN_S = { castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:8.0, beamDrop:8.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, healCd:4.0, healRadius:7.0, healAmt:18 };
 // FEJLESZTÉS (co-op mirror): a kliens TROLL_TYPES.wisp / .spitter számaival KELL egyezniük
@@ -421,25 +422,33 @@ function handleMessage(ws, msg) {
       const elMul = clamp(+msg.mul || 1, 0, 1);   // elemi-hatás szorzó (nyíl=1, közelharc=0.25): a FIZIKAI sebzés teljes, az ELEMI negyed
       const elDmg = dmgBase * elMul;
       const rz = (m.resist && m.resist[el]) ? m.resist[el] : 1;
-      m.hp -= dmgBase * (m.frozenSolid > 0 ? 1.5 : 1) * rz;   // ELEM: brittle (fagyott +50%) + per-troll resist — FIZIKAI: teljes dmgBase
-      let reaction = null;
-      if (el !== 'base') {
-        const now = Date.now() / 1000, onCd = (now - (m.lastReactT || -999)) < 0.45;
-        let rid = onCd ? null : resolveReactionS(el, m);
-        if (rid) { const innateOnly = reactionFromInnateOnlyS(el, m); if (innateOnly && (now - (m.lastInnateReactT || -999)) < 2.5) rid = null; else if (innateOnly) m.lastInnateReactT = now; }   // PARITY-KRITIKUS: innate-only reakció 2.5s hűtésen -> elnyomva, esik az alap-mechanikára (kliens-tükör)
-        if (rid) { m.lastReactT = now; reaction = rid; const skip = applyReactionS(rid, room, m, elDmg, charge); if (!skip) applyServerStatus(m, el, charge); }
-        else {   // base per-element mechanic + becsapódási splash (CSAK reakció nélkül)
-          elementalSplashS(room, m, el, elDmg, charge, headshot);   // EGYETLEN splash-hívás (a régi bespoke tűz-ág megszűnt -> nincs dupla)
-          if (el === 'lightning') chainLightningS(room, m, elDmg);
-          else if (el === 'poison') { elFx(room, { k: 'zone', kind: 'gas', x: m.pos.x, z: m.pos.z }); room.zones.push({ kind:'gas', x:m.pos.x, z:m.pos.z, life:4.5, tick:0.5 }); }   // a splash MELLETT talaj-gáz DoT
-          applyServerStatus(m, el, charge);
+      let reaction = null, absorbed = false;
+      if (el !== 'base' && m.el && m.el === el) {   // ROSSZ-ELEM BÜNTETÉS (server-authoritative): a troll SAJÁT (innate) elemével lőve ELNYELI -> heal, nincs sebzés/reakció/státusz
+        absorbed = true;
+        const wouldBe = dmgBase * (m.frozenSolid > 0 ? 1.5 : 1) * rz;
+        const heal = Math.min(wouldBe * 0.20, (m.maxHp || m.hp) - m.hp);   // HEAL_FRAC=0.20 (== kliens)
+        if (heal > 0) m.hp = Math.min(m.maxHp || m.hp, m.hp + heal);
+        elFx(room, { k:'reaction', kind:'absorb', el, x:m.pos.x, z:m.pos.z });
+      } else {
+        m.hp -= dmgBase * (m.frozenSolid > 0 ? 1.5 : 1) * rz;   // ELEM: brittle (fagyott +50%) + per-troll resist — FIZIKAI: teljes dmgBase
+        if (el !== 'base') {
+          const now = Date.now() / 1000, onCd = (now - (m.lastReactT || -999)) < 0.45;
+          let rid = onCd ? null : resolveReactionS(el, m);
+          if (rid) { const innateOnly = reactionFromInnateOnlyS(el, m); if (innateOnly && (now - (m.lastInnateReactT || -999)) < 2.5) rid = null; else if (innateOnly) m.lastInnateReactT = now; }   // PARITY-KRITIKUS: innate-only reakció 2.5s hűtésen -> elnyomva, esik az alap-mechanikára (kliens-tükör)
+          if (rid) { m.lastReactT = now; reaction = rid; const skip = applyReactionS(rid, room, m, elDmg, charge); if (!skip) applyServerStatus(m, el, charge); }
+          else {   // base per-element mechanic + becsapódási splash (CSAK reakció nélkül)
+            elementalSplashS(room, m, el, elDmg, charge, headshot);   // EGYETLEN splash-hívás (a régi bespoke tűz-ág megszűnt -> nincs dupla)
+            if (el === 'lightning') chainLightningS(room, m, elDmg);
+            else if (el === 'poison') { elFx(room, { k: 'zone', kind: 'gas', x: m.pos.x, z: m.pos.z }); room.zones.push({ kind:'gas', x:m.pos.x, z:m.pos.z, life:4.5, tick:0.5 }); }   // a splash MELLETT talaj-gáz DoT
+            applyServerStatus(m, el, charge);
+          }
         }
       }
       let killed = false;
-      if (m.hp <= 0) { killed = true; room.monsters = room.monsters.filter((x) => x.id !== mid); room.score += headshot ? 150 : 100; elFx(room, { k:'kill', id:mid, el:(m.statusEl||el), x:m.pos.x, z:m.pos.z }); splitBruteS(room, m); }   // arrow-halál: a brute itt esik szét (a 150/el pontozás+FX megmarad, nincs regresszió)
+      if (!absorbed && m.hp <= 0) { killed = true; room.monsters = room.monsters.filter((x) => x.id !== mid); room.score += headshot ? 150 : 100; elFx(room, { k:'kill', id:mid, el:(m.statusEl||el), x:m.pos.x, z:m.pos.z }); splitBruteS(room, m); }   // arrow-halál: a brute itt esik szét (a 150/el pontozás+FX megmarad, nincs regresszió)
       reapDead(room);   // reaction/chain neighbours that dropped to 0
       broadcast(room, { t: 'hit', id: player.id, monsterId: mid, headshot,
-                        dmg: dmgBase, killed, score: room.score, el, reaction, reactPos: { x: m.pos.x, z: m.pos.z } }, null);
+                        dmg: absorbed ? 0 : dmgBase, killed, score: room.score, el, reaction, reactPos: { x: m.pos.x, z: m.pos.z }, absorbed }, null);
       break;
     }
 

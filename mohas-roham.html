@@ -1671,11 +1671,14 @@ function embellishTroll(m){
 // INNATE ELEM: a troll típus-eleme (T.el) láthatóvá tétele — bőr/szem-tint + egy olcsó additív aura. A wisp saját áttetsző passt kap, ott CSAK szem+aura.
 function elementSkin(m){
   const e=m.el; if(!e) return; const C=TROLL_EL[e]; if(!C) return;   // m.el-t a makeMonster állítja be (random spawnonként, nem a típushoz kötve)
-  if(m.bodySkin && m.bodySkin!==skinMat && m.typeId!=='wisp'){ m.bodySkin.color.setHex(C.skin); m.bodySkin.emissive=new THREE.Color(C.emissive); m.bodySkin.emissiveIntensity=C.emInt; }
+  if(m.bodySkin && m.bodySkin!==skinMat){ m.bodySkin.color.setHex(C.skin); m.bodySkin.emissive=new THREE.Color(C.emissive); m.bodySkin.emissiveIntensity=C.emInt; }   // a wisp-guard MEGSZŰNT (a test már opaque -> a tint látszik)
+  if(m.spitMat){ m.spitMat.color.setHex(C.skin); m.spitMat.emissive=new THREE.Color(C.emissive); m.spitMat.emissiveIntensity=Math.max(C.emInt,0.35); }   // SPITTER: a zöld epe-anyag is kapja az elem-színt
+  if(m.wispGlow){ m.wispGlow.forEach(s=>s.material.color.setHex(C.aura)); }   // WISP halo -> elem szín
+  if(m.wispFaceMat){ m.wispFaceMat.emissive=new THREE.Color(C.emissive); m.wispFaceMat.emissiveIntensity=0.5; }   // WISP csont-arc
   if(m.eyes) m.eyes.forEach(x=>{ if(x.material&&x.material.emissive) x.material.emissive.setHex(C.eye); });
   if(m._eyeBase==null && m.eyes&&m.eyes[0]) m._eyeBase=C.eye;   // státusz-tint visszaállítása az ELEM-színre, nem a narancsra
-  const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:C.aura,transparent:true,opacity:0.42,depthWrite:false,blending:THREE.AdditiveBlending}));
-  aura.scale.setScalar(1.6*(m.scale||1)); aura.position.y=(m.bodyCY||1.1); m.g.add(aura); m.elAura=aura;
+  const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:C.aura,transparent:true,opacity:0.55,depthWrite:false,blending:THREE.AdditiveBlending}));
+  aura.scale.setScalar(2.0*(m.scale||1)); aura.position.y=(m.bodyCY||1.1); m.g.add(aura); m.elAura=aura;   // prominensebb aura -> a zöld spitteren / sötét wispen is olvas az elem
 }
 buildElementHUD(); buildUltHud(); updateNockElement();
 
@@ -1689,15 +1692,16 @@ const TROLL_TYPES = {
     build(m){
       // ÁTDOLGOZVA: opaque SZELLEM-LÉNY (csuklyás köpeny + csont-arc + szarvak); a glow csak HALO a test körül, nem maga a test -> creature, nem részecske
       const g=m.g, head=m.head;
-      if(m.bodySkin){ m.bodySkin.transparent=true; m.bodySkin.opacity=0.92; m.bodySkin.emissive=new THREE.Color(0x36c5ff); m.bodySkin.emissiveIntensity=0.40; }
+      if(m.bodySkin){ m.bodySkin.transparent=false; m.bodySkin.opacity=1; m.bodySkin.emissive=new THREE.Color(0x36c5ff); m.bodySkin.emissiveIntensity=0.35; }   // FACE-FIX: opaque test -> a csont-arc nem mosódik el a 0.92-es testtől; a glow halo viszi a szellem-érzetet
       if(m.legs){ m.legs.L.visible=false; m.legs.R.visible=false; }   // LIDÉRC LEBEG -> nincs láb; helyette lefelé csúcsosodó szellem-uszály
       const tail=mesh(new THREE.ConeGeometry(0.34,1.25,7), wispCloth, 0,0.18,0); tail.rotation.x=Math.PI; g.add(tail);   // uszály (csúcs lefelé, a talaj felé nyúlik)
       const mantle=mesh(new THREE.ConeGeometry(0.55,1.6,7), wispCloth, 0,1.3,0); g.add(mantle);   // csuklya/köpeny a sziluettért
       [-1,1].forEach(s=>{ const hem=mesh(new THREE.ConeGeometry(0.22,0.7,6), wispCloth, s*0.32,0.6,0.05); hem.rotation.z=s*0.3; g.add(hem); });   // szaggatott szegély
-      head.add(mesh(new THREE.SphereGeometry(0.19,9,7), bellyMat, 0,0.02,0.06, 1,1.05,0.7));   // csont-arclap (világos akcentus a szemek köré)
+      const faceMat=bellyMat.clone(); m.wispFaceMat=faceMat;   // saját opaque klón -> elementSkin tintezheti (NE a SHARED bellyMat-ra írjunk)
+      head.add(mesh(new THREE.SphereGeometry(0.19,9,7), faceMat, 0,0.02,0.06, 1,1.05,0.7));   // csont-arclap (világos akcentus a szemek köré)
       [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.05,0.5,6), wispCloth, s*0.16,0.30,-0.04); h.rotation.x=-0.5; h.rotation.z=s*0.55; head.add(h); });   // 2 görbe szellem-szarv
-      const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(1.15); core.position.set(0,1.05,0); g.add(core);   // szellem-ragyogás a test körül (lebegő lidérc-fény)
-      for(let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.35,depthWrite:false,blending:THREE.AdditiveBlending})); sp.scale.setScalar(0.42-i*0.07); sp.position.set(rand(-0.28,0.28),0.5-i*0.18,rand(-0.22,0.22)); g.add(sp); }
+      const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(1.15); core.position.set(0,1.05,0); g.add(core); m.wispGlow=[core];   // szellem-ragyogás (ref: elementSkin az elem színére tinteli)
+      for(let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.35,depthWrite:false,blending:THREE.AdditiveBlending})); sp.scale.setScalar(0.42-i*0.07); sp.position.set(rand(-0.28,0.28),0.5-i*0.18,rand(-0.22,0.22)); g.add(sp); m.wispGlow.push(sp); }
     } },
   grunt: { id:'grunt', resist:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:4.5, skin:0x5f9168, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.12, shoulderW:1.12, torsoW:1.05, neckLen:-0.03, tuskScale:1.0, earLen:0.34, noTusks:false,
     build(m){
@@ -2154,6 +2158,7 @@ function disposeMonster(m){
   if(m.aura && m.aura.material) m.aura.material.dispose();
   if(m.staffMat) m.staffMat.dispose();
   if(m.spitMat) m.spitMat.dispose();
+  if(m.wispFaceMat) m.wispFaceMat.dispose();   // a wisp csont-arc klónja (a wispGlow sprite-okat a g.traverse takarítja)
   if(m._crackMat) m._crackMat.dispose();   // szilánk repedés-anyag (klónozott Mesh-anyag, a sprite-traverzál nem fogja)
 }
 
@@ -2456,7 +2461,8 @@ function pickTrollType(){
   return 'grunt';
 }
 // RANDOM ELEM: spawnonként sorsolt innate elem, a TÍPUSTÓL FÜGGETLENÜL (a Lidérc marad jég-identitás; sámán/szilánk semleges)
-function rollMonsterEl(id){ if(id==='wisp') return 'ice'; if(id==='shard'||id==='shaman') return null; return Math.random()<0.35 ? null : EL_ORDER[1+((Math.random()*4)|0)]; }
+const EL_NULL_CHANCE = 0.20;   // hány hányad legyen SEMLEGES (base) troll; MUST EQUAL mp-server/server.js EL_NULL_CHANCE
+function rollMonsterEl(id){ return Math.random()<EL_NULL_CHANCE ? null : EL_ORDER[1+((Math.random()*4)|0)]; }   // FEJLESZTÉS: TELJESEN random elem MINDEN típusra (nincs wisp=jég / spitter=méreg rögzítés)
 function spawnMonster(){
   const ca=(spawnAngles.length ? spawnAngles.shift() : CAVES[(Math.random()*CAVES.length)|0].ang);
   let cave=CAVES[0], bd=9; for(const c of CAVES){ let dd=Math.abs(c.ang-ca); if(dd>Math.PI) dd=2*Math.PI-dd; if(dd<bd){ bd=dd; cave=c; } }   // a popolt szöghöz tartozó barlang
@@ -2742,14 +2748,18 @@ function update(dt,t){
       if(segDist(a.prev,a.g.position,c)<m.bodyR*0.72){ hit=m; dmgMul=0.6; break; }             // LÁB ×0.6 (alacsonyabb, kisebb gömb, kevesebb sebzés)
     }
     if(hit){ const dmg=a.dmg*dmgMul;
-      if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg, a.el, a.charge); } // CO-OP: server applies dmg/kill/score/status (+el/charge)
+      const _absorbed = a.el!=='base' && hit.el && hit.el===a.el;   // ROSSZ-ELEM BÜNTETÉS: a troll SAJÁT (innate) elemével lőve -> ELNYELI (gyógyul), nem sebződik. Motiválja a sima nyilat / ellen-elemet.
+      if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg, a.el, a.charge); } // CO-OP: a szerver dönt sebzés/heal/kill felől; az absorb-tellt a 'absorb' elFx hozza
+      else if(_absorbed){   // SP elnyelés: kis heal + tell, NINCS sebzés / reakció / státusz
+        const _heal=Math.min(dmg*0.20, (hit.maxHp||hit.hp)-hit.hp); if(_heal>0) hit.hp=Math.min(hit.maxHp||hit.hp, hit.hp+_heal);
+        hit.hurtFlash=0; absorbTell(hit, a.el); }
       else { const wasStatus=hit.statusEl; const _rz=(hit.resist&&hit.resist[a.el])?hit.resist[a.el]:1; const _dmg=dmg*(hit.frozenSolid>0?1.5:1)*_rz; hit.hp-=_dmg; hit.hurtFlash=(_rz>1.3?0.3:0.15);   // törékeny ×1.5 + per-troll resist
         if(_rz<0.6){ const _q=a.g.position; for(let i=0;i<4;i++) RP.spawn(_q.x,_q.y,_q.z,rand(-1,1),rand(0,1.5),rand(-1,1),0x8a8f99,0.3,0.02,0.3,1,1); }   // ELLENÁLL: szürke sercegés (rossz elem)
         const _skip=elementMechanic(a.g.position, a.el, hit, dmg, head, wasStatus, a.charge, a.resonant); if(!_skip) applyStatus(hit, a.el, a.charge); if(head) gainUlt(2); }   // ELEM-REACT: reakció/alap + rezonancia; fejlövés tölti a VIHAR-t
       const hp=a.g.position;
-      elementalImpact(hp, a.el, head);   // ELEM: element-colored impact burst
+      if(!_absorbed) elementalImpact(hp, a.el, head);   // ELEM: becsapódás-burst (absorbnál KIHAGYVA -> az absorbTell hordozza a "rossz elem" olvasatot)
       if(head) AUD.head(); else AUD.hit();
-      if(head) toast('FEJLÖVÉS!');
+      if(head && !_absorbed) toast('FEJLÖVÉS!');
       if(!coopIsRemote(hit)) a.hitSet.add(hit);
       if(!coopIsRemote(hit) && hit.hp<=0) killMonster(hit, head);
       let consumed = true;
@@ -3323,6 +3333,13 @@ function coopApplyStatusVisual(m, st){
   m.frozenSolid=frozen?1:0;
 }
 /* ELEM co-op: vizuál-only reakció-villanás a megadott talajponton */
+// ELNYELÉS-TELL (rossz elem): befelé-omló gyűrű + felfelé szálló motesok + 'ELNYELTE!' — másképp olvas, mint egy sebző becsapódás
+function absorbTellAt(x, z, el){ const y=GROUND_Y+1.2, col=(TROLL_EL[el]&&TROLL_EL[el].aura)||0x9becff;
+  EFX.ring(x, GROUND_Y+0.05, z, col, 3.2, 0.4, 0.5, 0.85);   // BEFELÉ (r0>r1) -> 'beszívás', nem terjedő sebző-gyűrű
+  EFX.flash(x, y, z, col, 0.5, 2.0, 0.28, 0.9); EFX.light(x, y, z, col, 2.4, 0.22);
+  for(let i=0;i<10;i++){ const a=rand(0,6.28); RP.spawn(x+Math.cos(a)*0.6, y-0.4, z+Math.sin(a)*0.6, Math.cos(a)*1.2, rand(1.5,3.0), Math.sin(a)*1.2, col, rand(0.35,0.6), 0.02, rand(0.5,0.9), -1.0, 1.4); }
+  toast('ELNYELTE!'); if(AUD.hit) AUD.hit(); }
+function absorbTell(m, el){ m.hurtFlash=0; absorbTellAt(m.g.position.x, m.g.position.z, el); }
 function reactionFxVisual(kind, x, z){ const y=GROUND_Y+1.2;
   if(kind==='overload'){ EFX.flash(x,y,z,0x9fd0ff,0.6,3.8,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fd0ff,0.5,9,0.5,0.9); EFX.light(x,y,z,0xbfe6ff,4.5,0.3); shake=Math.max(shake,0.4); toast('FAGYTÚLTÖLTÉS!'); }
   else if(kind==='steam'){ EFX.flash(x,y,z,0xffffff,0.5,3.2,0.26); for(let i=0;i<14;i++) SMK.spawn(x+rand(-0.3,0.3),y,z+rand(-0.3,0.3),rand(-1,1),rand(0.5,1.6),rand(-1,1),0xdfeaf2,0.8,2.2,0.9,-0.5,0.8,0.7); toast('GŐZROBBANÁS!'); }
@@ -3334,7 +3351,7 @@ function reactionFxVisual(kind, x, z){ const y=GROUND_Y+1.2;
 /* ELEM co-op: a szerver monster_fx eseményeinek lejátszása (reakció/lánc/zóna/elemi halál) — vizuál-only */
 function coopHandleFx(fx){ if(!Array.isArray(fx)) return;
   for(const e of fx){
-    if(e.k==='reaction'){ if(e.kind==='splash'){ const col=e.el==='fire'?0xff7a3d:e.el==='ice'?0x9fd0ff:0x9fdc4a, r=e.r||3; EFX.ring(e.x,GROUND_Y+0.05,e.z,col,0.4,r,0.4,0.7); EFX.flash(e.x,GROUND_Y+0.6,e.z,col,0.35,r*0.6,0.22); } else reactionFxVisual(e.kind, e.x, e.z); }
+    if(e.k==='reaction'){ if(e.kind==='splash'){ const col=e.el==='fire'?0xff7a3d:e.el==='ice'?0x9fd0ff:0x9fdc4a, r=e.r||3; EFX.ring(e.x,GROUND_Y+0.05,e.z,col,0.4,r,0.4,0.7); EFX.flash(e.x,GROUND_Y+0.6,e.z,col,0.35,r*0.6,0.22); } else if(e.kind==='absorb'){ absorbTellAt(e.x, e.z, e.el); } else reactionFxVisual(e.kind, e.x, e.z); }   // ROSSZ-ELEM elnyelés tell (a szerver dönti el)
     else if(e.k==='chain' && e.from && e.to){ const c=(e.el==='poison')?0x9fdc4a:0xffffff; EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, c, 0.16, 0.4); EFX.bolt(e.from.x,GROUND_Y+1.2,e.from.z, e.to.x,GROUND_Y+1.2,e.to.z, 0xb48cff, 0.16, 0.5); }
     else if(e.k==='zone'){ spawnZone(e.kind, e.x, e.z, {}); }
     else if(e.k==='split'){ gore.burst(e.x,GROUND_Y+1.1,e.z,26,0x6f7a72,9,0.55); gore.burst(e.x,GROUND_Y+1.1,e.z,12,0xc98a3a,7,0.6); sparks.burst(e.x,GROUND_Y+1.1,e.z,16,0xffb24d,7,0.5); EFX.ring(e.x,GROUND_Y+0.05,e.z,0xc98a3a,0.5,3.6,0.5,0.85); EFX.flash(e.x,GROUND_Y+1.0,e.z,0xffce5a,0.5,3.0,0.22); shake=Math.max(shake,0.35); }   // OSZTÓDÁS FX (a szilánkokat a monsterView hozza)
@@ -3556,7 +3573,7 @@ function coopConnect(){
     onPeerLeft:   (id)=>{ coopRemovePeer(id); coopUpdateHudPlayers(); },
     onArrow:      (a)=>{ coopShowPeerArrow(a); },
     onHit:        (h)=>{ if(typeof h.score==='number'){ score=h.score; scoreN.textContent=score; }
-                         if(h.id!==coopMyId && h.el && h.el!=='base' && h.reactPos) elementalImpact({x:h.reactPos.x,y:GROUND_Y+1.2,z:h.reactPos.z}, h.el, h.headshot);   // társ találatának elemi becsapódása
+                         if(h.id!==coopMyId && !h.absorbed && h.el && h.el!=='base' && h.reactPos) elementalImpact({x:h.reactPos.x,y:GROUND_Y+1.2,z:h.reactPos.z}, h.el, h.headshot);   // társ találatának elemi becsapódása (absorbnál KIHAGYVA -> az 'absorb' elFx hozza a tellt)
                          if(h.killed && h.monsterId!=null){ const rm=coopRemoteById.get(h.monsterId); if(rm && h.el && h.el!=='base') rm.statusEl=h.el; coopKillRemote(h.monsterId, h.headshot); } },
     onMonsterFx:  (fx)=>{ coopHandleFx(fx); },   // ELEM: szerver reakció/lánc/zóna/elemi-halál FX
     onSpawnWave:  (w)=>{ if(typeof w.wave==='number'){ coopWaveNum=w.wave; wave=w.wave; if(waveN) waveN.textContent='HULLÁM '+w.wave; AUD.wave(); toast('HULLÁM '+w.wave); } },
