@@ -118,8 +118,8 @@ const MIN_PLAYERS         = 2;                            // co-op design minimu
 const SPAWN_R       = 26;     // (legacy ring radius — radar/scale reference; spawns now come from caves)
 const GROUND_Y      = 0;      // monsters live on the ground plane (player y=1.7)
 // FÁZIS 5: barlang-spawnpontok — UGYANAZOK a pozíciók mint a kliens CAVES (mohas-roham.html), hogy a trollok co-opban is a barlangokból bújjanak elő
-const R_CAVE        = 30.5;
-const CAVE_ANGS     = [0.9, 2.0, 3.1, 4.2, 5.3];
+const R_CAVE        = 52.5;
+const CAVE_ANGS     = [0.5, 1.4, 2.3, 3.2, 4.1, 5.0, 5.9];
 const SERVER_CAVES  = CAVE_ANGS.map(a => ({ x: Math.cos(a) * R_CAVE, z: Math.sin(a) * R_CAVE }));
 const MELEE_RANGE   = 2.2;    // horizontal (x,z) distance at which a troll bites
 const MELEE_DMG     = 8;      // hp removed per melee connect
