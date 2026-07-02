@@ -1177,15 +1177,15 @@ const servingMat= std({color:0xc7d2ec, roughness:.5, metalness:.25}); // nock-po
 const HALF=0.50;                 // fél-magasság (magas longbow sziluett)
 // pontok: [x(oldal), y(fel), z(előre)] — a longbow finom egyszeres D-íve, a tip enyhén előre fordul
 const limbProfile=[
-  [0.000, 0.000, 0.022],        // markolat-tő (legvastagabb has)
-  [0.004, 0.110, 0.018],
-  [0.009, 0.230, 0.006],
-  [0.013, 0.340,-0.010],
-  [0.015, 0.430,-0.030],
-  [0.012, 0.490,-0.052],        // tip felé elvékonyodik és előre kanyarodik
-  [0.008, 0.500,-0.060]         // nock-pont (horn)
+  [0.000, 0.000, 0.040],        // markolat-tő (has a néző felé) — MÉLYEBB ív, hogy rendes íjnak nézzen ki
+  [0.006, 0.120, 0.026],
+  [0.011, 0.245,-0.006],
+  [0.015, 0.360,-0.055],
+  [0.016, 0.450,-0.098],        // a végtag szépen elível a nézőtől (hát)
+  [0.012, 0.500,-0.126],        // tip felé elvékonyodik és enyhén vissza-kanyarodik (recurve)
+  [0.008, 0.510,-0.138]         // nock-pont (horn)
 ];
-const TIP_U=[0.008, 0.500,-0.060], TIP_L=[0.008,-0.500,-0.060];
+const TIP_U=[0.008, 0.510,-0.138], TIP_L=[0.008,-0.510,-0.138];
 
 function staveTube(pts, r0, r1){
   const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2])));
@@ -1229,17 +1229,20 @@ function buildLimb(grp, sign){
 }
 buildLimb(limbU, 1); buildLimb(limbL, -1);
 
-/* --- markolat (deep-section longbow grip) + bőr-tekercs + nyíl-polc --- */
-const gripCore=mesh(new THREE.CylinderGeometry(0.034,0.034,0.165,16), staveWood, 0,0,0.012);
-gripCore.scale.z=1.5;                       // mély D-szelvény (előre vastagabb has)
-gripCore.castShadow=true; bow.add(gripCore);
-// háti lapítás, hogy ne legyen pont henger
-const gripBack=mesh(new THREE.BoxGeometry(0.030,0.165,0.012), staveWood, 0,0,-0.026); bow.add(gripBack);
-// egyetlen elegáns bőr-fogás (átfedő gyűrűk, sima, nem szöszös)
+/* --- karcsú, ívelt riser (markolat-váz) + bőr-fogás + nyíl-polc — nem "duci henger" ---
+   Vékony, lapos-oldalú riser, ami a markolatnál enyhén kiöblösödik, a végtagok felé elvékonyodik. */
+const riserCore=mesh(new THREE.CylinderGeometry(0.017,0.017,0.235,12), staveWood, 0,0,0.014);
+riserCore.scale.set(0.82,1,1.35);            // keskeny oldalt, kissé mély elöl-hátul (lapos lencse-szelvény, nem kör)
+riserCore.castShadow=true; bow.add(riserCore);
+// a riser a végtagokba olvad: két rövid kúp a tetején/alján
+[[1,0.16],[-1,0.16]].forEach(([s,y])=>{ const c=mesh(new THREE.CylinderGeometry(0.010,0.017,0.09,10), staveWood, 0,s*y,0.012); c.scale.z=1.3; bow.add(c); });
+// finom markolat-kiöblösödés csak a tenyér magasságában (elegáns swell, nem gömb)
+const gripSwell=mesh(new THREE.CylinderGeometry(0.021,0.021,0.10,12), staveWood, 0,-0.005,0.016); gripSwell.scale.set(0.85,1,1.25); bow.add(gripSwell);
+// vékony bőr-fogás (feszes gyűrűk a tenyér körül)
 const wrap=new THREE.Group(); bow.add(wrap);
-for(let i=0;i<7;i++){
-  const ring=mesh(new THREE.TorusGeometry(0.036,0.0055,8,18), gripLeather, 0,-0.060+i*0.020,0.012);
-  ring.rotation.x=Math.PI/2; ring.scale.z=1.45; ring.castShadow=true; wrap.add(ring);
+for(let i=0;i<6;i++){
+  const ring=mesh(new THREE.TorusGeometry(0.0225,0.004,8,18), gripLeather, 0,-0.050+i*0.020,0.016);
+  ring.rotation.x=Math.PI/2; ring.scale.set(0.9,1,1.2); ring.castShadow=true; wrap.add(ring);
 }
 // nyíl-polc + ablak (a riser jobb oldalán, hogy a nyíl rajta üljön)
 const shelf=mesh(new THREE.BoxGeometry(0.055,0.014,0.040), staveWood, 0.030,0.052,0.030); shelf.castShadow=true; bow.add(shelf);
@@ -1253,7 +1256,7 @@ const bowInlayMat=new THREE.MeshStandardMaterial({color:0x0d1a24, emissive:0x36c
 const nock=new THREE.Group(); bow.add(nock);
 const serving=mesh(new THREE.CylinderGeometry(0.006,0.006,0.060,8), servingMat,0,0,0); serving.rotation.x=Math.PI/2; nock.add(serving);
 // a húr maga (két vékony szakasz felső/alsó tip -> nock)
-function strSeg(){ const m=mesh(new THREE.CylinderGeometry(0.0026,0.0026,1,5), stringMat,0,0,0); m.castShadow=false; m.receiveShadow=false; return m; }
+function strSeg(){ const m=mesh(new THREE.CylinderGeometry(0.0034,0.0034,1,6), stringMat,0,0,0); m.castShadow=false; m.receiveShadow=false; return m; }
 const sUp=strSeg(), sLo=strSeg(); bow.add(sUp); bow.add(sLo);
 
 const _tipU=new THREE.Vector3(), _tipL=new THREE.Vector3();
@@ -1296,7 +1299,7 @@ bow.add(nockArrow);
 /* --- feszítés/lövés animációs állapot --- */
 const BOW_BASE_X=0.34, BOW_BASE_Y=-0.10, BOW_BASE_Z=-0.62, BOW_BASE_ROTZ=0.13;
 const FOV_BASE=camera.fov;
-let prevCharge=0, bowKick=0, bowKickRot=0, relTwang=0, idleT=0;
+let prevCharge=0, bowKick=0, bowKickRot=0, relTwang=0, idleT=0, drawNockIn=1;
 // ÚJRATÖLTÉS-animáció: egyszer-sülő hang/impulzus-jelzők (lövéskor/húzáskor/cancelkor nullázódnak)
 let raspFired=false, swingFired=false, tapFired=false, seatFired=false;
 // élő íj-hangoló: B = be/ki, J/L yaw, I/K pitch, U/O roll, N/M méret, P tükör
@@ -2944,50 +2947,44 @@ function update(dt,t){
   else if(slashArc.visible) slashArc.visible=false;
   // ÚJRATÖLTÉS present-póz delták (alapból 0; a reload-ág tölti) — a lenti bow-írásokhoz ADDITÍVAN adódnak
   let presentY=0, presentZ=0, presentRotX=0, presentRotZ=0;
-  if(drawing && running){ charge=Math.min(RUNM.drawCap, charge+dt*1.5*RUNM.drawMul); powwrap.classList.add('on'); powwrap.classList.remove('reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width=(Math.min(1,charge)*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; nockArrow.scale.setScalar(1); if(currentElement==='base' && nockArrow._glow) nockArrow._glow.material.opacity=0; animateNock(t); }
+  if(drawing && running){ charge=Math.min(RUNM.drawCap, charge+dt*1.5*RUNM.drawMul); powwrap.classList.add('on'); powwrap.classList.remove('reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width=(Math.min(1,charge)*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; nockArrow.scale.setScalar(1);
+    // BETÖLTÉS: a húzás legelején a nyíl alulról-jobbról felúszik a húrra, majd onnan feszül hátra
+    drawNockIn=Math.min(1, charge/0.16);
+    if(drawNockIn<1){ const fe=easeOutCubic(drawNockIn);
+      nockArrow.position.set(lerp(0.12,0.046,fe), lerp(-0.42,0.060,fe), lerp(0.14,0.04,fe)*bowAdj.mz);
+      nockArrow.rotation.set(lerp(-0.5,0,fe), lerp(0.5,0,fe), lerp(0.7,0,fe)); }
+    else nockArrow.rotation.set(0,0,0);
+    if(currentElement==='base' && nockArrow._glow) nockArrow._glow.material.opacity=0; animateNock(t); }
   else if(running && shotCd>0){
-    // === ÍJ-ÚJRATÖLTÉS: a cooldown alatt LÁTHATÓ "új nyíl elővétele -> íjra helyezése -> beülés" — ez magyarázza a várakozást ===
-    const rp=Math.min(1, 1-shotCd/SHOT_CD), na=nockArrow, mz=bowAdj.mz;
+    // === ÍJ-ÚJRATÖLTÉS: a cooldown alatt üres, FELAJZOTT íj (csak a húr látszik) — a nyíl MAJD a húzáskor kerül a húrra ===
+    const rp=Math.min(1, 1-shotCd/SHOT_CD);
     powwrap.classList.add('on','reload'); if(powlabel) powlabel.textContent='TÖLTÉS…';
     powfill.style.width=(rp*100).toFixed(0)+'%'; powfill.style.background='';
-    // present-póz burkológörbe: 0->0.18 felfut, 0.18->0.6 tart, 0.6->0.88 kienged (az íj "felmutatja" a polcot)
-    const present = rp<0.18 ? easeOutCubic(rp/0.18) : rp<0.6 ? 1 : rp<0.88 ? 1-easeInOut((rp-0.6)/0.28) : 0;
-    presentY=-0.012*present; presentZ=0.006*present; presentRotX=0.03*present; presentRotZ=0.04*present;
-    if(rp<0.18){ na.visible=false; na.position.set(0.046,0.060,0.04*mz); na.rotation.set(0,0,0); na.scale.setScalar(1); }                 // FETCH: nyúl a tegezhez (nyíl még rejtve)
-    else if(rp<0.6){ na.visible=true; const fe=easeOutCubic((rp-0.18)/0.42);                                                            // SWING-IN: a nyíl alulról-jobbról felúszik a képbe
-      na.position.set(lerp(0.110,0.052,fe), lerp(-0.62,0.072,fe), lerp(0.12,0.02,fe)*mz);
-      na.rotation.set(lerp(-0.55,-0.10,fe), lerp(0.40,0.06,fe), lerp(0.65,0.10,fe)); na.scale.setScalar(lerp(0.92,1.0,fe)); }
-    else if(rp<0.88){ na.visible=true; const ge=easeInOut((rp-0.6)/0.28);                                                               // NOCK: ráfekteti a polcra + kiegyenesedik
-      na.position.set(lerp(0.052,0.046,ge), 0.060-0.010*Math.sin(ge*Math.PI), lerp(0.02,0.04,ge)*mz);
-      na.rotation.set(lerp(-0.10,0,ge), lerp(0.06,0,ge), lerp(0.10,0,ge)); na.scale.setScalar(1); }
-    else { na.visible=true; const s=(rp-0.88)/0.12;                                                                                     // SEAT/CLICK: bekattan a húrra
-      na.position.set(0.046, 0.060+0.004*Math.sin(s*Math.PI), 0.04*mz); na.rotation.set(0,0,0); na.scale.setScalar(1+0.04*Math.sin(s*Math.PI)); }
-    // egyszer-sülő hang/impulzus-cue-k (>= küszöb + jelző: egy dt-ugrás se hagyja ki)
+    // az íj finoman leereszkedik, majd visszaemelkedik (a várakozás olvasható gesztusa) — nyíl nélkül
+    const present = rp<0.25 ? easeOutCubic(rp/0.25) : rp<0.7 ? 1 : 1-easeInOut((rp-0.7)/0.3);
+    presentY=-0.012*present; presentZ=0.006*present; presentRotX=0.03*present; presentRotZ=0.03*present;
+    nockArrow.visible=false;
     if(!raspFired){ raspFired=true; if(AUD.rasp) AUD.rasp(); }
-    if(rp>=0.18 && !swingFired){ swingFired=true; if(AUD.whoosh) AUD.whoosh(); }
-    if(rp>=0.6 && !tapFired){ tapFired=true; if(AUD.tap) AUD.tap(); }
-    if(rp>=0.9 && !seatFired){ seatFired=true; bowKick=Math.max(bowKick,0.35); bowKickRot=Math.max(bowKickRot,0.30); relTwang=Math.max(relTwang,0.06);
-      if(na._glow) na._glow.material.opacity=0.7; if(AUD.nock) AUD.nock(); powwrap.classList.add('ready'); }   // a "beülés" pillanata: kis rúgás + szikra + arany pulzus + 'tk' hang
-    if(na._glow && na._glow.material.opacity>0) na._glow.material.opacity=Math.max(0, na._glow.material.opacity-dt*6);
-    if(rp>=0.999){ na.position.set(0.046,0.060,0.04*mz); na.rotation.set(0,0,0); na.scale.setScalar(1); }   // pontos nyugalmi póz az első húzás-frame-re
+    if(rp>=0.9 && !seatFired){ seatFired=true; if(AUD.nock) AUD.nock(); powwrap.classList.add('ready'); }   // felajzva, mehet a húzás
   }
   else { powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.background='';
-    nockArrow.scale.setScalar(1); nockArrow.rotation.set(0,0,0);   // a reload-pop maradékának pontos visszaállítása
+    nockArrow.scale.setScalar(1); nockArrow.rotation.set(0,0,0);
     if(nockArrow._glow && currentElement==='base') nockArrow._glow.material.opacity=0;
-    nockArrow.visible = (running && player.alive); }   // KÉSZENLÉT: a felajzott nyíl NEM tűnik el a reload után — ott marad nockolva (menüben/szünetben/halálkor rejtve)
+    nockArrow.visible = false; }   // KÉSZENLÉT: nyugalomban NINCS nyíl a húron — csak felhúzáskor úszik rá (a húr/ideg viszont mindig látszik)
   // elengedés-detektálás -> twang + FOV-rúgás + limb-snap
   if(prevCharge>0.12 && charge<=0.0001){ bowKick=1; bowKickRot=1; relTwang=0.14; camera.fov=FOV_BASE+5.5; camera.updateProjectionMatrix(); }
   prevCharge=charge;
 
   // húr/nyíl hátrahúzás a tölts szerint + elengedéskor előre-csattanó twang
-  const PULL=0.30;
+  const PULL=0.30, BRACE=0.088;   // BRACE = felajzott alaphelyzet: a húr nyugalomban is jól elemelkedik az íjtól (látható ideg)
   const twang = (relTwang>0 ? Math.sin(relTwang*70)*0.020*relTwang*7 : 0);
-  const pull  = charge*PULL + twang;
+  const pull  = BRACE + charge*PULL + twang;
   nock.position.set(0,0,-Math.max(0,pull)*bowAdj.mz);           // húr a néző felé (görbület-tükörrel kompenzálva)
-  if(!(running && shotCd>0 && !drawing)) nockArrow.position.set(0.046,0.060, (-pull+0.04)*bowAdj.mz);  // a nyíl a nockkal csúszik — DE reload alatt a reload-ág vezérli
+  // a nyíl a nockkal csúszik — DE reload alatt a reload-ág vezérli, és a húzás-eleji "felúszás" alatt a fenti nock-in
+  if(!(running && shotCd>0 && !drawing) && !(drawing && drawNockIn<1)) nockArrow.position.set(0.046,0.060, (-pull+0.04)*bowAdj.mz);
 
   // a végtagok valódi hajlása (longbow szép ívben görbül), elengedéskor visszacsapódik
-  let flex=charge*0.22;
+  let flex=0.05 + charge*0.22;   // 0.05 = felajzott alap-feszülés (a braced íj végtagjai enyhén behúzva)
   if(bowKick>0){ flex += -bowKick*0.12*Math.cos(bowKick*11); }
   limbU.rotation.x=flex; limbL.rotation.x=-flex;
 
@@ -3291,14 +3288,15 @@ function trollAI(m, dt, t){
     return; }   // bénítás VAGY teljes fagy = mozdulatlan (frozenSolid-et a tickStatus csökkenti)
   const walkAnim=()=>{
     if(T.id==='wisp'){ const s=Math.sin(m.hoverPh||0); m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.25+s*0.14,0.1); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.25-s*0.14,0.1);
-      m.torso.rotation.z=Math.sin((m.hoverPh||0)*0.7)*0.08; m.head.rotation.z=Math.sin((m.hoverPh||0)*0.5)*0.06; return; }   // LIDÉRC: lebegő imbolygás (a p.y-t a hover állítja)
-    m.walkPhase+=dt*(4+m.speed); const ph=m.walkPhase, sw=Math.sin(ph)*0.6;
-    m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(ph))*0.07;
+      m.head.rotation.x=lerp(m.head.rotation.x, s*0.05, 0.1); return; }   // LIDÉRC: lágy kar-lebegés + apró fej-billenés (a p.y-t a hover állítja) — NINCS torzó-ingás, hogy a fej ne váljon le
+    m.walkPhase+=dt*(4+m.speed); const ph=m.walkPhase;
+    m.legs.L.rotation.x=Math.sin(ph)*0.6; m.legs.R.rotation.x=-Math.sin(ph)*0.6; p.y=GROUND_Y+Math.abs(Math.sin(ph))*0.07;
     m.arms.L.rotation.x=0.5+Math.sin(ph)*0.35; m.arms.R.rotation.x=0.5-Math.sin(ph)*0.35;
-    // bütyök-vonszoló testbeszéd: váll-billegés a léptekre + tartás-dőlés + lomha fej-ellenbólintás
-    m.torso.rotation.z=Math.sin(ph)*0.075;
-    m.torso.rotation.x=(T.postureLean||0)+Math.abs(Math.sin(ph))*0.05;
-    m.head.rotation.z=Math.sin(ph+0.6)*0.05; m.head.rotation.x=-Math.abs(Math.sin(ph))*0.05; };
+    // FONTOS: a fej a torzó TESTVÉRE (nem gyereke), ezért a torzó oldal-döntése LEVÁLASZTANÁ a fejet.
+    // Ezért csak fej-BÓLINTÁS (rotation.x — a nyak-csuklónál pördül, marad a helyén) + enyhe torzó-előredőlés van, oldal-ingás NINCS.
+    m.torso.rotation.z=0;
+    m.torso.rotation.x=(T.postureLean||0);
+    m.head.rotation.z=0; m.head.rotation.x=-Math.abs(Math.sin(ph))*0.05; };
   const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; const ox=p.x, oz=p.z;
     p.x+=dx/d*step; p.z+=dz/d*step; let _pm=pushMob(p.x,p.z,(m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z;   // ELEM: slowMul; + nem megy át fán/kövön (mob solids)
     // ANTI-BESZORULÁS (első lépés): ha az akadály miatt alig haladt, oldalazzon el mellette egy irányba, amíg ki nem szabadul
@@ -3350,7 +3348,7 @@ function trollAI(m, dt, t){
       if(d<5.0){ moveToward(-0.8); walkAnim(); }
       else if(d>T.castRange+2){ moveToward(0.7); walkAnim(); }
       else { m.arms.L.rotation.x=0.5+Math.sin(t*2)*0.15; m.arms.R.rotation.x=0.5+Math.cos(t*2)*0.15;
-        m.torso.rotation.x=(T.postureLean||0)+Math.sin(t*1.5)*0.03; m.head.rotation.z=Math.sin(t*1.1)*0.04; }   // idle: ringatózó kántálás
+        m.torso.rotation.x=(T.postureLean||0)+Math.sin(t*1.5)*0.03; m.head.rotation.z=0; m.head.rotation.x=-Math.sin(t*1.5)*0.025; }   // idle: bólogató kántálás (oldal-ingás nélkül)
       // MÓD A: NAGY TÁVRÓL arkán lövedék (telegrafált felhúzás -> lövés)
       if(d>T.castRange && d<T.castMax){ if(m.casting<=0){ m.castTimer-=dt; if(m.castTimer<=0) m.casting=T.castWind; }
         if(m.casting>0){ m.casting-=dt; m.arms.R.rotation.x=-0.9; if(m.staffCrystal) m.staffCrystal.material.emissiveIntensity=1.4+2.2*(1-Math.max(0,m.casting)/T.castWind);
@@ -3375,7 +3373,7 @@ function trollAI(m, dt, t){
       if(d<T.bandMin){ moveToward(-0.9); walkAnim(); }
       else if(d>T.bandMax){ moveToward(0.8); walkAnim(); }
       else { m.arms.L.rotation.x=0.3; m.arms.R.rotation.x=0.3;
-        m.torso.rotation.x=(T.postureLean||0)+Math.sin(t*1.8)*0.035; m.torso.rotation.z=Math.sin(t*0.9)*0.02; }   // idle-légzés (a duzzadó epe-has él)
+        m.torso.rotation.x=(T.postureLean||0)+Math.sin(t*1.8)*0.03; m.torso.rotation.z=0; m.head.rotation.x=-Math.sin(t*1.8)*0.03; }   // idle-légzés: torzó előre-hátra + fej-bólintás EGYÜTT (nincs oldal-ingás, a fej nem válik le)
       m.rangedTimer-=dt;
       if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.6; spitterFire(m); if(wave>10) spitterFire(m, rand(0.10,0.22)*(Math.random()<0.5?1:-1)); }   // FEJLESZTÉS: a 2. lövedék CSAK wave 10 felett (mint a brute-osztódás)
       break;
