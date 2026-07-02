@@ -1804,14 +1804,22 @@ function embellishTroll(m){
   }
   sprout(g, rand(0.2,0.36),1.4,-0.30, 0.95, false);   // egyetlen kis hátsó glow-spóra (a "mohás" jegy, de kevesebb zaj)
   if(Math.random()<0.4) sprout(head, rand(-0.12,0.12),0.34,-0.08, 0.5, false);
-  // --- görbe csont-SZARVAK (sziluett-változás) ---
-  [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.07,0.42,6), tuskMat, s*0.15,0.28,-0.06); h.rotation.x=-0.30; h.rotation.z=s*0.28; head.add(h);   // FŐ szarv: a koponya tetejéről (közel a középvonalhoz) hátra-felfelé ível
-    const h2=mesh(new THREE.ConeGeometry(0.04,0.20,6), tuskMat, s*0.21,0.46,-0.12); h2.rotation.x=-0.45; h2.rotation.z=s*0.5; head.add(h2); });   // hegy: a fő szarv folytatása (átfed vele, nincs lebegő rés)
-  // --- magas, szaggatott HÁT-TARAJ ---
-  const ns=4+((Math.random()*3)|0);
-  for(let i=0;i<ns;i++){ const sp=mesh(new THREE.ConeGeometry(0.07,0.30+Math.random()*0.14,5), tuskMat, rand(-0.05,0.05), 0.90+i*0.18, -0.36); sp.rotation.x=-0.35; g.add(sp); }
-  // --- nagy MOHA-tömegek + zuzmó-kontraszt a vállon/háton ---
-  for(let i=0;i<4;i++){ const a=rand(0,6.28); g.add(mesh(new THREE.DodecahedronGeometry(0.14+Math.random()*0.10,0), (i%2?lichenMat:mossMat), Math.cos(a)*0.30, 1.0+Math.random()*0.8, -0.32-Math.random()*0.14, 1.1,0.7,1.1)); }   // moha a HÁTRA húzva, ne törje a sziluett-élt
+  // --- görbe csont-SZARVAK (sziluett-változás) — mind a 4 kúp EGY merge-elt mesh-ben ---
+  { const horns=[];
+    [-1,1].forEach(s=>{ horns.push({geo:new THREE.ConeGeometry(0.07,0.42,6), x:s*0.15,y:0.28,z:-0.06, rx:-0.30, rz:s*0.28});   // FŐ szarv: hátra-felfelé ível
+      horns.push({geo:new THREE.ConeGeometry(0.04,0.20,6), x:s*0.21,y:0.46,z:-0.12, rx:-0.45, rz:s*0.5}); });                  // hegy: a fő szarv folytatása
+    head.add(mesh(mergeGeos(horns), tuskMat, 0,0,0)); }
+  // --- magas, szaggatott HÁT-TARAJ — EGY merge-elt mesh ---
+  { const ns=4+((Math.random()*3)|0), crest=[];
+    for(let i=0;i<ns;i++) crest.push({geo:new THREE.ConeGeometry(0.07,0.30+Math.random()*0.14,5), x:rand(-0.05,0.05), y:0.90+i*0.18, z:-0.36, rx:-0.35});
+    g.add(mesh(mergeGeos(crest), tuskMat, 0,0,0)); }
+  // --- nagy MOHA-tömegek + zuzmó-kontraszt a vállon/háton — 2 merge-elt mesh (moha / zuzmó) ---
+  { const mossC=[], lichC=[];
+    for(let i=0;i<4;i++){ const a=rand(0,6.28), r=0.14+Math.random()*0.10;
+      const it={geo:jitter(new THREE.IcosahedronGeometry(r,0),r*0.2,r*0.15), x:Math.cos(a)*0.30, y:1.0+Math.random()*0.8, z:-0.32-Math.random()*0.14, sx:1.1,sy:0.7,sz:1.1};
+      (i%2?lichC:mossC).push(it); }
+    if(mossC.length){ const geo=mergeGeos(mossC); gradTint(geo,0x87a07d,0xffffff,0.8,2.0); g.add(mesh(geo, mossMatV, 0,0,0)); }
+    if(lichC.length) g.add(mesh(mergeGeos(lichC), lichenMat, 0,0,0)); }
   for(let i=0;i<3;i++) head.add(mesh(new THREE.SphereGeometry(0.03+Math.random()*0.02,6,5), skinDark, rand(-0.16,0.16), rand(-0.08,0.08), 0.30+Math.random()*0.16)); // szemölcs (belső textúra-zaj)
 }
 
@@ -2167,6 +2175,28 @@ function updateHpBar(m, dt){
   if(b !== m._hpBucket){ m.hpbarFill.material = (b===0?HPMAT_HI:b===1?HPMAT_MID:HPMAT_LO); m._hpBucket = b; }
   _hpQ.copy(m.g.quaternion).invert(); grp.quaternion.copy(_hpQ).multiply(camera.quaternion);  // billboard: szülő-yaw kiütése
 }
+/* Kúposodó 2-szegmensű végtag EGY merged geometriában: felkar/comb + könyök/térd-dudor +
+   alkar/lábszár + mitt-kéz (tenyér+hüvelyk+bütykök) vagy boka+lábfej-ék.
+   A Group-origótól negatív Y-ban lóg (pivot változatlan), gradTint a föld felé sötétedve.
+   A vertex-szín fehér körüli -> bodySkin element-átszínezésével jól komponál. */
+function limbGeo(o){
+  const mir=o.mirror?-1:1, tint=o.tint||[0xffffff,0x86987f];
+  const parts=[
+    {geo:jitter(new THREE.CylinderGeometry(o.upR0,o.upR1,o.upLen,7,2),0.012,0.008), y:-o.upLen/2},
+    {geo:new THREE.IcosahedronGeometry(Math.max(o.upR1,o.loR0)*1.18,0), y:-o.upLen, z:o.bend*0.5},
+    {geo:jitter(new THREE.CylinderGeometry(o.loR0,o.loR1,o.loLen,7,2),0.010,0.008), y:-o.upLen-o.loLen/2, z:o.bend, rx:o.bend*0.6}
+  ];
+  const y2=-o.upLen-o.loLen;
+  if(o.hand==='mitt'){
+    parts.push({geo:jitter(new THREE.IcosahedronGeometry(0.16,0),0.02,0.02), y:y2-0.07, z:o.bend+0.04, sx:1.05,sy:0.8,sz:1.3});   // tenyér
+    parts.push({geo:new THREE.SphereGeometry(0.055,6,5), x:mir*0.13, y:y2-0.03, z:o.bend+0.10});                                   // hüvelyk
+    for(let i=-1;i<=1;i++) parts.push({geo:new THREE.SphereGeometry(0.05,5,4), x:i*0.07, y:y2-0.16, z:o.bend+0.13});               // bütykök
+  } else if(o.hand==='foot'){
+    parts.push({geo:new THREE.CylinderGeometry(0.12,0.14,0.10,7), y:y2+0.03, z:o.bend});                                           // boka
+    parts.push({geo:jitter(new THREE.IcosahedronGeometry(0.16,0),0.02,0.02), y:y2-0.04, z:o.bend+0.10, sx:1.25,sy:0.55,sz:1.6});   // lábfej-ék
+  }
+  return gradTint(mergeGeos(parts), tint[1], tint[0], y2-0.24, 0.06);
+}
 function makeMonster(type, scale, hp, speed, el){
   let T;
   if(typeof type==='string' && TROLL_TYPES[type]) T=TROLL_TYPES[type];
@@ -2175,9 +2205,8 @@ function makeMonster(type, scale, hp, speed, el){
   const g=new THREE.Group(); g.scale.setScalar(scale);
 
   /* per-monster cloned materials (disposed in disposeMonster) */
-  const bodySkin = (T.skin!==undefined)
-    ? std({color:T.skin, bumpMap:SKIN_N, bumpScale:0.018})
-    : skinMat;
+  const bodySkin = std({color:(T.skin!==undefined)?T.skin:0x6b9c6e, bumpMap:SKIN_N, bumpScale:0.018, vertexColors:true});
+  // vertexColors:true -> minden bodySkin-es mesh színattribútumot igényel; a build végi biztonsági pass fehérrel pótolja
   const myEye = eyeMat.clone();
   if(T.eyeColor!==undefined) myEye.emissive=new THREE.Color(T.eyeColor);
   const eyeGlowCol = (T.eyeColor!==undefined) ? T.eyeColor : 0xff7a3d;
@@ -2191,62 +2220,58 @@ function makeMonster(type, scale, hp, speed, el){
   const earLen      = (T.earLen      !==undefined) ? T.earLen      : 0.34;
   const noTusks     = !!T.noTusks;
 
-  /* small helper: a 3-toe foot so footfalls read */
-  function foot(parent){
-    parent.add(mesh(new THREE.SphereGeometry(0.2,8,6), bodySkin, 0,-0.6,0.10, 1.25,0.6,1.5));
-    [-1,0,1].forEach(i=> parent.add(
-      mesh(new THREE.ConeGeometry(0.05,0.14,5), tuskMat, i*0.085,-0.62,0.26, 1,1,1)
-    ));
-  }
-
   /* ---------- LEGS (hips y0.62, rotate.x for walk) ---------- */
+  /* comb+térd+lábszár+boka+lábfej EGY merged mesh-ben (limbGeo) + karom-ujjak */
   const legs={};
   [-1,1].forEach(s=>{
     const leg=new THREE.Group(); leg.position.set(s*0.22*torsoW, 0.62, 0);
-    leg.add(mesh(new THREE.CylinderGeometry(0.17,0.22,0.40,7), bodySkin, 0,-0.18,0));  // thigh
-    leg.add(mesh(new THREE.CylinderGeometry(0.14,0.16,0.30,7), bodySkin, 0,-0.46,0.02)); // shin
-    foot(leg);
-    leg.add(mesh(new THREE.DodecahedronGeometry(0.15,0), mossMat, s*0.05,-0.10,-0.10)); // mossy knee clump
+    leg.add(mesh(limbGeo({upLen:0.34,upR0:0.21,upR1:0.16,loLen:0.26,loR0:0.15,loR1:0.115,bend:0.045,hand:'foot'}), bodySkin, 0,0,0));
+    const toes=[]; [-1,0,1].forEach(i=> toes.push({geo:new THREE.ConeGeometry(0.05,0.14,5), x:i*0.085, y:-0.60, z:0.28, rx:1.2}));
+    leg.add(mesh(mergeGeos(toes), tuskMat, 0,0,0));   // 3 előre néző karom a lábfej-ék orrán
+    leg.add(mesh(jitter(new THREE.IcosahedronGeometry(0.13,0),0.03,0.03), mossMat, s*0.05,-0.10,-0.10)); // mossy knee clump
     g.add(leg); legs[s<0?'L':'R']=leg;
   });
 
   /* ---------- TORSO (belly + chest + mossy back) ---------- */
   const torso=new THREE.Group(); torso.rotation.x=postureLean; g.add(torso);
-  // big rounded belly
-  torso.add(mesh(new THREE.SphereGeometry(0.6,12,9), bodySkin, 0,1.05,0, 1.0*torsoW,0.95,0.85));
-  // pale under-belly / chest plate (family belly motif)
-  torso.add(mesh(new THREE.SphereGeometry(0.44,11,8), bellyMat, 0,0.96,0.30, 1.0*torsoW,0.9,0.6));
-  // upper chest / trapezius
-  torso.add(mesh(new THREE.SphereGeometry(0.46,11,8), bodySkin, 0,1.46,-0.04, 1.08*shoulderW,0.78,0.82));
+  // big rounded belly — icosa finom jitterrel; hát/has kéttónus (hát hűvös-sötét, has világos)
+  const bellyGeo=jitter(new THREE.IcosahedronGeometry(0.6,1),0.025,0.02);
+  gradTint(bellyGeo, 0x90a48f, 0xffffff, -0.62, 0.62, 1.0, 'z');
+  torso.add(mesh(bellyGeo, bodySkin, 0,1.05,0, 1.0*torsoW,0.95,0.85));
+  // pale under-belly / chest plate (family belly motif) — krém hotspot a közepén
+  const plateGeo=radialTint(new THREE.SphereGeometry(0.44,11,8), 0xffffff, 0xcfc6ae, 0.5);
+  torso.add(mesh(plateGeo, bellyMat, 0,0.96,0.30, 1.0*torsoW,0.9,0.6));
+  // upper chest / trapezius — felfelé-hátra húzott púp (görnyedt sziluett)
+  const chestGeo=jitter(new THREE.IcosahedronGeometry(0.46,1),0.03,0.02);
+  gradTint(chestGeo, 0x8d9f8c, 0xffffff, -0.5, 0.5, 1.0, 'z');
+  torso.add(mesh(chestGeo, bodySkin, 0,1.46,-0.06, 1.08*shoulderW,0.82,0.85));
   // collar / throat
   torso.add(mesh(new THREE.CylinderGeometry(0.17,0.24,0.18,8), bodySkin, 0,1.74+neckLen*0.5,0.0));
-  // MOSS crust on back + shoulders (species signature) — irregular clumps
-  [[0.40,1.42,-0.16,0.24],[-0.40,1.36,-0.18,0.22],[0,1.02,-0.42,0.26],[0.22,1.66,-0.20,0.16],[-0.20,1.60,-0.22,0.15]]
-    .forEach(p=> torso.add(mesh(new THREE.DodecahedronGeometry(p[3],0), mossMat, p[0],p[1],p[2], 1,0.7,1)));
+  // MOSS crust on back + shoulders — EGY merge-elt mesh az 5 külön dodeka helyett
+  const mossCrust=[[0.40,1.42,-0.16,0.24],[-0.40,1.36,-0.18,0.22],[0,1.02,-0.42,0.26],[0.22,1.66,-0.20,0.16],[-0.20,1.60,-0.22,0.15]]
+    .map(p=>({geo:gradTint(jitter(new THREE.IcosahedronGeometry(p[3],0),p[3]*0.25,p[3]*0.2),0x7e9276,0xffffff,-p[3],p[3]), x:p[0],y:p[1],z:p[2], sy:0.7}));
+  torso.add(mesh(mergeGeos(mossCrust), mossMatV, 0,0,0));
 
   /* ---------- ARMS (shoulders y1.5, rotate.x walk/attack, rotate.z death) ---------- */
   const arms={};
+  /* felkar+könyök+alkar+mitt-kéz EGY merged mesh-ben; a volt skinDark ököl sötétebb vertex-szín */
   [-1,1].forEach(s=>{
     const arm=new THREE.Group(); arm.position.set(s*0.5*shoulderW, 1.5, 0);
-    arm.add(mesh(new THREE.CylinderGeometry(0.14,0.12,0.42,7), bodySkin, 0,-0.21,0));     // upper arm
-    arm.add(mesh(new THREE.SphereGeometry(0.10,7,6), mossMat, 0,-0.02,-0.04));            // mossy shoulder cap
-    arm.add(mesh(new THREE.CylinderGeometry(0.12,0.10,0.34,7), bodySkin, 0,-0.55,0.02));  // forearm
-    // oversized 3-knuckle fist (knuckle-dragging family)
-    arm.add(mesh(new THREE.SphereGeometry(0.17,8,6), skinDark, 0,-0.74,0.04, 1.0,0.9,1.1));
-    [-1,0,1].forEach(i=> arm.add(mesh(new THREE.SphereGeometry(0.06,6,5), skinDark, i*0.085,-0.80,0.12)));
+    arm.add(mesh(limbGeo({upLen:0.42,upR0:0.15,upR1:0.12,loLen:0.34,loR0:0.13,loR1:0.10,bend:0.05,hand:'mitt',mirror:s<0,tint:[0xffffff,0x7d8f7d]}), bodySkin, 0,0,0));
+    arm.add(mesh(jitter(new THREE.IcosahedronGeometry(0.11,0),0.03,0.03), mossMat, 0,-0.02,-0.04));   // mossy shoulder cap
     arm.rotation.x=0.5; g.add(arm); arms[s<0?'L':'R']=arm;
   });
 
   /* ---------- HEAD (group at y1.95, +neckLen) ---------- */
   const head=new THREE.Group(); head.position.set(0, 1.95+neckLen, 0.05); g.add(head);
-  // cranium
-  head.add(mesh(new THREE.SphereGeometry(0.38,12,10), bodySkin, 0,0,0, 1,0.95,1));
-  // mossy scalp cap
-  head.add(mesh(new THREE.SphereGeometry(0.30,9,7), mossMat, 0,0.18,-0.10, 1.2,0.7,1.0));
-  // heavy brow ridge (mossy wedge that shadows the eyes)
-  head.add(mesh(new THREE.SphereGeometry(0.30,9,6), mossMat, 0,0.10,0.22, 1.3,0.45,0.7));
-  // snout / muzzle
-  head.add(mesh(new THREE.SphereGeometry(0.18,9,7), bodySkin, 0,-0.06,0.34, 1.1,0.95,1.3));
+  // cranium — icosa a sima UV-gömb helyett (faceted, de a tömeg marad ~r0.38 -> headR hiteles)
+  head.add(mesh(jitter(new THREE.IcosahedronGeometry(0.38,1),0.02,0.018), bodySkin, 0,0,0, 1,0.92,1));
+  // mossy scalp cap (kisebb, feljebb — nem nyeli el a homlokot)
+  head.add(mesh(new THREE.SphereGeometry(0.28,9,7), mossMat, 0,0.20,-0.10, 1.15,0.6,1.0));
+  // heavy brow ridge — szögletes bőr-párkány, ami tényleg beárnyékolja a szemeket
+  { const brow=mesh(jitter(new THREE.BoxGeometry(0.50,0.11,0.18,2,1,1),0.03,0.02), bodySkin, 0,0.16,0.21); brow.rotation.x=0.15; head.add(brow); }
+  // snout / muzzle — icosa
+  head.add(mesh(jitter(new THREE.IcosahedronGeometry(0.18,1),0.015,0.012), bodySkin, 0,-0.06,0.34, 1.1,0.9,1.3));
   // nostrils
   [-1,1].forEach(s=> head.add(mesh(new THREE.SphereGeometry(0.035,6,5), skinDark, s*0.06,-0.02,0.50)));
 
@@ -2258,8 +2283,8 @@ function makeMonster(type, scale, hp, speed, el){
     sp.scale.setScalar(0.32); sp.position.set(s*0.15,0.05,0.34); head.add(sp);
   });
 
-  /* lower jaw + tooth row (family teeth motif) */
-  head.add(mesh(new THREE.SphereGeometry(0.16,8,6), bodySkin, 0,-0.20,0.30, 1.15,0.7,1.0)); // jaw
+  /* lower jaw + tooth row (family teeth motif) — lapított icosa, kissé előretolva */
+  head.add(mesh(jitter(new THREE.IcosahedronGeometry(0.16,1),0.012,0.01), bodySkin, 0,-0.21,0.31, 1.2,0.65,1.05)); // jaw
   [-2,-1,0,1,2].forEach(i=>{
     const t=mesh(new THREE.ConeGeometry(0.035,0.10,4), tuskMat, i*0.07,-0.10,0.40); t.rotation.x=Math.PI; head.add(t);
   });
@@ -2291,6 +2316,10 @@ function makeMonster(type, scale, hp, speed, el){
   embellishTroll(m);   // REDESIGN: gazdagabb részlet-pass (moha/zuzmó/tüskék/spórák/szőr) minden trollon
   m.el = (el!==undefined) ? el : (T.el||null);   // RANDOM ELEM: spawnonként sorsolt elem (a típustól FÜGGETLEN); co-opban a szervertől jön
   elementSkin(m);      // INNATE ELEM: tint + aura az m.el alapján
+  // vertexColors-os bodySkin: minden színattribútum nélküli mesh fehér attribútumot kap (a szorzás semleges eleme)
+  g.traverse(o=>{ if(o.isMesh && o.material===bodySkin && !o.geometry.attributes.color){
+    const n=o.geometry.attributes.position.count;
+    o.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n*3).fill(1),3)); } });
   // FPS: a sok submesh (alaprig + díszítések) közül CSAK a sziluett vessen árnyékot -> 3-4× kevesebb árnyék-mesh
   g.traverse(o=>{ if(o.isMesh) o.castShadow=false; });
   [torso, head, legs.L, legs.R, arms.L, arms.R].forEach(p=>{ if(p) p.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); });
