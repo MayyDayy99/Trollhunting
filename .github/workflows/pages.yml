@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url || steps.deployment3.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Assemble site (single-player only)
@@ -37,7 +37,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      # A deploy-pages action a timeoutot 10 percben MAXIMÁLJA (a nagyobb értéket visszavágja),
+      # a Pages-sor viszont időnként ennél tovább dugul (deployment_queued) -> 3 próbálkozás
+      # egymás után, összesen ~30 perc lefedettség. Ha az 1. sikerül, a többi kimarad.
       - id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          timeout: 1800000   # 30 perc: a Pages-deploy sor időnként bedugul (deployment_queued), a default 10 perc kevés
+        continue-on-error: true
+      - id: deployment2
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - id: deployment3
+        if: steps.deployment.outcome == 'failure' && steps.deployment2.outcome == 'failure'
+        uses: actions/deploy-pages@v4
