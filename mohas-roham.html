@@ -154,7 +154,7 @@
 <div id="hurt"></div>
 <div id="wither"></div>
 <div id="toast"></div>
-<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-02.7</div></div></div>
+<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-02.8</div></div></div>
 
 <div id="start" class="screen">
   <div class="card">
@@ -260,8 +260,8 @@
 
 /* ===================== Alap ===================== */
 const GROUND_Y = 0;
-const ARENA_R = 34;       // bejárható holdkör-tisztás
-const SPAWN_R = 50;       // a trollok a ködös fasor mögül jönnek
+const ARENA_R = 56;       // bejárható holdkör-tisztás (GRANDIÓZUS: ~2.7x terület)
+const SPAWN_R = 58;       // a trollok a ködös fasor mögül jönnek (radar-hatókör is ebből)
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp  = (a,b,t)=>a+(b-a)*t;
 const rand  = (a,b)=>a+Math.random()*(b-a);
@@ -276,7 +276,7 @@ const BOUND_R  = ARENA_R - 1.5; // 32.5 — a látható peremen belül tartja a 
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e1726);
-scene.fog = new THREE.Fog(0x0e1726, 40, 130);
+scene.fog = new THREE.Fog(0x0e1726, 45, 160);
 
 const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 400);
 const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -329,8 +329,8 @@ MOSS_T.anisotropy=renderer.capabilities.getMaxAnisotropy();
 scene.add(new THREE.HemisphereLight(0x6f86d6, 0x26301f, 0.55));
 const key=new THREE.DirectionalLight(0xbcd0ff,0.95); key.position.set(34,60,26);
 key.castShadow=true; key.shadow.mapSize.set(1024,1024); // FPS: feleakkora árnyék-textúra
-key.shadow.camera.left=-40; key.shadow.camera.right=40; key.shadow.camera.top=40; key.shadow.camera.bottom=-40;
-key.shadow.camera.near=1; key.shadow.camera.far=110; key.shadow.bias=-0.0005; key.shadow.normalBias=0.03;
+key.shadow.camera.left=-64; key.shadow.camera.right=64; key.shadow.camera.top=64; key.shadow.camera.bottom=-64;
+key.shadow.camera.near=1; key.shadow.camera.far=160; key.shadow.bias=-0.0005; key.shadow.normalBias=0.03;
 scene.add(key);
 const rim=new THREE.DirectionalLight(0x9fd8ff,0.5); rim.position.set(-24,28,-44); scene.add(rim);
 const moonFill=new THREE.PointLight(0x88aaff,0.4,120,2); moonFill.position.set(-40,30,-60); scene.add(moonFill);
@@ -471,7 +471,7 @@ function mergeGeos(items){
 /* ===================== Aréna / díszlet ===================== */
 const groundGeo=new THREE.CircleGeometry(150,96);
 groundGeo.rotateX(-Math.PI/2);   // forgatás a geometriába égetve, hogy a radialTint világ-XZ-ben dolgozzon
-radialTint(groundGeo, 0xffffff, 0x9aa89a, 60);                       // világos mohás közép -> hűvös-sötét perem
+radialTint(groundGeo, 0xffffff, 0x9aa89a, 95);                       // világos mohás közép -> hűvös-sötét perem
 mottleTint(groundGeo, [0x33503a,0x2b4531,0x4a6b41,0x4d3d2a], 0.72);  // moha/föld foltok (a repeatelt textúra-monotónia ellen)
 const ground=new THREE.Mesh(groundGeo, groundMat);
 ground.position.y=GROUND_Y; ground.receiveShadow=true;
@@ -500,7 +500,7 @@ const skirtGeo=new THREE.CircleGeometry(150,128);
 // Sugár-kapuzva, hogy az arénán belül a sík talaj alatt maradjon.
 { const p=skirtGeo.attributes.position;
   for(let i=0;i<p.count;i++){ const r=Math.hypot(p.getX(i),p.getY(i));
-    if(r>40) p.setZ(i, rand(-0.7,1.5)*Math.min(1,(r-40)/28)); }
+    if(r>62) p.setZ(i, rand(-0.7,1.5)*Math.min(1,(r-62)/30)); }
   skirtGeo.computeVertexNormals(); }
 gradTint(skirtGeo, 0x5f7663, 0xffffff, -0.7, 1.4, undefined, 'z');   // mélyedések sötétebbek — "nedves láp" mélységjel
 const bogSkirt=new THREE.Mesh(skirtGeo, bogMossMat);
@@ -509,7 +509,7 @@ scene.add(bogSkirt);
 // worn flagstone paths from altar toward the 4 cardinal stone-circle gaps
 const flagMat=std({color:0x3a4450,roughness:.95,map:MOSS_T,bumpMap:MOSS_T,bumpScale:0.05});
 for(let p=0;p<4;p++){ const ang=p*Math.PI/2 + Math.PI/4;
-  for(let s=0;s<7;s++){ const d=4.5 + s*4.6;
+  for(let s=0;s<11;s++){ const d=4.5 + s*4.6;
     const fs=mesh(new THREE.CircleGeometry(rand(1.6,2.4),10), flagMat,
       Math.cos(ang)*d + rand(-0.5,0.5), GROUND_Y+0.005 + s*0.0006, Math.sin(ang)*d + rand(-0.5,0.5));
     fs.rotation.x=-Math.PI/2; fs.rotation.z=rand(0,6.28); fs.castShadow=false; fs.receiveShadow=true; scene.add(fs); }
@@ -521,9 +521,12 @@ function tree(x,z,s){
   const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(s); g.rotation.y=rand(0,6.283);
   // EGY fa-mesh: törzs + 4 gyökérterpesz + 3 ágcsonk összefésülve, tövétől világosodó gradienssel
   const wood=[{geo:jitter(new THREE.CylinderGeometry(0.26,0.5,4.6,7,3),0.10,0.06), y:2.3, rz:(Math.random()-0.5)*0.14}];
-  for(let i=0;i<4;i++){ const a=i*1.571+rand(-0.3,0.3);
-    wood.push({geo:new THREE.CylinderGeometry(0.10,0.32,1.1,5), x:Math.cos(a)*0.45, y:0.30, z:Math.sin(a)*0.45,
-      rx:Math.sin(a)*0.6, rz:-Math.cos(a)*0.6}); }
+  // törzs-tő: zárt, szoknyás gallér + lapos, törzshöz SIMULÓ gyökér-bütykök (a régi szétálló kúpok
+  // sötét réseket hagytak a tő körül — közelről csúnya volt)
+  wood.push({geo:jitter(new THREE.CylinderGeometry(0.50,0.80,0.8,7,2),0.06,0.04), y:0.38});
+  for(let i=0;i<5;i++){ const a=i*1.257+rand(-0.25,0.25);
+    wood.push({geo:new THREE.CylinderGeometry(0.16,0.30,0.55,5), x:Math.cos(a)*0.55, y:0.16, z:Math.sin(a)*0.55,
+      rx:Math.sin(a)*0.35, rz:-Math.cos(a)*0.35}); }
   for(let i=0;i<3;i++){ const a=rand(0,6.283), len=1.0+Math.random();
     const b=new THREE.CylinderGeometry(0.05,0.12,len,5); b.translate(0,len/2,0);
     wood.push({geo:b, y:3.2+Math.random()*0.9, rz:Math.cos(a)*0.9, rx:Math.sin(a)*0.9}); }
@@ -568,7 +571,7 @@ function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROU
   /* ---- megalit kőkör (henge) az aréna peremén — most KÖRBEÉRŐ, sűrűbb (perem-fal) ---- */
   /* Az upright kövek a BOUND_R-en kívül, sűrűn körben (látható, tömör fal-ív).
      Mindegyik álló kő solidBox ütközőt kap, így a perem fizikailag is zárt. */
-  const N_STONE=22, RING=BOUND_R+3.0; const STONE=jitter(new THREE.BoxGeometry(1.6,5.5,1.0,2,3,2),0.25,0.2);
+  const N_STONE=34, RING=BOUND_R+3.0; const STONE=jitter(new THREE.BoxGeometry(1.6,5.5,1.0,2,3,2),0.25,0.2);
   gradTint(STONE, 0x7a8090, 0xffffff, -2.75, 2.75);   // földbe süllyedt sötét tő -> holdfény-kapta tető
   const stoneIM=new THREE.InstancedMesh(STONE, rockMatV, N_STONE); stoneIM.castShadow=true; stoneIM.receiveShadow=true;
   const _sm=new THREE.Matrix4(), _sq=new THREE.Quaternion(), _ss=new THREE.Vector3(), _sp=new THREE.Vector3(), _se=new THREE.Euler();
@@ -580,7 +583,7 @@ function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROU
     if(!fallen) solidCyl(Math.cos(a)*r, Math.sin(a)*r, 0.95); }
   stoneIM.instanceMatrix.needsUpdate=true; scene.add(stoneIM);
   /* ---- folytonos MOHÁS SZIKLAFAL-gyűrű a kövek mögött (a perem vizuálisan zárt, nincs rés) ---- */
-  const N_WALL=40, WALLR=BOUND_R+6.0;
+  const N_WALL=60, WALLR=BOUND_R+6.0;
   const WALLG=jitter(new THREE.IcosahedronGeometry(3.4,1), 1.0, 0.9);
   gradTint(WALLG, 0x6f7580, 0xffffff, -3.4, 3.4, 0.9);
   const wallIM=new THREE.InstancedMesh(WALLG, rockMatV, N_WALL); wallIM.castShadow=true; wallIM.receiveShadow=true;
@@ -750,13 +753,12 @@ function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROU
    vagy tisztán blokkoljon. */
 
 // FÁZIS 5: barlang-spawnpontok az aréna peremén (a trollok innen bújnak elő, nem a falból). A szerver UGYANEZEKET a pozíciókat használja.
-const R_CAVE=30.5, CAVE_ANGS=[0.9, 2.0, 3.1, 4.2, 5.3];
+const R_CAVE=52.5, CAVE_ANGS=[0.5, 1.4, 2.3, 3.2, 4.1, 5.0, 5.9];
 const CAVES=CAVE_ANGS.map(a=>({ ang:a, x:Math.cos(a)*R_CAVE, z:Math.sin(a)*R_CAVE }));
 // foglalt zónák, amiket KERÜLÜNK (cx,cz,r) — spawn + mászó-építmények + landmarkok + barlangok
 const KEEP_CLEAR = [
   ...CAVES.map(c=>[c.x, c.z, 3.2]),   // barlangok köré ne kerüljön fa/kő
   [0,0,6.5],            // spawn-tisztás
-  [9,-5,2.2],[9,-6.3,2.2],[9,-7.6,2.2],[9,-8.9,2.2],[9,-11.5,3.0], // lépcső+tető-emelvény
   [-7.0,5.5,2.0],[-8.6,6.2,2.0],[-7.6,4.0,2.0],                    // fa ládák
   [13,11,2.6],[16,13,2.6],                                          // kőlépcsők kifelé
   [11.55,7.90,2.6],    // oldWell
@@ -766,7 +768,15 @@ const KEEP_CLEAR = [
   [3.7,-19.6,4.0],     // brokenPillars #2
   [22.5,9,5.2],[18,9,2.8],   // A-kilátó rámpa + fedélzet
   [8,22.5,5.2],[8,18,2.8],   // B-kilátó rámpa + fedélzet
-  [13,13.5,3.2]              // lombhíd közép (A<->B)
+  [13,13.5,3.2],             // lombhíd közép (A<->B)
+  // --- ÓRIÁSFA-LOMBHÁZAK (törzs + fedélzet + rámpa-folyosó) + kötélhíd-vonalak (alattuk ne nőjön fa a hídba) ---
+  [40,-8,4.6],[37.1,-8,3.6],[37.1,-23,3.4],[37.1,-18.5,3.4],[37.1,-14,3.4],[37.1,-9.5,3.4],   // TH1 (kelet)
+  [24,-24,4.6],[24,-21.1,3.6],[9,-21.1,3.4],[13.5,-21.1,3.4],[18,-21.1,3.4],[22.5,-21.1,3.4],   // TH2 (délkelet)
+  [-34,-18,4.6],[-31.1,-18,3.6],[-31.1,-33,3.4],[-31.1,-28.5,3.4],[-31.1,-24,3.4],[-31.1,-19.5,3.4],   // TH3 (délnyugat)
+  [-20,24,4.6],[-20,21.1,3.6],[-5,21.1,3.4],[-9.5,21.1,3.4],[-14,21.1,3.4],[-18.5,21.1,3.4],    // TH4 (északnyugat)
+  [27.3,-17.8,2.8],[30.6,-14.6,2.8],[33.9,-11.3,2.8],                          // híd TH2<->TH1
+  [32.3,-3.8,2.8],[27.6,0.5,2.8],[22.8,4.8,2.8],                               // híd TH1<->A-kilátó
+  [-28.8,-10.2,2.8],[-26.6,-2.4,2.8],[-24.4,5.5,2.8],[-22.2,13.4,2.8]          // híd TH3<->TH4 (hosszú nyugati átkelő)
 ];
 function zoneFree(x,z,pad){ for(const c of KEEP_CLEAR){ if(Math.hypot(x-c[0],z-c[1]) < c[2]+(pad||0)) return false; } return true; }
 
@@ -778,7 +788,8 @@ solidCyl(-15.9, -15.2, 1.3);                // brokenPillars #1 oszlop-csokor
 solidCyl(3.7, -19.6, 1.3);                  // brokenPillars #2
 
 // --- FA-LIGETEK a tisztás peremén (klaszteres, természetes csoportok) ---
-const GROVES = [ [0.4,26],[1.25,27],[2.05,24],[3.0,28],[3.85,25],[4.7,27],[5.5,24],[6.0,28] ];
+const GROVES = [ [0.4,46],[1.25,48],[2.05,44],[3.0,49],[3.85,45],[4.7,47],[5.5,44],[6.0,48],
+  [0.8,30],[1.9,27],[2.9,31],[4.0,28],[5.2,30],[6.1,27] ];   // külső perem-ligetek + középmező-szigetek
 for(const gr of GROVES){ const ca=gr[0], cr=gr[1];
   const cx=Math.cos(ca)*cr, cz=Math.sin(ca)*cr; const n=2+((Math.random()*3)|0);
   for(let k=0;k<n;k++){ let tries=0,tx,tz; do{ const aa=ca+rand(-0.18,0.18), rr=cr+rand(-3.5,3.0); tx=Math.cos(aa)*rr; tz=Math.sin(aa)*rr; }
@@ -786,13 +797,14 @@ for(const gr of GROVES){ const ca=gr[0], cr=gr[1];
     if(tries<8){ tree(tx,tz, rand(0.9,1.7)); KEEP_CLEAR.push([tx,tz,1.6]); } }
 }
 // --- SŰRŰ HATÁR-FASOR a perem mentén (vizuális zártság, fenn ütköző) ---
-for(let i=0;i<26;i++){ const a=(i/26)*6.283+rand(-0.06,0.06), r=BOUND_R+rand(0.5,2.2);
+for(let i=0;i<40;i++){ const a=(i/40)*6.283+rand(-0.06,0.06), r=BOUND_R+rand(0.5,2.2);
   tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.1,1.9)); }
 // néhány nagy fa a fal mögött (sziluett, ütköző nem szükséges – peremen kívül)
-for(let i=0;i<18;i++){ const a=rand(0,6.28), r=rand(BOUND_R+10, 90); tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.0,1.8)); }
+for(let i=0;i<26;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 100); tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.0,1.8)); }
 
 // --- KŐ-KIBÚVÁSOK / sziklacsoportok a tisztáson belül (klaszteres) ---
-const OUTCROPS = [ [0.9,15],[2.4,17],[3.5,12],[4.2,18],[5.1,14],[5.9,16] ];
+const OUTCROPS = [ [0.9,15],[2.4,17],[3.5,12],[4.2,18],[5.1,14],[5.9,16],
+  [0.5,36],[1.6,40],[2.7,35],[3.8,42],[4.9,38],[5.7,34] ];   // + külső sziklacsoportok
 for(const oc of OUTCROPS){ const ca=oc[0], cr=oc[1];
   const n=2+((Math.random()*2)|0);
   for(let k=0;k<n;k++){ let tries=0,rx,rz; const rr0=rand(0.7,1.7); do{ const aa=ca+rand(-0.22,0.22), rr=cr+rand(-2.5,2.5); rx=Math.cos(aa)*rr; rz=Math.sin(aa)*rr; }
@@ -800,7 +812,7 @@ for(const oc of OUTCROPS){ const ca=oc[0], cr=oc[1];
     if(tries<8){ rock(rx,rz, rr0); KEEP_CLEAR.push([rx,rz,rr0+0.9]); } }
 }
 // szórt kis kövek a peremen kívül (díszlet, ütköző peremen kívül – ártalmatlan)
-for(let i=0;i<16;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 110); rock(Math.cos(a)*r, Math.sin(a)*r, rand(0.6,1.8)); }
+for(let i=0;i<24;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 115); rock(Math.cos(a)*r, Math.sin(a)*r, rand(0.6,1.8)); }
 // fű-foltok az arénában
 const grassMat=std({color:0x47803f,roughness:1});
 /* ===================== FOLIAGE: Sunken Moon-Circle ground-cover ===================== */
@@ -841,7 +853,7 @@ function grassTuftGeo(){
 }
 const grassBladeMat=std({color:0xffffff, roughness:1, vertexColors:true});   // a zöldet a per-instance szín adja (szorzódás!) grassBladeMat.side=THREE.DoubleSide;   // a hajló pengék mindkét oldala látsszon
 const _ic=new THREE.Color();
-(function(){ const N=760, BLADE=grassTuftGeo();
+(function(){ const N=1300, BLADE=grassTuftGeo();
   gradTint(BLADE, 0x53614f, 0xffffff, 0, 0.55, 1.2);   // sötét tő -> világos hegy (penge-mélység)
   const im=new THREE.InstancedMesh(BLADE, grassBladeMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   const A=new THREE.Color(0x4f8a45), B=new THREE.Color(0x9cc06a);
@@ -870,7 +882,7 @@ function fernGeo(){
   const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return g;
 }
 const fernMatV=std({color:0xffffff, roughness:1, vertexColors:true, side:THREE.DoubleSide});   // a zöldet a per-instance szín adja
-(function(){ const N=150, FROND=fernGeo();
+(function(){ const N=260, FROND=fernGeo();
   gradTint(FROND, 0x3d4f3c, 0xffffff, 0, 0.9, 1.1);   // sötét tő -> világosabb levélhegy
   const im=new THREE.InstancedMesh(FROND, fernMatV, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   const A=new THREE.Color(0x30583a), B=new THREE.Color(0x6f9c50);
@@ -887,7 +899,7 @@ const fernMatV=std({color:0xffffff, roughness:1, vertexColors:true, side:THREE.D
 })();
 
 // ---- PEBBLES (instanced ground stones, worn-flagstone fleck) ----
-(function(){ const N=110, PEB=new THREE.IcosahedronGeometry(0.16,0);
+(function(){ const N=190, PEB=new THREE.IcosahedronGeometry(0.16,0);
   const im=new THREE.InstancedMesh(PEB, rockMat, N); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;
   const A=new THREE.Color(0xb0b5be), B=new THREE.Color(0xffffff);
   for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+14, 1.2), s=rand(0.5,1.6);
@@ -900,7 +912,7 @@ const fernMatV=std({color:0xffffff, roughness:1, vertexColors:true, side:THREE.D
 })();
 
 // ---- FALLEN LEAVES (instanced flat litter quads) ----
-(function(){ const N=140, LEAF=new THREE.PlaneGeometry(0.22,0.13);
+(function(){ const N=250, LEAF=new THREE.PlaneGeometry(0.22,0.13);
   const im=new THREE.InstancedMesh(LEAF, leafMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   const LC=[0xffffff,0xe8d0a8,0xb8d0a0,0xd8b890];
   for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+8, 1.4);
@@ -913,11 +925,11 @@ const fernMatV=std({color:0xffffff, roughness:1, vertexColors:true, side:THREE.D
 })();
 
 // ---- GLOW-MUSHROOMS (groups, swaying — reuse existing mushroom() fn) ----
-for(let i=0;i<30;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+10, 1.3);
+for(let i=0;i<52;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+10, 1.3);
   mushroom(Math.cos(a)*r, Math.sin(a)*r, rand(0.4,1.3), Math.random()<0.45); }
 
 // ---- WILDFLOWERS (groups, swaying — warm amber + rare cyan accents) ----
-for(let i=0;i<22;i++){ const a=rand(0,6.283), r=rFall(3, ARENA_R, 1.5);
+for(let i=0;i<36;i++){ const a=rand(0,6.283), r=rFall(3, ARENA_R, 1.5);
   flower(Math.cos(a)*r, Math.sin(a)*r, rand(0.8,1.6), Math.random()<0.25); }
 /* ===================== /FOLIAGE ===================== */
 
@@ -1077,9 +1089,6 @@ function climbStruct(cx,cy,cz,w,height,d,mat){
   solidBox(cx, cz, w/2, d/2, {climb:true, top:cy+height, bottom:cy, mob:true});   // mob:true -> a trollok nem mennek át a platformon (de a magas építmény ALATT igen, lásd OVERHEAD)
   return m;
 }
-// lépcső -> emelvény (a lépés-tűrés miatt felsétálható)
-for(let i=0;i<4;i++) climbStruct(9, GROUND_Y+i*0.4, -5-i*1.3, 2.6, 0.5, 1.5, rockMat);
-climbStruct(9, GROUND_Y+1.6, -11.5, 3.2, 0.5, 3.0, rockMat); // tető-emelvény
 // fa ládák egymás mellett/tetején (ugrálós)
 climbStruct(-7.0, GROUND_Y, 5.5, 1.4,0.9,1.4, woodMat);
 climbStruct(-8.6, GROUND_Y, 6.2, 1.4,0.9,1.4, woodMat);
@@ -1101,40 +1110,101 @@ const DECK_A = climbStruct(18, GROUND_Y+3.6, 9, 3.4, 0.5, 3.4, woodMat);   // te
 // B-kilátó: rámpa (8,26)->(8,19) felfelé, majd fedélzet (8,18) tető=4.1
 rampUp(8, 27, 0, -1, 9, woodMat);   // FIX: ld. DECK_A — 9 lépcső 27-ről, hogy a deck előtt ne akadjon el
 const DECK_B = climbStruct(8, GROUND_Y+3.6, 18, 3.4, 0.5, 3.4, woodMat);
-// LOMBHÍD A<->B: KÖTÉL-PALLÓ FÜGGŐHÍD — belógó oldalkötelek + korlát + keresztpallók + tartókötelek + végoszlopok.
+// KÖTÉL-PALLÓ FÜGGŐHÍD-ÉPÍTŐ: belógó oldalkötelek + korlát + keresztpallók + tartókötelek + végoszlopok.
 // A járható ütközés a pallók alatt enyhén belóg (STEP-tűréssel végigsétálható), a látvány egy igazi rope-bridge.
-(function(){
-  const A={x:18,z:9}, B={x:8,z:18}; const dxb=B.x-A.x, dzb=B.z-A.z, span=Math.hypot(dxb,dzb);
+// Lejtős hidat is tud (atop != btop) — a belógás a fesztávval nő, a palló-lépcsők STEP alatt maradnak.
+const plankMat=std({color:0x835a32, roughness:.82, bumpMap:SKIN_N, bumpScale:0.015});   // meleg palló-fa
+const ropeMat =std({color:0x5e4326, roughness:.96});      // sodrott kötél
+const postMat =std({color:0x6e4a2c, roughness:.9});       // végoszlop / tartóláb
+function buildRopeBridge(ax,az,atop, bx,bz,btop){
+  const dxb=bx-ax, dzb=bz-az, span=Math.hypot(dxb,dzb);
   const ux=dxb/span, uz=dzb/span, qx=-uz, qz=ux;           // hossz- és keresztirány
   const yaw=Math.atan2(ux,uz);                              // pallók forgatása a hossztengelyre
-  const deckTop=GROUND_Y+4.1, HALF=1.05, SAG=0.42, N=13;   // járószint, fél-szélesség, közép-belógás, palló-szám
-  const yAt=(t)=> deckTop - Math.sin(Math.PI*t)*SAG;        // katenár-szerű belógás (0 a végeken, max középen)
-  const plankMat=std({color:0x835a32, roughness:.82, bumpMap:SKIN_N, bumpScale:0.015});   // meleg palló-fa
-  const ropeMat =std({color:0x5e4326, roughness:.96});      // sodrott kötél
-  const postMat =std({color:0x6e4a2c, roughness:.9});       // végoszlop
-  const tubeFromPts=(pts,r,mat)=>{ const c=new THREE.CatmullRomCurve3(pts); const t=new THREE.Mesh(new THREE.TubeGeometry(c,22,r,5,false),mat); t.castShadow=true; scene.add(t); };
+  const HALF=1.05, SAG=Math.max(0.42, span*0.031), N=Math.max(9, Math.round(span/1.05));   // fél-szélesség, belógás, palló-szám
+  const yAt=(t)=> atop+(btop-atop)*t - Math.sin(Math.PI*t)*SAG;   // lineáris lejtés + katenár-belógás (0 a végeken)
+  const SEG=Math.max(14, Math.round(span*0.55));            // kötél-mintavétel a fesztávhoz igazítva
+  const tubeFromPts=(pts,r,mat)=>{ const c=new THREE.CatmullRomCurve3(pts); const t=new THREE.Mesh(new THREE.TubeGeometry(c,Math.max(22,SEG*2),r,5,false),mat); t.castShadow=true; scene.add(t); };
   // 1) KERESZTPALLÓK + collision (keskeny lécek réssel, a belógást követve)
-  for(let k=0;k<N;k++){ const t=(k+0.5)/N, cx=A.x+dxb*t, cz=A.z+dzb*t, cy=yAt(t);
+  for(let k=0;k<N;k++){ const t=(k+0.5)/N, cx=ax+dxb*t, cz=az+dzb*t, cy=yAt(t);
     const plank=mesh(new THREE.BoxGeometry(HALF*2+0.1,0.12,0.46), plankMat, cx, cy-0.06, cz); plank.rotation.y=yaw; scene.add(plank);   // léc KERESZTBEN (szélesség=kereszt, mélység=0.46 a járásirányban)
     solidBox(cx, cz, 0.95, 0.95, {climb:true, top:cy, bottom:GROUND_Y+2.6, mob:true});   // ÁTFEDŐ négyzet-ütközők -> folytonos járófelület a diagonális hídon (nincs rés); bottom>=OVERHEAD -> a trollok ALATTA átmennek
   }
-  // 2) OLDALKÖTELEK: deck-szintű (a pallók pereme) + korlát (deck+0.95), mindkét oldalon, belógással
+  // 2) OLDALKÖTELEK: deck-szintű (a pallók pereme) + korlát (járószint+0.95), mindkét oldalon, belógással
   for(let s=-1;s<=1;s+=2){ for(const lvl of [0.0,0.95]){ const pts=[];
-    for(let i=0;i<=14;i++){ const t=i/14; pts.push(new THREE.Vector3(A.x+dxb*t+qx*s*HALF, yAt(t)+lvl, A.z+dzb*t+qz*s*HALF)); }
+    for(let i=0;i<=SEG;i++){ const t=i/SEG; pts.push(new THREE.Vector3(ax+dxb*t+qx*s*HALF, yAt(t)+lvl, az+dzb*t+qz*s*HALF)); }
     tubeFromPts(pts, lvl>0?0.035:0.05, ropeMat); } }
   // 3) FÜGGŐLEGES TARTÓKÖTELEK (korlát -> palló) néhány osztásnál
-  for(let s=-1;s<=1;s+=2){ for(let k=1;k<N;k+=2){ const t=k/N, bx=A.x+dxb*t+qx*s*HALF, bz=A.z+dzb*t+qz*s*HALF, yb=yAt(t);
-    tubeFromPts([new THREE.Vector3(bx,yb,bz), new THREE.Vector3(bx,yb+0.95,bz)], 0.025, ropeMat); } }
+  for(let s=-1;s<=1;s+=2){ for(let k=1;k<N;k+=2){ const t=k/N, bxp=ax+dxb*t+qx*s*HALF, bzp=az+dzb*t+qz*s*HALF, yb=yAt(t);
+    tubeFromPts([new THREE.Vector3(bxp,yb,bzp), new THREE.Vector3(bxp,yb+0.95,bzp)], 0.025, ropeMat); } }
   // 4) VÉGOSZLOPOK a két fedélzeten (a korlát-kötelek lehorgonyzása)
-  for(const D of [A,B]){ for(let s=-1;s<=1;s+=2){ const cx=D.x+qx*s*HALF, cz=D.z+qz*s*HALF;
-    const post=mesh(new THREE.CylinderGeometry(0.085,0.11,1.6,7), postMat, cx, deckTop+0.4, cz); scene.add(post);
+  for(const D of [{x:ax,z:az,top:atop},{x:bx,z:bz,top:btop}]){ for(let s=-1;s<=1;s+=2){ const cx=D.x+qx*s*HALF, cz=D.z+qz*s*HALF;
+    const post=mesh(new THREE.CylinderGeometry(0.085,0.11,1.6,7), postMat, cx, D.top+0.4, cz); scene.add(post);
     post.add(mesh(new THREE.SphereGeometry(0.12,6,5), postMat, 0,0.85,0)); } }
-  // 5) KORLÁT-ÜTKÖZŐ (láthatatlan, collision-only): sűrű poszt-sor a két él mentén, a látható korlátnál picit kijjebb (RAIL=1.2),
+  // 5) KORLÁT-ÜTKÖZŐ (láthatatlan, collision-only): sűrű poszt-sor a két él mentén, a látható korlátnál picit kijjebb,
   //    hogy a tested a kötélnél fogjon meg -> nem esel le, bátran szaladhatsz/lőhetsz. NEM mászható (groundAt kihagyja -> nem állsz rá),
   //    bottom>=OVERHEAD -> a magas híd ALATT a játékos/troll szabadon átmegy a talajon.
-  { const RAIL=HALF+0.15, M=20; for(let s=-1;s<=1;s+=2){ for(let i=0;i<=M;i++){ const t=0.03+0.94*(i/M);
-    solidCyl(A.x+dxb*t+qx*s*RAIL, A.z+dzb*t+qz*s*RAIL, 0.18, {top:GROUND_Y+5.5, bottom:GROUND_Y+2.6}); } } }
-})();
+  { const RAIL=HALF+0.15, M=Math.max(20, Math.round(span*1.6)); for(let s=-1;s<=1;s+=2){ for(let i=0;i<=M;i++){ const t=0.03+0.94*(i/M);
+    solidCyl(ax+dxb*t+qx*s*RAIL, az+dzb*t+qz*s*RAIL, 0.18, {top:Math.max(atop,btop)+1.5, bottom:GROUND_Y+2.6}); } } }
+}
+buildRopeBridge(18,9,GROUND_Y+4.1, 8,18,GROUND_Y+4.1);   // A<->B kilátóhíd (az eredeti lombhíd)
+
+// === ÓRIÁSFÁK + LOMBHÁZ-HÁLÓZAT — 4 hatalmas fa magas fedélzettel, felfutó palló-rámpával, kötélhidakkal összekötve ===
+// A "mocsaras action-játék" vertikalitás: földi rámpa -> 7.7-es lombház-fedélzet -> hidak a fák és a kilátók között.
+function giantTree(x,z){
+  const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=rand(0,6.283);
+  // EGY törzs-mesh: vaskos, kúposodó törzs + szoknyás gallér + 6 simuló gyökér-bütyök + 4 ágcsonk fenn
+  const wood=[{geo:jitter(new THREE.CylinderGeometry(1.05,1.7,17,9,5),0.22,0.15), y:8.5}];
+  wood.push({geo:jitter(new THREE.CylinderGeometry(1.75,2.6,1.6,9,2),0.14,0.10), y:0.8});
+  for(let i=0;i<6;i++){ const a=i*1.047+rand(-0.2,0.2);
+    wood.push({geo:new THREE.CylinderGeometry(0.5,0.95,1.5,6), x:Math.cos(a)*1.9, y:0.45, z:Math.sin(a)*1.9,
+      rx:Math.sin(a)*0.4, rz:-Math.cos(a)*0.4}); }
+  for(let i=0;i<4;i++){ const a=i*1.571+rand(-0.4,0.4), len=2.6+Math.random()*1.6;
+    const b=new THREE.CylinderGeometry(0.16,0.42,len,6); b.translate(0,len/2,0);
+    wood.push({geo:b, y:12+i*0.9, rz:Math.cos(a)*1.05, rx:Math.sin(a)*1.05}); }
+  const trunk=new THREE.Mesh(gradTint(mergeGeos(wood),0x35281c,0xffffff,-0.5,13), woodDarkV);
+  trunk.castShadow=true; trunk.receiveShadow=true; g.add(trunk);
+  // EGY lombkorona-mesh: 9 nagy icosa-gömb magasan, szélesen terülve
+  const blobs=[];
+  for(let i=0;i<9;i++){ const a=(i/9)*6.283+rand(-0.3,0.3), rr=i? 1.6+Math.random()*2.4 : 0;
+    blobs.push({geo:jitter(new THREE.IcosahedronGeometry(1.7+Math.random()*1.2,1),0.34,0.28),
+      x:Math.cos(a)*rr, y:16.5+rand(-0.6,1.2)-rr*0.45, z:Math.sin(a)*rr}); }
+  const canGeo=mergeGeos(blobs);
+  gradTint(canGeo, 0x3d5a44, 0xffffff, 12.5, 19.5, 1.3);
+  mottleTint(canGeo, [0xd8e8c0,0xffffff,0xbfd8a8], 0.45);
+  const canopy=new THREE.Mesh(canGeo, canopyMat); canopy.castShadow=false; canopy.receiveShadow=true; g.add(canopy);
+  scene.add(g);
+  solidCyl(x, z, 1.9, {mob:true});                                        // vaskos törzs-ütköző (teljes magasság)
+  flammables.push({x:x, z:z, r:1.9, g:g, onFire:false, zone:null});       // ELEM-ENV: az óriásfa is gyújtható
+  return g;
+}
+// lombház: óriásfa + oldalára rakott fedélzet (tető 7.7) + hosszú felfutó rámpa a fedélzet-tengelyre merőlegesen.
+// (dx,dz) a rámpa iránya; a fedélzet oldalirányban (n = side*(-dz,dx)) 2.9-re a törzstől -> a rámpa a törzs MELLETT fut el.
+// side (+1/-1): melyik merőleges oldalra kerüljön a fedélzet — így a rámpa és a kifutó híd NEM keresztezheti egymást.
+function treehouse(x,z,dx,dz,side){
+  giantTree(x,z);
+  side=side||1;
+  const nx=-dz*side, nz=dx*side, dcx=x+nx*2.9, dcz=z+nz*2.9;
+  climbStruct(dcx, GROUND_Y+7.2, dcz, 3.6, 0.5, 3.6, woodMat);            // fedélzet, tető=7.7 == a rámpa legfelső pallójával -> SIMA átlépés
+  const dp=mesh(new THREE.CylinderGeometry(0.3,0.42,7.2,7), postMat, dcx, GROUND_Y+3.6, dcz);
+  dp.castShadow=true; scene.add(dp);
+  solidCyl(dcx, dcz, 0.35, {top:GROUND_Y+7.15, climb:true, mob:true});    // fedélzet-tartóoszlop — climb: a fedélzeten állva (feet>=top-STEP) NEM blokkol oldalról; a földről (feet 0) fal marad
+  // 17-palló rámpa: teteje 7.7 == fedélzet-tető -> sík átlépés; RISE=0.45<=STEP -> VÉGIGFUTHATÓ, nem akaszt lépcsőfok
+  const r0x=dcx-dx*17, r0z=dcz-dz*17;
+  rampUp(r0x, r0z, dx, dz, 17, woodMat);
+  // tartólábak minden 4. pallónál — tetejük a palló ALJA alá limitálva, így a felfutást nem akasztják meg
+  for(let k=3;k<17;k+=4){ const px=r0x+dx*k, pz=r0z+dz*k, h=0.45*k;
+    const p=mesh(new THREE.CylinderGeometry(0.13,0.18,h,7), postMat, px, GROUND_Y+h/2, pz);
+    p.castShadow=true; scene.add(p);
+    solidCyl(px, pz, 0.22, {top:GROUND_Y+h-0.05, climb:true, mob:true}); }   // climb: a rámpán felfelé (feet a palló tetején > oszlop-tető-STEP) nem akaszt; a földről fal
+  return {x:dcx, z:dcz, top:GROUND_Y+7.7};
+}
+const TH1=treehouse( 40, -8,  0, 1);   // kelet — fedélzet (37.1,-8), rámpa délről (z -25 -> -9)
+const TH2=treehouse( 24,-24,  1, 0);   // délkelet — fedélzet (24,-21.1), rámpa nyugatról (x 7 -> 23)
+const TH3=treehouse(-34,-18,  0,1,-1); // délnyugat — fedélzet (-31.1,-18), rámpa DÉLRŐL (z -35 -> -19): a TH4-híd északra indul, így nem keresztezik egymást
+const TH4=treehouse(-20, 24, -1, 0);   // északnyugat — fedélzet (-20,21.1), rámpa keletről (x -3 -> -19)
+buildRopeBridge(TH2.x,TH2.z,TH2.top, TH1.x,TH1.z,TH1.top);      // TH2 <-> TH1
+buildRopeBridge(TH1.x,TH1.z,TH1.top, 18,9,GROUND_Y+4.1);        // TH1 <-> A-kilátó (LEJTŐS híd 7.8 -> 4.1)
+buildRopeBridge(TH3.x,TH3.z,TH3.top, TH4.x,TH4.z,TH4.top);      // TH3 <-> TH4 (hosszú nyugati átkelő)
 // hero-landmark testek (csak az arénán belüliek; pozíciók a buildLandmarks placement-jeiből)
 solidCyl(11.555, 7.905, 1.55, {});      // oldWell
 solidCyl(-7.329, 8.203, 0.95, {});      // cairnShrine
@@ -1916,7 +1986,7 @@ buildElementHUD(); buildUltHud(); updateNockElement();
 const monsters=[];
 /* ---- 5 troll-típus (art-direkciós újratervezés, erős sziluett-különbség) ---- */
 const TROLL_TYPES = {
-  wisp: { id:'wisp', el:'ice', resist:{fire:1.0,ice:0.35,poison:0.8,lightning:1.0}, name:'Lidérc', threat:0x7fe2ff, scaleMul:0.95, hpMul:0.8, speedMul:1.2, dmgMul:0.5, speedCap:4.5,
+  wisp: { id:'wisp', el:'ice', resist:{fire:1.0,ice:0.35,poison:0.8,lightning:1.0}, name:'Lidérc', threat:0x7fe2ff, scaleMul:0.95, hpMul:0.8, speedMul:1.2, dmgMul:0.5, speedCap:5.6,
     rangedCd:2.4, bandMin:6.0, bandMax:18.0, castDmg0:8, auraR:3.0, auraSpd:1.25, auraDmg:1.35,   // FEJLESZTÉS: távolsági jég-lövedék + 3m erősítő aura (server-mirror: WISP_S)
     skin:0x16414f, eyeColor:0x7fe2ff, club:false, noTusks:true, earLen:0.52, deathSpin:1.4, postureLean:0.05,
     build(m){
@@ -1939,7 +2009,7 @@ const TROLL_TYPES = {
       const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(1.15); core.position.set(0,1.05,0); g.add(core); m.wispGlow=[core];   // szellem-ragyogás (ref: elementSkin az elem színére tinteli)
       for(let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.35,depthWrite:false,blending:THREE.AdditiveBlending})); sp.scale.setScalar(0.42-i*0.07); sp.position.set(rand(-0.28,0.28),0.5-i*0.18,rand(-0.22,0.22)); g.add(sp); m.wispGlow.push(sp); }
     } },
-  grunt: { id:'grunt', resist:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:4.5, skin:0x6b9c6e, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.12, shoulderW:1.12, torsoW:1.05, neckLen:-0.03, tuskScale:1.0, earLen:0.34, noTusks:false,
+  grunt: { id:'grunt', resist:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:5.6, skin:0x6b9c6e, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.12, shoulderW:1.12, torsoW:1.05, neckLen:-0.03, tuskScale:1.0, earLen:0.34, noTusks:false,
     build(m){
 const g=m.g;
 // ---- HAFTED STONE-&-WOOD CLUB, parented to the RIGHT FIST so it swings with the attack ----
@@ -1984,7 +2054,7 @@ m.head.add(mesh(new THREE.SphereGeometry(0.075, 6, 5), mossMat, -0.15, 0.22, -0.
 // a small mossy clump crusted on the right shoulder (ties club arm into the back-moss line)
 m.arms.R.add(mesh(jitter(new THREE.DodecahedronGeometry(0.13, 0), 0.04, 0.04), mossMat, 0.04, 0.16, -0.08));
     } },
-  scout: { id:'scout', el:'fire', resist:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2}, name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:9.0, skin:0x93c653, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.40, shoulderW:0.78, torsoW:0.66, neckLen:0.06, tuskScale:0.0, noTusks:true, earLen:0.95,
+  scout: { id:'scout', el:'fire', resist:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2}, name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:11.0, skin:0x93c653, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.40, shoulderW:0.78, torsoW:0.66, neckLen:0.06, tuskScale:0.0, noTusks:true, earLen:0.95,
     build(m){
 const g=m.g;
   // LITHE LIMBS — thin the rigged arm/leg Groups so the imp reads lean & wiry.
@@ -2026,7 +2096,7 @@ const g=m.g;
   // the least moss of the caste, per the art direction).
   m.head.add(mesh(new THREE.SphereGeometry(0.07,7,6), mossMat, 0.20,0.20,-0.05));
     } },
-  brute: { id:'brute', el:'lightning', resist:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.2, skin:0x77828c, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.22, shoulderW:1.6, torsoW:1.42, neckLen:-0.14, tuskScale:2.2, earLen:0.22,
+  brute: { id:'brute', el:'lightning', resist:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.8, skin:0x77828c, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.22, shoulderW:1.6, torsoW:1.42, neckLen:-0.14, tuskScale:2.2, earLen:0.22,
     build(m){
 const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   // SHRINK THE HEAD so it reads buried between the shoulders (tiny sunken head = key brute silhouette).
@@ -2060,7 +2130,7 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   // a brow-ridge moss crust to anchor the sunken-eyes "two coals in shadow" look on the tiny head
   m.head.add(mesh(new THREE.SphereGeometry(0.14,7,6), mossDk, 0,0.16,0.18, 1.6,0.6,1.0));
     } },
-  shard: { id:'shard', el:null, resist:{fire:0.6,ice:0.7,poison:0.9,lightning:1.3}, name:'Kőszilánk', threat:0xc98a3a, scaleMul:0.62, hpMul:0.9, speedMul:1.15, dmgMul:1.0, speedCap:3.6, skin:0x6a7480, eyeColor:0xffce5a, club:false, deathSpin:1.1, postureLean:0.16, shoulderW:1.15, torsoW:1.1, neckLen:-0.06, tuskScale:1.2, earLen:0.22,
+  shard: { id:'shard', el:null, resist:{fire:0.6,ice:0.7,poison:0.9,lightning:1.3}, name:'Kőszilánk', threat:0xc98a3a, scaleMul:0.62, hpMul:0.9, speedMul:1.15, dmgMul:1.0, speedCap:4.5, skin:0x6a7480, eyeColor:0xffce5a, club:false, deathSpin:1.1, postureLean:0.16, shoulderW:1.15, torsoW:1.1, neckLen:-0.06, tuskScale:1.2, earLen:0.22,
     build(m){ m._crackMat=new THREE.MeshBasicMaterial({color:0xffb24d,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});   // izzó repedés-varratok (a pop-out alatt felvillannak)
       [[0.0,1.1,0.45,0.5],[0.2,0.85,0.42,0.4],[-0.18,1.3,0.36,0.35]].forEach(s=>{ const c=mesh(new THREE.BoxGeometry(0.05,s[3],0.05), m._crackMat, s[0],s[1],s[2]); c.rotation.z=rand(-0.5,0.5); m.g.add(c); });
       // KRISTÁLYFÜRT: 6-8 nyújtott oktaéder a vállakból/hátból, sötét tő -> sápadt hegy — EGY merge-elt mesh
@@ -2075,7 +2145,7 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
           gr.push({geo:gradTint(jitter(new THREE.IcosahedronGeometry(0.07+Math.random()*0.04,0),0.02,0.02),0x777d88,0xffffff,-0.1,0.1),
             x:Math.cos(a)*r2, y:0.55+rand(-0.08,0.10), z:Math.sin(a)*r2*0.7}); }
         m.g.add(mesh(mergeGeos(gr), rockMatV, 0,0,0)); } } },
-  shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x3a7a72, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18,
+  shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:4.5, skin:0x3a7a72, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18,
     castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:5.0, beamDrop:5.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, witherDmgMul:0.65, witherReloadMul:1.35,   // ÚJ: nagy távról arkán lövedék + közelről gyengítő varázs-nyaláb (HEX) postureLean:0.0, shoulderW:0.9, torsoW:0.80, neckLen:0.20, tuskScale:1.2, earLen:0.5,
     build(m){
 const g=m.g;
@@ -2135,7 +2205,7 @@ const g=m.g;
       m.healTimer=rand(1.5,3.0); m.auraPulse=0;
       m.castTimer=rand(1.5,2.6); m.casting=0; m.beaming=false; m.beamAcc=0;   // ÚJ: lövedék-telegráf + nyaláb-akkumulátor
     } },
-  spitter: { id:'spitter', el:'poison', resist:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:2.8, skin:0xa8bd52, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.16, shoulderW:0.95, torsoW:1.32, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
+  spitter: { id:'spitter', el:'poison', resist:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:3.5, skin:0xa8bd52, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.16, shoulderW:0.95, torsoW:1.32, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
     build(m){
 const g=m.g, head=m.head;
       // ── per-monster bile material (the ONLY new material → disposed via m.spitMat) ──
@@ -2773,7 +2843,7 @@ function spawnMonster(){
   const ca=(spawnAngles.length ? spawnAngles.shift() : CAVES[(Math.random()*CAVES.length)|0].ang);
   let cave=CAVES[0], bd=9; for(const c of CAVES){ let dd=Math.abs(c.ang-ca); if(dd>Math.PI) dd=2*Math.PI-dd; if(dd<bd){ bd=dd; cave=c; } }   // a popolt szöghöz tartozó barlang
   const id=pickTrollType(), T=TROLL_TYPES[id];
-  const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3, baseSp=(1.5+wave*0.10)*rand(0.85,1.15);
+  const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3, baseSp=(1.9+wave*0.12)*rand(0.85,1.15);   // NAGYOBB PÁLYA: +25% alaptempó, hogy a hullám-ritmus megmaradjon
   const sc=baseSc*T.scaleMul, hp=Math.round(baseHp*T.hpMul), sp=Math.min(baseSp*T.speedMul, T.speedCap);
   const m=makeMonster(id, sc, hp, sp, rollMonsterEl(id));
   const inx=-cave.x/R_CAVE, inz=-cave.z/R_CAVE;   // befelé (központ felé) egységvektor
