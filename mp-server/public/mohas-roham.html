@@ -1244,6 +1244,10 @@ for(let i=0;i<7;i++){
 // nyíl-polc + ablak (a riser jobb oldalán, hogy a nyíl rajta üljön)
 const shelf=mesh(new THREE.BoxGeometry(0.055,0.014,0.040), staveWood, 0.030,0.052,0.030); shelf.castShadow=true; bow.add(shelf);
 const rest =mesh(new THREE.CylinderGeometry(0.0035,0.0035,0.045,6), gripLeather, 0.046,0.060,0.030); rest.rotation.z=Math.PI/2; bow.add(rest);
+// ELEM-BERAKÁS: vésett, izzó csík a markolat hasán + rúna-gyöngy a polc alatt — az aktuális elem színére vált (updateNockElement)
+const bowInlayMat=new THREE.MeshStandardMaterial({color:0x0d1a24, emissive:0x36c5ff, emissiveIntensity:0.15, roughness:.4, flatShading:true});
+{ const strip=mesh(new THREE.BoxGeometry(0.007,0.125,0.006), bowInlayMat, 0,0,0.063); bow.add(strip);
+  const rune=mesh(new THREE.OctahedronGeometry(0.013,0), bowInlayMat, 0.030,0.032,0.042); bow.add(rune); }
 
 /* --- húr (két szakasz a nock-ig) + nock-pont (string-pull point) --- */
 const nock=new THREE.Group(); bow.add(nock);
@@ -1317,11 +1321,18 @@ const slashArc=(function(){
 const GRAV=9.2;
 const JUMP_V=5.2;
 const arrows=[];
+const arrowBandMat=std({color:0x2e8fa8, roughness:.6});   // festett jelölő-sáv a tollazat előtt (megosztott — 30 nyíl)
 function makeArrow(){
   const g=new THREE.Group();
-  const shaft=mesh(new THREE.CylinderGeometry(0.018,0.018,0.82,6), arrowWood,0,0,0); shaft.rotation.x=Math.PI/2; g.add(shaft);
-  const tip=mesh(new THREE.ConeGeometry(0.045,0.13,6), metalMat.clone(),0,0,-0.46); tip.rotation.x=-Math.PI/2; g.add(tip);  // ELEM: own material clone so the head can be tinted per element
-  [0,1,2].forEach(i=>{ const f=mesh(new THREE.BoxGeometry(0.005,0.12,0.1), featherMat,0,0,0.36); f.rotation.z=i*Math.PI/1.5; g.add(f); });
+  const shaft=mesh(new THREE.CylinderGeometry(0.010,0.013,0.82,7), arrowWood,0,0,0); shaft.rotation.x=Math.PI/2; g.add(shaft);   // karcsú, hegy felé enyhén vastagodó vessző
+  { const band=mesh(new THREE.CylinderGeometry(0.0135,0.0135,0.05,7), arrowBandMat,0,0,0.30); band.rotation.x=Math.PI/2; g.add(band); }
+  // PENGE-FEJ: lapított 4-oldalú kúp (broadhead) + fém nyakgyűrű
+  const tip=mesh(new THREE.ConeGeometry(0.052,0.16,4), metalMat.clone(),0,0,-0.46, 1,1,0.30); tip.rotation.x=-Math.PI/2; g.add(tip);  // ELEM: own material clone so the head can be tinted per element
+  { const col=mesh(new THREE.CylinderGeometry(0.012,0.015,0.03,7), metalMat,0,0,-0.375); col.rotation.x=Math.PI/2; g.add(col); }
+  // 3 valódi toll-lap enyhe spirál-csavarral (a doboz-fletchek helyett)
+  [0,1,2].forEach(i=>{ const f=mesh(new THREE.PlaneGeometry(0.11,0.052), featherMat,0,0,0.35);
+    f.rotation.y=Math.PI/2; f.rotation.z=i*(Math.PI*2/3); f.rotation.x=0.10; g.add(f); });
+  { const nk=mesh(new THREE.CylinderGeometry(0.012,0.009,0.02,7), hornMat,0,0,0.415); nk.rotation.x=Math.PI/2; g.add(nk); }   // szaru-nock a végén
   // ELEM: per-arrow additive glow sprite (color/opacity set by applyArrowVisual)
   const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
   glow.scale.setScalar(0.55); glow.position.set(0,0,-0.42); g.add(glow);
@@ -1628,6 +1639,7 @@ function updateNockElement(){   // a nockolt nyíl FINOMAN mutassa az elemet —
   const na=nockArrow; if(!na._tip) return; const def=EL[currentElement]||EL.base, base=(currentElement==='base');
   if(na._tip.material){ na._tip.material.emissive.setHex(base?0x000000:def.head); na._tip.material.emissiveIntensity=base?0:0.45; na._tip.visible=true; }   // a fém hegy mindig látszik, csak izzik
   if(na._glow){ na._glow.material.color.setHex(def.glow); na._glow.material.opacity=base?0:0.2; }
+  bowInlayMat.emissive.setHex(base?0x2b4254:def.glow); bowInlayMat.emissiveIntensity=base?0.25:1.0;   // íj-berakás az elem színében
   nockVis.el=currentElement; nockVis.elemHolder=na._elemHolder; nockVis.flames=null; buildElemHead(nockVis); na._flames=nockVis.flames;   // elem-specifikus fej (láng/kristály/csepp/szikra)
   na._elemHolder.children.forEach(o=>{ if(o.material && typeof o.material.opacity==='number') o.material.opacity*=0.5; });   // tompítás (a kilőtt nyíl marad a fényes)
 }
