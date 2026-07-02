@@ -1849,9 +1849,15 @@ const TROLL_TYPES = {
       const g=m.g, head=m.head;
       if(m.bodySkin){ m.bodySkin.transparent=false; m.bodySkin.opacity=1; m.bodySkin.emissive=new THREE.Color(0x36c5ff); m.bodySkin.emissiveIntensity=0.35; }   // FACE-FIX: opaque test -> a csont-arc nem mosódik el a 0.92-es testtől; a glow halo viszi a szellem-érzetet
       if(m.legs){ m.legs.L.visible=false; m.legs.R.visible=false; }   // LIDÉRC LEBEG -> nincs láb; helyette lefelé csúcsosodó szellem-uszály
-      const tail=mesh(new THREE.ConeGeometry(0.34,1.25,7), wispCloth, 0,0.18,0); tail.rotation.x=Math.PI; g.add(tail);   // uszály (csúcs lefelé, a talaj felé nyúlik)
-      const mantle=mesh(new THREE.ConeGeometry(0.55,1.6,7), wispCloth, 0,1.3,0); g.add(mantle);   // csuklya/köpeny a sziluettért
-      [-1,1].forEach(s=>{ const hem=mesh(new THREE.ConeGeometry(0.22,0.7,6), wispCloth, s*0.32,0.6,0.05); hem.rotation.z=s*0.3; g.add(hem); });   // szaggatott szegély
+      // uszály + köpeny + szegélyek EGY merge-elt mesh-ben, jitterelt-RONGYOS peremmel
+      { const cloth=[
+          {geo:jitter(new THREE.ConeGeometry(0.34,1.25,7),0.06,0), y:0.18, rx:Math.PI},          // uszály (csúcs lefelé)
+          {geo:jitter(new THREE.ConeGeometry(0.55,1.6,8),0.07,0), y:1.3},                        // csuklya/köpeny
+          {geo:jitter(new THREE.ConeGeometry(0.22,0.7,6),0.05,0), x:-0.32, y:0.6, z:0.05, rz:-0.3},
+          {geo:jitter(new THREE.ConeGeometry(0.22,0.7,6),0.05,0), x:0.32, y:0.6, z:0.05, rz:0.3}];
+        g.add(mesh(mergeGeos(cloth), wispCloth, 0,0,0)); }
+      // csuklya-torus keretezi a csont-arcot
+      { const hood=mesh(new THREE.TorusGeometry(0.245,0.055,6,12), wispCloth, 0,0.05,0.03); head.add(hood); }
       const faceMat=bellyMat.clone(); m.wispFaceMat=faceMat;   // saját opaque klón -> elementSkin tintezheti (NE a SHARED bellyMat-ra írjunk)
       head.add(mesh(new THREE.SphereGeometry(0.19,9,7), faceMat, 0,0.02,0.06, 1,1.05,0.7));   // csont-arclap (világos akcentus a szemek köré)
       [-1,1].forEach(s=>{ const h=mesh(new THREE.ConeGeometry(0.05,0.5,6), wispCloth, s*0.16,0.30,-0.04); h.rotation.x=-0.5; h.rotation.z=s*0.55; head.add(h); });   // 2 görbe szellem-szarv
@@ -1875,13 +1881,27 @@ club.add(haft);
 haft.add(mesh(new THREE.SphereGeometry(0.075, 7, 6), woodDark, 0, -0.50, 0));
 // chunky striking HEAD: a knotted dark-wood burl with embedded mossy stone studs
 const headGrp = new THREE.Group(); headGrp.position.set(0, 0.62, 0); haft.add(headGrp);
-headGrp.add(mesh(jitter(new THREE.DodecahedronGeometry(0.20, 0), 0.05, 0.05), woodDark, 0, 0, 0, 1.0, 1.15, 1.0));
-// three small stone studs ringing the burl (the "teeth" of the club)
-[[0.17, 0.05, 0.02],[-0.15, -0.02, 0.06],[0.02, 0.06, -0.16]].forEach(p=>
-  headGrp.add(mesh(new THREE.DodecahedronGeometry(0.075, 0), woodMat, p[0], p[1], p[2])));
+headGrp.add(mesh(jitter(new THREE.IcosahedronGeometry(0.20, 1), 0.05, 0.05), woodDark, 0, 0, 0, 1.0, 1.15, 1.0));   // görcsös icosa-burl
+// 3 beágyazott fog-kúp ("a buzogány fogai") — EGY merge-elt tuskMat mesh
+headGrp.add(mesh(mergeGeos([
+  {geo:new THREE.ConeGeometry(0.05,0.17,5), x:0.17, y:0.06, z:0.02, rz:-1.2},
+  {geo:new THREE.ConeGeometry(0.05,0.17,5), x:-0.14, y:0.0, z:0.08, rz:1.1, rx:0.5},
+  {geo:new THREE.ConeGeometry(0.05,0.17,5), x:0.02, y:0.08, z:-0.15, rx:-1.2}
+]), tuskMat, 0,0,0));
 // a creep of moss on the club head — keeps it in the species' material trinity
 headGrp.add(mesh(new THREE.SphereGeometry(0.11, 7, 6), mossMat, -0.06, 0.10, 0.07, 1.0, 0.7, 1.0));
+// 2 bőr grip-tekercs a nyélen — EGY merge-elt clothMat mesh
+haft.add(mesh(mergeGeos([
+  {geo:new THREE.TorusGeometry(0.078,0.02,5,10), y:-0.26, rx:Math.PI/2},
+  {geo:new THREE.TorusGeometry(0.082,0.02,5,10), y:-0.34, rx:Math.PI/2}
+]), clothMat, 0,0,0));
 fistR.add(club);
+// ---- MOHA/SZŐR-GALLÉR a váll vonalán: 9 lapított kúp EGY merge-elt mesh-ben ----
+{ const ruff=[], nR=9;
+  for(let i=0;i<nR;i++){ const a2=(i/nR)*6.283;
+    ruff.push({geo:gradTint(new THREE.ConeGeometry(0.09,0.30,5),0x77906c,0xffffff,-0.15,0.15),
+      x:Math.cos(a2)*0.30, y:1.66, z:Math.sin(a2)*0.26-0.02, rx:Math.sin(a2)*1.25, rz:-Math.cos(a2)*1.25}); }
+  m.torso.add(mesh(mergeGeos(ruff), mossMatV, 0,0,0)); }
 // ---- extra MOSS on the crown for character (the species signature, denser up top on the baseline) ----
 m.head.add(mesh(new THREE.SphereGeometry(0.10, 7, 6), mossMat, 0.12, 0.26, -0.04));
 m.head.add(mesh(new THREE.SphereGeometry(0.075, 6, 5), mossMat, -0.15, 0.22, -0.02, 1.2, 0.7, 1.0));
@@ -1938,23 +1958,26 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   m.head.scale.setScalar(0.78);
   // THICKEN THE FRAME: bulk arms & legs (rescale sub-groups only — pivots/rotations untouched, rig safe).
   ['L','R'].forEach(k=>{ m.arms[k].scale.set(1.28,1.0,1.28); m.legs[k].scale.set(1.22,1.0,1.22); });
-  // BOULDER PAULDRONS — the unmistakable wide granite silhouette: mossy rock domes capping each shoulder,
-  // each topped with a bare grey stone nub. Placed on g over the shoulder line (~y1.62), spread by shoulderW.
-  [[0.80,1.62,-0.04],[-0.80,1.62,-0.04]].forEach(p=>{
-    g.add(mesh(jitter(new THREE.DodecahedronGeometry(0.42,0),0.07,0.07), mossDk, p[0],p[1],p[2]));
-    g.add(mesh(new THREE.DodecahedronGeometry(0.20,0), woodMat, p[0],p[1]+0.20,p[2]-0.08)); // grey stone nub (woodMat = warm rock)
-  });
-  // STONE BACK-HUMP: a hunched slab of mossy granite filling the back, widening the standing mass.
-  g.add(mesh(jitter(new THREE.DodecahedronGeometry(0.46,0),0.06,0.06), mossDk, 0,1.30,-0.46, 1.25,1.0,1.0));
-  // small stone scree on the hump for crusty texture
-  g.add(mesh(new THREE.DodecahedronGeometry(0.16,0), woodDark, -0.18,1.50,-0.42));
-  // GIANT TWO-HANDED STONE MAUL in the right fist — hung off g at a fixed pose (the AI swings arms.R, the
-  // club stays gripped-looking; matches the base-club pattern so it reads as carried, never floats off the rig).
+  // GRÁNIT-LAP PÁNCÉL: 6 lapított, jitterelt icosa-lap a vállakon + a gerinc mentén,
+  // EGY merge-elt rockMatV mesh-ben, kő-gradienssel (a régi woodMat-"meleg szikla" hack kiváltva).
+  { const plates=[];
+    [[0.80,1.66,-0.02],[-0.80,1.66,-0.02]].forEach(p=> plates.push(
+      {geo:jitter(new THREE.IcosahedronGeometry(0.42,1),0.09,0.07), x:p[0],y:p[1],z:p[2], sx:1.15,sy:0.62,sz:1.05, rz:p[0]>0?-0.25:0.25}));
+    [[0,1.52,-0.42],[0.10,1.20,-0.50],[-0.08,0.90,-0.52],[0.04,0.62,-0.50]].forEach((p,i)=> plates.push(
+      {geo:jitter(new THREE.IcosahedronGeometry(0.34-i*0.04,1),0.07,0.06), x:p[0],y:p[1],z:p[2], sx:1.2,sy:0.55,sz:1.0, rx:-0.35}));
+    const geo=mergeGeos(plates); gradTint(geo,0x6d7787,0xffffff,0.4,2.0);
+    g.add(mesh(geo, rockMatV, 0,0,0)); }
+  // KŐ BÜTYÖK-SAPKÁK mindkét öklön
+  ['L','R'].forEach(k=> m.arms[k].add(mesh(
+    gradTint(jitter(new THREE.IcosahedronGeometry(0.13,0),0.03,0.03),0x8b93a2,0xffffff,-0.13,0.13),
+    rockMatV, 0,-0.88,0.08, 1.15,0.8,1.2)));
+  // GIANT TWO-HANDED STONE MAUL — icosa-fej + kötél-tekercs a nyakán
   const club=mesh(new THREE.CylinderGeometry(0.10,0.14,1.25,7), woodDark, 0,0,0);
   club.position.set(0.66,1.02,0.05); club.rotation.x=0.55; club.rotation.z=-0.12;
-  const head=mesh(jitter(new THREE.DodecahedronGeometry(0.34,0),0.07,0.07), mossDk, 0,0.64,0); // mossy boulder head
-  head.add(mesh(new THREE.DodecahedronGeometry(0.16,0), woodMat, 0.10,0.06,0.10)); // bare stone chip on the maul
-  club.add(head); g.add(club);
+  const mhead=mesh(gradTint(jitter(new THREE.IcosahedronGeometry(0.34,1),0.08,0.07),0x757e8e,0xffffff,-0.35,0.35), rockMatV, 0,0.64,0);
+  club.add(mhead);
+  { const lash=mesh(new THREE.TorusGeometry(0.125,0.028,5,10), clothMat, 0,0.40,0); lash.rotation.x=Math.PI/2; club.add(lash); }
+  g.add(club);
   // HUGE BROKEN TUSKS jutting from the jaw — extra pair beyond the base's tuskScale:2.2 set, jagged & splayed.
   [-1,1].forEach(s=>{ const t=mesh(new THREE.ConeGeometry(0.07,0.36,5), tuskMat, s*0.21,-0.05,0.22);
     t.rotation.x=-0.5; t.rotation.z=s*0.28; m.head.add(t); });
@@ -1964,7 +1987,18 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   shard: { id:'shard', el:null, resist:{fire:0.6,ice:0.7,poison:0.9,lightning:1.3}, name:'Kőszilánk', threat:0xc98a3a, scaleMul:0.62, hpMul:0.9, speedMul:1.15, dmgMul:1.0, speedCap:3.6, skin:0x6a7480, eyeColor:0xffce5a, club:false, deathSpin:1.1, postureLean:0.16, shoulderW:1.15, torsoW:1.1, neckLen:-0.06, tuskScale:1.2, earLen:0.22,
     build(m){ m._crackMat=new THREE.MeshBasicMaterial({color:0xffb24d,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});   // izzó repedés-varratok (a pop-out alatt felvillannak)
       [[0.0,1.1,0.45,0.5],[0.2,0.85,0.42,0.4],[-0.18,1.3,0.36,0.35]].forEach(s=>{ const c=mesh(new THREE.BoxGeometry(0.05,s[3],0.05), m._crackMat, s[0],s[1],s[2]); c.rotation.z=rand(-0.5,0.5); m.g.add(c); });
-      for(let i=0;i<3;i++){ const a=rand(0,6.28); m.g.add(mesh(new THREE.TetrahedronGeometry(0.12,0), skinDark, Math.cos(a)*0.4,1.0+rand(-0.2,0.4),Math.sin(a)*0.3)); } } },
+      // KRISTÁLYFÜRT: 6-8 nyújtott oktaéder a vállakból/hátból, sötét tő -> sápadt hegy — EGY merge-elt mesh
+      { const cl=[], n=6+((Math.random()*3)|0);
+        for(let i=0;i<n;i++){ const a=rand(0,6.28), rr=0.22+Math.random()*0.22;
+          cl.push({geo:gradTint(new THREE.OctahedronGeometry(0.10+Math.random()*0.07,0),0x5a626e,0xffffff,-0.15,0.15),
+            x:Math.cos(a)*rr, y:1.05+rand(-0.15,0.5), z:-0.12-Math.random()*0.26,
+            sy:1.6+Math.random()*0.9, rx:rand(-0.55,0.15), rz:rand(-0.5,0.5)}); }
+        m.g.add(mesh(mergeGeos(cl), rockMatV, 0,0,0)); }
+      // kavics-szoknya a csípőn — EGY merge-elt mesh
+      { const gr=[]; for(let i=0;i<5;i++){ const a=rand(0,6.28), r2=0.28+Math.random()*0.1;
+          gr.push({geo:gradTint(jitter(new THREE.IcosahedronGeometry(0.07+Math.random()*0.04,0),0.02,0.02),0x777d88,0xffffff,-0.1,0.1),
+            x:Math.cos(a)*r2, y:0.55+rand(-0.08,0.10), z:Math.sin(a)*r2*0.7}); }
+        m.g.add(mesh(mergeGeos(gr), rockMatV, 0,0,0)); } } },
   shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:3.6, skin:0x3a7a72, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18,
     castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:5.0, beamDrop:5.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, witherDmgMul:0.65, witherReloadMul:1.35,   // ÚJ: nagy távról arkán lövedék + közelről gyengítő varázs-nyaláb (HEX) postureLean:0.0, shoulderW:0.9, torsoW:0.80, neckLen:0.20, tuskScale:1.2, earLen:0.5,
     build(m){
@@ -1977,12 +2011,14 @@ const g=m.g;
       ['L','R'].forEach(k=>{ m.arms[k].scale.set(0.82,1.08,0.82); m.legs[k].scale.set(0.85,1.1,0.85); });
       m.head.scale.set(0.92,1.12,0.95); m.head.position.y=1.95+0.15; // neckLen lift -> taller stance
 
-      // --- ANTLER-HORN CROWN sweeping back from the skull (the regal giveaway), parented to head in HEAD-LOCAL space ---
+      // --- VALÓDI CSONT-AGANCS: oldalanként 3 kúposodó, ívesen forgatott szegmens + 2 ág,
+      //     EGY merge-elt tuskMat mesh-ben (az izzás a staffCrystal + harmadik szem kiváltsága marad) ---
       [-1,1].forEach(s=>{
-        const horn=mesh(new THREE.ConeGeometry(0.055,0.6,5), staffMat, s*0.20,0.26,-0.06);
+        const horn=mesh(new THREE.ConeGeometry(0.055,0.6,5), tuskMat, s*0.20,0.26,-0.06);
         horn.rotation.z=s*0.62; horn.rotation.x=-0.42;
-        const tine=mesh(new THREE.ConeGeometry(0.032,0.26,5), staffMat, s*0.10,0.30,0.02); tine.rotation.x=0.5; horn.add(tine); // forward branch
-        const back=mesh(new THREE.ConeGeometry(0.028,0.20,5), staffMat, -s*0.04,0.24,-0.06); back.rotation.x=-0.5; horn.add(back); // rear branch
+        const tine=mesh(new THREE.ConeGeometry(0.032,0.26,5), tuskMat, s*0.10,0.30,0.02); tine.rotation.x=0.5; horn.add(tine);   // előre ág
+        const back=mesh(new THREE.ConeGeometry(0.028,0.20,5), tuskMat, -s*0.04,0.24,-0.06); back.rotation.x=-0.5; horn.add(back); // hátra ág
+        const tip=mesh(new THREE.ConeGeometry(0.034,0.26,5), tuskMat, s*0.10,0.42,-0.08); tip.rotation.z=s*0.55; tip.rotation.x=-0.25; horn.add(tip); // felső ív-folytatás
         m.head.add(horn);
       });
       // small crystal third-eye gem on the brow to tie the crown together
@@ -1991,14 +2027,22 @@ const g=m.g;
       // --- bone-bead priest necklace across the pale throat/chest (HEAD-LOCAL, drapes under the jaw) ---
       for(let i=-2;i<=2;i++){ const bead=mesh(new THREE.SphereGeometry(0.035,6,5), tuskMat, i*0.085,-0.34+Math.abs(i)*0.018,0.33); m.head.add(bead); }
 
-      // --- CEREMONIAL CRYSTAL STAFF in the right hand (kept on g so it doesn't swing with the attack arm) ---
-      const staff=mesh(new THREE.CylinderGeometry(0.04,0.05,1.42,7), woodMat, 0.55,1.05,0.06); staff.rotation.x=0.18;
+      // --- LAPOS FÉL-SZOKNYA KÖPENY hátulra (LatheGeometry, a torso-val together dől) ---
+      { const pts=[new THREE.Vector2(0.30,1.04),new THREE.Vector2(0.44,0.70),new THREE.Vector2(0.52,0.40),new THREE.Vector2(0.58,0.14)];
+        const robe=mesh(new THREE.LatheGeometry(pts,10,Math.PI/2,Math.PI), clothMat, 0,0,0);
+        m.torso.add(robe); }
+      // --- CEREMONIAL CRYSTAL STAFF — kétszegmensű, enyhén megtört görcsös nyél ---
+      const staff=mesh(new THREE.CylinderGeometry(0.045,0.055,0.78,7), woodMat, 0.55,0.75,0.06); staff.rotation.x=0.18;
+      { const upper=mesh(new THREE.CylinderGeometry(0.035,0.045,0.72,7), woodMat, 0.03,0.72,0.03); upper.rotation.z=0.12; upper.rotation.x=-0.08; staff.add(upper); }
       // bound moss grip + bone cap at the base
       staff.add(mesh(new THREE.SphereGeometry(0.07,7,6), mossMat, 0,-0.10,0,1,0.6,1));
       staff.add(mesh(new THREE.ConeGeometry(0.05,0.12,6), tuskMat, 0,-0.74,0)); // pointed bone ferrule
       // crowning crystal (m.staffCrystal -> AI pulses its emissiveIntensity)
-      const crystal=mesh(new THREE.OctahedronGeometry(0.17,0), staffMat, 0,0.80,0); staff.add(crystal); m.staffCrystal=crystal;
+      const crystal=mesh(new THREE.OctahedronGeometry(0.17,0), staffMat, 0.06,1.12,0.05); staff.add(crystal); m.staffCrystal=crystal;
       crystal.add(mesh(new THREE.OctahedronGeometry(0.085,0), staffMat, 0,0,0,1,2.0,1)); // inner spike for sparkle
+      // kristályfürt a fő kristály tövén (2 kisebb oktaéder)
+      crystal.add(mesh(new THREE.OctahedronGeometry(0.07,0), staffMat, 0.10,-0.08,0.02, 1,1.5,1));
+      crystal.add(mesh(new THREE.OctahedronGeometry(0.055,0), staffMat, -0.09,-0.10,-0.02, 1,1.4,1));
       // two small orbiting runes near the head of the staff
       staff.add(mesh(new THREE.OctahedronGeometry(0.05,0), staffMat, 0.13,0.56,0.02));
       staff.add(mesh(new THREE.OctahedronGeometry(0.05,0), staffMat, -0.11,0.42,-0.02));
@@ -2025,15 +2069,18 @@ const g=m.g, head=m.head;
       ['L','R'].forEach(k=>{ m.legs[k].scale.set(1.28,0.82,1.28); m.arms[k].scale.set(0.78,0.9,0.78); });
 
       // ── HUGE SAGGING BILE-BELLY: a big glowing translucent-looking sac drooping from the gut ──
-      g.add(mesh(new THREE.SphereGeometry(0.6,12,9), spitMat, 0,0.86,0.30, 1.34,1.12,1.02));   // main sac
+      g.add(mesh(jitter(new THREE.IcosahedronGeometry(0.6,1),0.03,0.025), spitMat, 0,0.86,0.30, 1.34,1.12,1.02));   // main sac — facetted, duzzadt
       g.add(mesh(new THREE.SphereGeometry(0.30,9,7), spitMat, 0,0.55,0.40, 1.1,0.9,1.0));        // lower droop lobe
       g.add(mesh(new THREE.SphereGeometry(0.20,8,6), bellyMat, 0,1.02,0.50, 1.2,0.8,0.7));       // pale highlight ridge
       // moss patch crusted on the belly's upper crown (family unity)
       g.add(mesh(new THREE.SphereGeometry(0.16,7,6), mossMat, -0.10,1.18,0.18, 1.1,0.6,1));
 
       // ── OOZING BACK-PUSTULE CLUSTER: clumped pale-yellow bile sacs (diseased read) ──
-      [[0.40,1.46,-0.24,0.21],[-0.42,1.30,-0.22,0.23],[0.04,1.58,-0.30,0.18],[0.24,1.10,-0.42,0.20],[-0.20,1.04,-0.40,0.17]]
-        .forEach(p=> g.add(mesh(new THREE.SphereGeometry(p[3],8,6), spitMat, p[0],p[1],p[2], 1,0.84,1)));
+      { const pus=[];
+        [[0.40,1.46,-0.24,0.21],[-0.42,1.30,-0.22,0.23],[0.04,1.58,-0.30,0.18],[0.24,1.10,-0.42,0.20],[-0.20,1.04,-0.40,0.17]]
+          .forEach(p=>{ pus.push({geo:new THREE.IcosahedronGeometry(p[3],1), x:p[0],y:p[1],z:p[2], sy:0.84});
+            pus.push({geo:new THREE.ConeGeometry(p[3]*0.3,p[3]*0.5,5), x:p[0],y:p[1]-p[3]*0.8,z:p[2], rx:Math.PI}); });   // lecsöppenő csepp-kúpok
+        g.add(mesh(mergeGeos(pus), spitMat, 0,0,0)); }
       // moss caps on the two biggest sacs (so the back still reads Mossfolk)
       [[0.40,1.57,-0.24],[-0.42,1.43,-0.22]].forEach(p=> g.add(mesh(new THREE.SphereGeometry(0.12,7,6), mossMat, p[0],p[1],p[2], 1,0.6,1)));
 
@@ -2045,6 +2092,11 @@ const g=m.g, head=m.head;
       [-1,1].forEach(s=>{ const t=mesh(new THREE.ConeGeometry(0.04,0.15,4), tuskMat, s*0.22,-0.10,0.30); t.rotation.x=-0.2; t.rotation.z=s*0.55; head.add(t); });
       // a single drip-bead of bile dangling from the lip (the gross detail)
       head.add(mesh(new THREE.SphereGeometry(0.05,6,5), spitMat, 0.06,-0.30,0.36, 1,1.4,1));
+
+      // ── ÚSZÓHÁRTYÁS VARANGYLÁB: 3 széles, lapított kúp-lábujj lábanként, EGY merge-elt mesh ──
+      ['L','R'].forEach(k=>{ const toes=[];
+        [-1,0,1].forEach(i=> toes.push({geo:new THREE.ConeGeometry(0.075,0.22,4), x:i*0.10, y:-0.585, z:0.30, rx:1.35, sy:0.5}));
+        m.legs[k].add(mesh(mergeGeos(toes), spitMat, 0,0,0)); });
 
       m.rangedTimer=rand(1.2,2.6);
     } },
@@ -3301,10 +3353,10 @@ warmup(frame);
 /* ===== ?shot=1 : DEV screenshot mód — fix kameraállások + trolltípus-sor (játékmenetet nem érinti) ===== */
 if(/[?&]shot=1/.test(location.search)){
   const SHOT_POSES=[
-    [0, 2.1, 3.5,   0, 1.2, -6],     // 0: trolltípus-sor közelről
+    [-6, 1.8, -2.6,  -6, 1.2, -6],   // 0: grunt/scout/brute közelről
     [0, 9, 22,      0, 1, 0],        // 1: tisztás totál
     [4, 1.7, 6,    -16, 4, -26],     // 2: fák / lombkorona / horizont
-    [0, 1.6, 2,     0, 1.0, -6],     // 3: troll-sor szemmagasságból
+    [3, 1.8, -2.6,   3, 1.2, -6],    // 3: shaman/spitter/wisp/shard közelről
   ];
   let shotIdx=0;
   window.__nextShot=()=>{ shotIdx=(shotIdx+1)%SHOT_POSES.length; window.__shotPose=SHOT_POSES[shotIdx]; return shotIdx; };
@@ -3314,8 +3366,9 @@ if(/[?&]shot=1/.test(location.search)){
       clearInterval(bootShot);
       document.querySelectorAll('.screen').forEach(e=>e.classList.add('hide'));
       const hud=document.getElementById('hud'); if(hud) hud.style.display='none';
+      window.__shotErrors=[];
       for(const [i,ty] of ['grunt','scout','brute','shaman','spitter','wisp','shard'].entries()){
-        try{ const m=makeMonster(ty,1.0,100,2.5); m.g.position.set(-9+i*3, GROUND_Y, -6); m.g.rotation.y=0; }catch(_e){}
+        try{ const m=makeMonster(ty,1.0,100,2.5); m.g.position.set(-9+i*3, GROUND_Y, -6); m.g.rotation.y=0; }catch(_e){ window.__shotErrors.push(ty+': '+_e.message); }
       }
       window.__shotPose=SHOT_POSES[0];
     }
