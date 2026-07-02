@@ -1443,16 +1443,16 @@ const EFX=(function(){
     for(let j=0;j<=SEG;j++){ const t=j/SEG, e=(j>0&&j<SEG)?jit:0; arr[j*3]=ax+(bx-ax)*t+rand(-e,e); arr[j*3+1]=ay+(by-ay)*t+rand(-e,e); arr[j*3+2]=az+(bz_-az)*t+rand(-e,e); }
     b.m.geometry.attributes.position.needsUpdate=true; b.m.material.color.set(color); b.m.material.opacity=1; b.life=dur; b.max=dur; b.m.visible=true; }
   // dinamikus fény (egy megosztott, villanó pontfény)
-  const L=new THREE.PointLight(0xffffff,0,18,2); L.visible=false; scene.add(L); let Ll=0,Lm=1,Li=0;
+  const L=new THREE.PointLight(0xffffff,0,18,2); L.visible=true; scene.add(L); let Ll=0,Lm=1,Li=0;   // MINDIG visible: a fény-szám konstans marad -> nincs shader-újrafordítás játék közben (intenzitás-kapuzás)
   function light(x,y,z,color,intensity,dur){ L.position.set(x,y,z); L.color.set(color); L.intensity=intensity; Li=intensity; Ll=dur; Lm=dur; L.visible=true; }
   function update(dt){
     for(const f of fl){ if(f.life>0){ f.life-=dt; const k=f.life/f.max; f.s.scale.setScalar(f.r0+(f.r1-f.r0)*(1-k)); f.s.material.opacity=f.a0*k; if(f.life<=0)f.s.visible=false; } }
     for(const r of rg){ if(r.life>0){ r.life-=dt; const k=r.life/r.max; r.m.scale.setScalar(r.r0+(r.r1-r.r0)*(1-k)); r.m.material.opacity=r.a0*k; if(r.life<=0)r.m.visible=false; } }
     for(const b of bz){ if(b.life>0){ b.life-=dt; b.m.material.opacity=Math.max(0,b.life/b.max); if(b.life<=0)b.m.visible=false; } }
-    if(Ll>0){ Ll-=dt; L.intensity=Li*Math.max(0,Ll/Lm); if(Ll<=0)L.visible=false; } }
+    if(Ll>0){ Ll-=dt; L.intensity=Li*Math.max(0,Ll/Lm); if(Ll<=0)L.intensity=0; } }
   return { flash, ring, bolt, light, update };
 })();
-const arrowLight=new THREE.PointLight(0x88ccff,0,9,2); arrowLight.visible=false; scene.add(arrowLight); let arrowLightT=0;
+const arrowLight=new THREE.PointLight(0x88ccff,0,9,2); arrowLight.visible=true; scene.add(arrowLight); let arrowLightT=0;   // MINDIG visible (konstans fény-szám), intenzitással kapuzva
 
 /* ========================= 2) ELEMI KONFIG + FÜGGVÉNYEK ========================= */
 /* ===================== ELEMI NYÍLRENDSZER (Tűz / Jég / Méreg / Villám) =====================
@@ -1948,7 +1948,7 @@ const g=m.g;
 const fistR = m.arms.R;
 const club = new THREE.Group();
 club.position.set(0.04, -0.78, 0.10);   // in the fist, angled forward out of the knuckles
-club.rotation.set(-0.35, 0.0, 0.10);
+club.rotation.set(-0.35, 0.0, -0.30);   // a bot KIFELÉ dől a válltól (nem a fej mögé lóg)
 // wooden haft (tapered, slightly knotty via woodMat's bump)
 const haft = mesh(new THREE.CylinderGeometry(0.055, 0.085, 0.95, 7), woodMat, 0, 0.30, 0);
 club.add(haft);
@@ -3197,7 +3197,7 @@ function update(dt,t){
   sparks.update(dt); gore.update(dt); updateElemFx(dt);
   RP.update(dt); SMK.update(dt); EFX.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg léptetése
   updateUltHud();   // PLAYER: VIHAR-csík + rezonancia-ragyogás
-  if(arrowLightT>0){ arrowLightT-=dt; if(arrowLightT<=0) arrowLight.visible=false; }   // repülő elemi nyíl fénye lecseng
+  if(arrowLightT>0){ arrowLightT-=dt; if(arrowLightT<=0) arrowLight.intensity=0; }   // repülő elemi nyíl fénye lecseng (visible marad: konstans fény-szám)
   drawRadar(t);
   updateHpOrbs(dt,t);   // FÁZIS 4: lebegő élet-gömbök (pörgés/lebegés + felvétel)
   // szentjánosbogarak
@@ -3313,11 +3313,18 @@ function trollAI(m, dt, t){
       if(m._stuckT>0.3){ if(!m._stuckSide) m._stuckSide=(((p.x*7+p.z*13)|0)&1)?1:-1; const tx=-dz/d*m._stuckSide, tz=dx/d*m._stuckSide;
         p.x+=tx*step*1.4; p.z+=tz*step*1.4; _pm=pushMob(p.x,p.z,(m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z; } }
     else { m._stuckT=0; m._stuckSide=0; } };
-  const startAtk=(dur,kind)=>{ if(m.atkPhase>0) return; m.atkPhase=0.0001; m.atkT=0; m.atkDur=dur; m.atkHit=false; m.atkKind=kind; m.lungeBase={x:p.x,z:p.z}; };
+  const startAtk=(dur,kind)=>{ if(m.atkPhase>0) return; m.atkPhase=0.0001;
+    const wf={gruntSmash:0.40,bruteSlam:0.45}[kind]||0;   // ha már közeledés közben FELEMELTE a fegyvert, a windup-fázis arányosan kimarad -> odaérve azonnal lesújt
+    m.atkT=dur*wf*Math.min(1,m._preRaise||0);
+    m.atkDur=dur; m.atkHit=false; m.atkKind=kind; m.lungeBase={x:p.x,z:p.z}; };
   const lunge=(amt)=>{ if(!m.lungeBase) return; const _pm=pushMob(m.lungeBase.x+(dx/d)*amt, m.lungeBase.z+(dz/d)*amt, (m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z; };   // pushMob: a lunge ne toljon fába/kőbe
   const endAtk=()=>{ m.atkPhase=0; m.atkKind=null; if(m.lungeBase){ p.x=m.lungeBase.x; p.z=m.lungeBase.z; m.lungeBase=null; } m.torso.rotation.set(0,0,0); m.head.rotation.x=0; m.g.scale.set(m.scale,m.scale,m.scale); };
-  const meleeAttack=(kind,dur,onHit)=>{   // 3-fázisú: windup -> strike(onHit a HITFRAC u-n) -> recovery; nem fight a walk/death anim-mal
-    if(m.atkPhase<=0){ m.atkCd-=dt; m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.5,0.15); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.5,0.15); if(m.atkCd<=0) startAtk(dur,kind); return; }
+  const meleeAttack=(kind,dur,onHit,holdRaised)=>{   // 3-fázisú: windup -> strike(onHit a HITFRAC u-n) -> recovery; nem fight a walk/death anim-mal
+    if(m.atkPhase<=0){ m.atkCd-=dt;
+      const restR=holdRaised?-1.55:0.5;   // bunkós troll ütések KÖZÖTT is fent tartja a botot (nincs le-fel pumpálás)
+      m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.5,0.15); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,restR,0.15);
+      if(holdRaised) m._preRaise=1;
+      if(m.atkCd<=0) startAtk(dur,kind); return; }
     m.atkT+=dt; const u=Math.min(1,m.atkT/m.atkDur); m.atkPhase=u;
     const fn=ATK[kind]; if(fn) fn(m,u,lunge);
     if(!m.atkHit && u>=(ATK_HITFRAC[kind]||0.5)){ m.atkHit=true;
@@ -3388,8 +3395,19 @@ function trollAI(m, dt, t){
       break;
     }
     case 'grunt': {
-      if(d>2.0 && m.atkPhase<=0){ moveToward(1.0); walkAnim(); }
-      else meleeAttack('gruntSmash',1.05,()=>{ m.atkCd=1.1; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });
+      // ÜTÉSTÁV: kar (~0.78) + bot a fejéig (~0.85) + lunge (0.32) skálázva -> lecsapáskor a bunkó VÉGE pont elér
+      const REACH=2.3*m.scale;
+      const RAISE_START=4.2*m.scale, RAISE_FULL=2.4*m.scale;   // ~4m-nél kezdi emelni, ütéstávhoz érve teljesen fent
+      if(d>REACH && m.atkPhase<=0){ moveToward(1.0); walkAnim();
+        const raise=Math.max(0, Math.min(1, (RAISE_START-d)/(RAISE_START-RAISE_FULL)));
+        if(raise>0){
+          m.arms.R.rotation.x=lerp(m.arms.R.rotation.x, -1.75, raise);   // séta-lengésből folyamatosan az emelt pózba
+          m.arms.R.rotation.z=-0.25*raise;
+          m.torso.rotation.x=(T.postureLean||0)-0.20*raise;              // kis hátradőlés az emeléshez
+        }
+        m._preRaise=raise;
+      }
+      else meleeAttack('gruntSmash',1.05,()=>{ m.atkCd=1.1; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }, true);
       break;
     }
     case 'shard': {
@@ -3403,8 +3421,12 @@ function trollAI(m, dt, t){
         if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.7; wispFire(m); } }
       break; }
     default: {
-      if(d>1.9 && m.atkPhase<=0){ moveToward(1.0); walkAnim(); }
-      else meleeAttack('gruntSmash',1.0,()=>{ m.atkCd=1.3; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });
+      const REACH=2.2*m.scale;
+      if(d>REACH && m.atkPhase<=0){ moveToward(1.0); walkAnim();
+        const raise=Math.max(0, Math.min(1, (4.0*m.scale-d)/(4.0*m.scale-2.3*m.scale)));
+        if(raise>0){ m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,-1.75,raise); m._preRaise=raise; }
+      }
+      else meleeAttack('gruntSmash',1.0,()=>{ m.atkCd=1.3; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }, true);
     }
   }
 }
@@ -3421,8 +3443,14 @@ function frame(){
 // hogy a shaderek leforduljanak és a bufferek feltöltődjenek MOST — így menet közben nincs akadás. Töltőképernyő addig.
 function warmup(done){
   const wx=120, wz=120, wy=GROUND_Y+1.5;   // messze az arénán kívül
-  const dummies=[]; for(const ty of ['grunt','scout','brute','shaman','spitter','wisp','shard']){ try{ const m=makeMonster(ty,1.0,100,2.5); m.g.position.set(wx+dummies.length*3, GROUND_Y, wz); dummies.push(m); }catch(_e){} }
-  try{
+  const loadbar=document.getElementById('loadbar'), loadingEl=document.getElementById('loading');
+  const dummies=[];
+  // VALÓDI, fázisokra bontott előtöltés — a csík MINDEN lépése tényleges munkát jelez, lépések közt kirajzolódik:
+  // 7× troll-építés -> FX-előmelegítés -> shader-fordítás (a legnehezebb lépés) -> 8 bemelegítő render.
+  const steps=[];
+  for(const ty of ['grunt','scout','brute','shaman','spitter','wisp','shard'])
+    steps.push(()=>{ try{ const m=makeMonster(ty,1.0,100,2.5); m.g.position.set(wx+dummies.length*3, GROUND_Y, wz); dummies.push(m); }catch(_e){} });
+  steps.push(()=>{ try{
     EFX.flash(wx,wy,wz,0xffffff,0.6,2.5,0.3); EFX.ring(wx,GROUND_Y+0.05,wz,0xffffff,0.4,2.5,0.4,0.6); EFX.bolt(wx,wy,wz,wx+2,wy,wz,0xffffff,0.12,0.3); EFX.light(wx,wy,wz,3,0.3);
     for(const el of ['fire','ice','poison','lightning']) elementalImpact({x:wx,y:wy,z:wz}, el, true);
     for(let i=0;i<10;i++){ RP.spawn(wx,wy,wz,rand(-2,2),rand(0,3),rand(-2,2),0xffffff,0.6,0.04,0.3,0,1); SMK.spawn(wx,wy,wz,rand(-1,1),rand(1,2),rand(-1,1),0xffffff,0.6,1,0.6,0,0.6,0.5); }
@@ -3434,18 +3462,21 @@ function warmup(done){
     for(let i=0;i<4;i++){ const a=arrows[i]; if(!a) break; a.el=['fire','ice','poison','lightning'][i]; applyArrowVisual(a); a.g.position.set(wx-3+i,wy,wz); a.g.visible=true; emitArrowTrail(a); }
     { const cur=currentElement; for(const el of ['fire','ice','poison','lightning']){ currentElement=el; nockArrow.visible=true; updateNockElement(); animateNock(0); } currentElement=cur; nockArrow.visible=false; updateNockElement(); }
     if(dummies[0]) freezeEncase(dummies[0]);   // jég-héj (full-freeze) anyaga is melegedjen be
-  }catch(_e){}
+  }catch(_e){} });
   // FONTOS: a próbabábuk az arénán KÍVÜL vannak -> renderer.render() FRUSTUM-CULLINGOLNÁ őket, így a shaderük NEM fordulna le (ezt mérve igazoltam: render után 24, compile után 28 program).
   // a renderer.compile() a pozíciótól FÜGGETLENÜL lefordít minden, a scene-ben lévő anyagot -> nincs első-feltűnéskori akadás.
-  try{ renderer.compile(scene, camera); }catch(_e){}
-  const TOTAL=8, loadbar=document.getElementById('loadbar'), loadingEl=document.getElementById('loading'); let n=0;
-  (function step(){ try{ renderer.render(scene,camera); }catch(_e){} n++; if(loadbar) loadbar.style.width=Math.round(n/TOTAL*100)+'%';
-    if(n<TOTAL){ setTimeout(step, 16); return; }   // setTimeout (nem rAF): akkor is lefut, ha a rAF fojtott/szünetel -> nem ragad be a töltőképernyő
+  steps.push(()=>{ try{ renderer.compile(scene, camera); }catch(_e){} });
+  for(let k=0;k<8;k++) steps.push(()=>{ try{ renderer.render(scene,camera); }catch(_e){} });
+  let i=0;
+  (function step(){
+    steps[i](); i++;
+    if(loadbar) loadbar.style.width=Math.round(i/steps.length*100)+'%';
+    if(i<steps.length){ setTimeout(step, 0); return; }   // setTimeout (nem rAF): a csík lépések közt kirajzolódik, és fojtott rAF mellett sem ragad be a töltőképernyő
     // takarítás: a próbabábuk + zónák eltűntetése, a poolok nyugalomba
     for(const m of dummies){ scene.remove(m.g); disposeMonster(m); }
-    for(let i=zones.length-1;i>=0;i--){ const c=zones[i]; scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); } zones.length=0;
+    for(let i2=zones.length-1;i2>=0;i2--){ const c=zones[i2]; scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); } zones.length=0;
     beamTube.visible=false; resetAbolts(); resetBombs();
-    for(let i=0;i<4;i++){ const a=arrows[i]; if(!a) break; a.el='base'; a.flames=null; applyArrowVisual(a); a.g.visible=false; a.active=false; }   // a felmelegítő nyilak nullára
+    for(let i2=0;i2<4;i2++){ const a=arrows[i2]; if(!a) break; a.el='base'; a.flames=null; applyArrowVisual(a); a.g.visible=false; a.active=false; }   // a felmelegítő nyilak nullára
     if(loadingEl) loadingEl.classList.add('hide');
     done();
   })();
