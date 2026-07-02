@@ -1971,6 +1971,7 @@ haft.add(mesh(mergeGeos([
   {geo:new THREE.TorusGeometry(0.082,0.02,5,10), y:-0.34, rx:Math.PI/2}
 ]), clothMat, 0,0,0));
 fistR.add(club);
+m._club=club;   // csukló-billentés handle: emeléskor a bot ELLENFORGATÁSSAL felfelé áll (ütésre kész), nem lóg le a marokból
 // ---- MOHA/SZŐR-GALLÉR a váll vonalán: 9 lapított kúp EGY merge-elt mesh-ben ----
 { const ruff=[], nR=9;
   for(let i=0;i<nR;i++){ const a2=(i/nR)*6.283;
@@ -3250,9 +3251,9 @@ function separateMonsters(){
 const ATK_HITFRAC = { gruntSmash:0.55, scoutClaw:0.30, bruteSlam:0.50, shardJab:0.45, wispBite:0.45 };
 const ATK = {
   gruntSmash(m,u,lunge){   // bunkó-csapás fentről
-    if(u<0.40){ const w=easeInOut(remap(u,0,0.40)); m.arms.R.rotation.x=lerp(0.5,-1.75,w); m.arms.R.rotation.z=lerp(0,-0.3,w); m.arms.L.rotation.x=lerp(0.5,-0.55,w); m.torso.rotation.x=lerp(0,-0.36,w); m.head.rotation.x=lerp(0,-0.24,w); m.g.scale.y=m.scale*lerp(1,0.95,w); lunge(-0.18*w); }
-    else if(u<0.62){ const s=easeOutBack(remap(u,0.40,0.62)); m.arms.R.rotation.x=lerp(-1.75,2.05,s); m.arms.R.rotation.z=lerp(-0.3,0,s); m.arms.L.rotation.x=lerp(-0.55,0.95,s); m.torso.rotation.x=lerp(-0.36,0.5,s); m.head.rotation.x=lerp(-0.24,0.38,s); m.g.scale.y=m.scale*lerp(0.95,1.03,s); lunge(lerp(-0.18,0.32,s)); }
-    else { const r=easeOutCubic(remap(u,0.62,1)); m.arms.R.rotation.x=lerp(2.05,0.5,r); m.arms.L.rotation.x=lerp(0.95,0.5,r); m.torso.rotation.x=lerp(0.5,0,r); m.head.rotation.x=lerp(0.38,0,r); m.g.scale.y=m.scale*lerp(1.03,1,r); lunge(0.32*(1-r)); }
+    if(u<0.40){ const w=easeInOut(remap(u,0,0.40)); m.arms.R.rotation.x=lerp(0.5,-1.75,w); m.arms.R.rotation.z=lerp(0,-0.3,w); m.arms.L.rotation.x=lerp(0.5,-0.55,w); m.torso.rotation.x=lerp(0,-0.36,w); m.head.rotation.x=lerp(0,-0.24,w); m.g.scale.y=m.scale*lerp(1,0.95,w); if(m._club) m._club.rotation.x=lerp(-0.35,1.55,w); lunge(-0.18*w); }
+    else if(u<0.62){ const s=easeOutBack(remap(u,0.40,0.62)); m.arms.R.rotation.x=lerp(-1.75,2.05,s); m.arms.R.rotation.z=lerp(-0.3,0,s); m.arms.L.rotation.x=lerp(-0.55,0.95,s); m.torso.rotation.x=lerp(-0.36,0.5,s); m.head.rotation.x=lerp(-0.24,0.38,s); m.g.scale.y=m.scale*lerp(0.95,1.03,s); if(m._club) m._club.rotation.x=lerp(1.55,-0.55,s); lunge(lerp(-0.18,0.32,s)); }
+    else { const r=easeOutCubic(remap(u,0.62,1)); m.arms.R.rotation.x=lerp(2.05,0.5,r); m.arms.L.rotation.x=lerp(0.95,0.5,r); m.torso.rotation.x=lerp(0.5,0,r); m.head.rotation.x=lerp(0.38,0,r); m.g.scale.y=m.scale*lerp(1.03,1,r); if(m._club) m._club.rotation.x=lerp(-0.55,-0.35,r); lunge(0.32*(1-r)); }
   },
   scoutClaw(m,u,lunge){   // gyors kettős karom-csapás
     if(u<0.08){ const w=remap(u,0,0.08); m.arms.R.rotation.x=lerp(0.5,-0.5,w); m.arms.L.rotation.x=lerp(0.5,0.2,w); }
@@ -3324,12 +3325,13 @@ function trollAI(m, dt, t){
     m.atkT=dur*wf*Math.min(1,m._preRaise||0);
     m.atkDur=dur; m.atkHit=false; m.atkKind=kind; m.lungeBase={x:p.x,z:p.z}; };
   const lunge=(amt)=>{ if(!m.lungeBase) return; const _pm=pushMob(m.lungeBase.x+(dx/d)*amt, m.lungeBase.z+(dz/d)*amt, (m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z; };   // pushMob: a lunge ne toljon fába/kőbe
-  const endAtk=()=>{ m.atkPhase=0; m.atkKind=null; if(m.lungeBase){ p.x=m.lungeBase.x; p.z=m.lungeBase.z; m.lungeBase=null; } m.torso.rotation.set(0,0,0); m.head.rotation.x=0; m.g.scale.set(m.scale,m.scale,m.scale); };
+  const endAtk=()=>{ m.atkPhase=0; m.atkKind=null; if(m.lungeBase){ p.x=m.lungeBase.x; p.z=m.lungeBase.z; m.lungeBase=null; } m.torso.rotation.set(0,0,0); m.head.rotation.x=0; if(m._club) m._club.rotation.x=-0.35; m.g.scale.set(m.scale,m.scale,m.scale); };
   const meleeAttack=(kind,dur,onHit,holdRaised)=>{   // 3-fázisú: windup -> strike(onHit a HITFRAC u-n) -> recovery; nem fight a walk/death anim-mal
     if(m.atkPhase<=0){ m.atkCd-=dt;
       const restR=holdRaised?-1.8:0.5;   // bunkós troll ütések KÖZÖTT is fent tartja a botot (nincs le-fel pumpálás)
       m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.5,0.15); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,restR,0.15);
-      if(holdRaised) m._preRaise=1; else m._preRaise=Math.max(0,(m._preRaise||0)-dt*2.5);
+      if(holdRaised){ m._preRaise=1; if(m._club) m._club.rotation.x=lerp(m._club.rotation.x,1.45,0.15); }
+      else m._preRaise=Math.max(0,(m._preRaise||0)-dt*2.5);
       if(m.atkCd<=0) startAtk(dur,kind); return; }
     m.atkT+=dt; const u=Math.min(1,m.atkT/m.atkDur); m.atkPhase=u;
     const fn=ATK[kind]; if(fn) fn(m,u,lunge);
@@ -3415,9 +3417,10 @@ function trollAI(m, dt, t){
       if(d>REACH && m.atkPhase<=0){ moveToward(1.0); walkAnim();
         const raise=raiseAmt(REACH);   // ~4.4m-nél kezdi, ütéstávhoz érve teljesen fent
         if(raise>0){
-          // FŐLEG A KAR emel: magasra, könyökkel KIFELÉ (szemből is tisztán olvasható) — a bot mereven a marokban
+          // FŐLEG A KAR emel: magasra, könyökkel KIFELÉ (szemből is tisztán olvasható)
           m.arms.R.rotation.x=lerp(m.arms.R.rotation.x, -1.95, raise);
           m.arms.R.rotation.z=-0.5*raise;
+          if(m._club) m._club.rotation.x=-0.35+1.9*raise;   // CSUKLÓ: a bot felfelé áll az emelt kézben (ütésre kész), nem lóg le
           m.arms.L.rotation.x=lerp(m.arms.L.rotation.x, -0.25, raise*0.6);   // ellensúly-kéz kicsit fel
           m.torso.rotation.x=(T.postureLean||0)-0.22*raise;                  // hátradőlés az emeléshez
           m.head.rotation.x=m.head.rotation.x-0.12*raise;                    // felnéz az ütéshez
