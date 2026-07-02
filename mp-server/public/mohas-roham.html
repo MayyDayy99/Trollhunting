@@ -3222,9 +3222,9 @@ function separateMonsters(){
 const ATK_HITFRAC = { gruntSmash:0.55, scoutClaw:0.30, bruteSlam:0.50, shardJab:0.45, wispBite:0.45 };
 const ATK = {
   gruntSmash(m,u,lunge){   // bunkó-csapás fentről
-    if(u<0.40){ const w=easeInOut(remap(u,0,0.40)); m.arms.R.rotation.x=lerp(0.5,-1.4,w); m.arms.R.rotation.z=lerp(0,-0.25,w); m.arms.L.rotation.x=lerp(0.5,-0.5,w); m.torso.rotation.x=lerp(0,-0.30,w); m.head.rotation.x=lerp(0,-0.20,w); m.g.scale.y=m.scale*lerp(1,0.97,w); lunge(-0.15*w); }
-    else if(u<0.62){ const s=easeOutBack(remap(u,0.40,0.62)); m.arms.R.rotation.x=lerp(-1.4,1.85,s); m.arms.R.rotation.z=lerp(-0.25,0,s); m.arms.L.rotation.x=lerp(-0.5,0.9,s); m.torso.rotation.x=lerp(-0.30,0.45,s); m.head.rotation.x=lerp(-0.20,0.35,s); m.g.scale.y=m.scale*lerp(0.97,1,s); lunge(lerp(-0.15,0.30,s)); }
-    else { const r=easeOutCubic(remap(u,0.62,1)); m.arms.R.rotation.x=lerp(1.85,0.5,r); m.arms.L.rotation.x=lerp(0.9,0.5,r); m.torso.rotation.x=lerp(0.45,0,r); m.head.rotation.x=lerp(0.35,0,r); m.g.scale.y=m.scale; lunge(0.30*(1-r)); }
+    if(u<0.40){ const w=easeInOut(remap(u,0,0.40)); m.arms.R.rotation.x=lerp(0.5,-1.75,w); m.arms.R.rotation.z=lerp(0,-0.3,w); m.arms.L.rotation.x=lerp(0.5,-0.55,w); m.torso.rotation.x=lerp(0,-0.36,w); m.head.rotation.x=lerp(0,-0.24,w); m.g.scale.y=m.scale*lerp(1,0.95,w); lunge(-0.18*w); }
+    else if(u<0.62){ const s=easeOutBack(remap(u,0.40,0.62)); m.arms.R.rotation.x=lerp(-1.75,2.05,s); m.arms.R.rotation.z=lerp(-0.3,0,s); m.arms.L.rotation.x=lerp(-0.55,0.95,s); m.torso.rotation.x=lerp(-0.36,0.5,s); m.head.rotation.x=lerp(-0.24,0.38,s); m.g.scale.y=m.scale*lerp(0.95,1.03,s); lunge(lerp(-0.18,0.32,s)); }
+    else { const r=easeOutCubic(remap(u,0.62,1)); m.arms.R.rotation.x=lerp(2.05,0.5,r); m.arms.L.rotation.x=lerp(0.95,0.5,r); m.torso.rotation.x=lerp(0.5,0,r); m.head.rotation.x=lerp(0.38,0,r); m.g.scale.y=m.scale*lerp(1.03,1,r); lunge(0.32*(1-r)); }
   },
   scoutClaw(m,u,lunge){   // gyors kettős karom-csapás
     if(u<0.08){ const w=remap(u,0,0.08); m.arms.R.rotation.x=lerp(0.5,-0.5,w); m.arms.L.rotation.x=lerp(0.5,0.2,w); }
@@ -3234,8 +3234,8 @@ const ATK = {
     if(u>=0.65){ const r=easeOutCubic(remap(u,0.65,1)); m.arms.L.rotation.x=lerp(1.4,0.5,r); m.arms.R.rotation.x=lerp(0.3,0.5,r); m.arms.L.rotation.z=lerp(-0.5,0,r); m.arms.R.rotation.z=lerp(0.5,0,r); m.torso.rotation.z=lerp(-0.2,0,r); m.g.scale.y=m.scale; }
   },
   bruteSlam(m,u,lunge){   // két ököl földre-csapás (a buzogány a g-n marad, nem leng — testtel adjuk a súlyt)
-    if(u<0.45){ const w=easeInOut(remap(u,0,0.45)); m.arms.L.rotation.x=m.arms.R.rotation.x=lerp(0.5,-1.6,w); m.arms.L.rotation.z=lerp(0,0.2,w); m.arms.R.rotation.z=lerp(0,-0.2,w); m.torso.rotation.x=lerp(0,-0.25,w); m.head.rotation.x=lerp(0,0.30,w); m.legs.L.rotation.x=m.legs.R.rotation.x=lerp(0,0.35,w); m.g.scale.set(m.scale*(1+0.06*w),m.scale*(1-0.12*w),m.scale*(1+0.06*w)); lunge(-0.10*w); }
-    else if(u<0.60){ const s=easeOutBack(remap(u,0.45,0.60)); m.arms.L.rotation.x=m.arms.R.rotation.x=lerp(-1.6,1.95,s); m.arms.L.rotation.z=lerp(0.2,0,s); m.arms.R.rotation.z=lerp(-0.2,0,s); m.torso.rotation.x=lerp(-0.25,0.40,s); m.legs.L.rotation.x=m.legs.R.rotation.x=lerp(0.35,0,s); m.g.scale.set(m.scale*lerp(1.06,0.96,s),m.scale*lerp(0.88,1.04,s),m.scale*lerp(1.06,0.96,s)); lunge(lerp(-0.10,0.28,s)); }
+    if(u<0.45){ const w=easeInOut(remap(u,0,0.45)); m.arms.L.rotation.x=m.arms.R.rotation.x=lerp(0.5,-1.85,w); m.arms.L.rotation.z=lerp(0,0.2,w); m.arms.R.rotation.z=lerp(0,-0.2,w); m.torso.rotation.x=lerp(0,-0.25,w); m.head.rotation.x=lerp(0,0.30,w); m.legs.L.rotation.x=m.legs.R.rotation.x=lerp(0,0.35,w); m.g.scale.set(m.scale*(1+0.06*w),m.scale*(1-0.12*w),m.scale*(1+0.06*w)); lunge(-0.10*w); }
+    else if(u<0.60){ const s=easeOutBack(remap(u,0.45,0.60)); m.arms.L.rotation.x=m.arms.R.rotation.x=lerp(-1.85,2.1,s); m.arms.L.rotation.z=lerp(0.2,0,s); m.arms.R.rotation.z=lerp(-0.2,0,s); m.torso.rotation.x=lerp(-0.25,0.40,s); m.legs.L.rotation.x=m.legs.R.rotation.x=lerp(0.35,0,s); m.g.scale.set(m.scale*lerp(1.06,0.96,s),m.scale*lerp(0.88,1.04,s),m.scale*lerp(1.06,0.96,s)); lunge(lerp(-0.10,0.28,s)); }
     else { const r=easeOutCubic(remap(u,0.60,1)); m.arms.L.rotation.x=m.arms.R.rotation.x=lerp(1.95,0.5,r); m.torso.rotation.x=lerp(0.40,0,r); m.head.rotation.x=lerp(0.30,0,r); m.g.scale.set(m.scale,m.scale,m.scale); lunge(0.28*(1-r)); }
   },
   shardJab(m,u,lunge){   // rövid egyenes bökés
@@ -3268,10 +3268,15 @@ function trollAI(m, dt, t){
     if(m.atkPhase>0){ m.atkPhase=0; m.atkKind=null; m.atkHit=false; if(m.lungeBase){ p.x=m.lungeBase.x; p.z=m.lungeBase.z; m.lungeBase=null; } m.torso.rotation.set(0,0,0); m.head.rotation.x=0; m.g.scale.set(m.scale,m.scale,m.scale); }   // bénítás lengés közben -> tiszta alapra
     return; }   // bénítás VAGY teljes fagy = mozdulatlan (frozenSolid-et a tickStatus csökkenti)
   const walkAnim=()=>{
-    if(T.id==='wisp'){ const s=Math.sin(m.hoverPh||0); m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.25+s*0.14,0.1); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.25-s*0.14,0.1); return; }   // LIDÉRC: nincs láb-lépés, csak lágy kar-lebegés (a p.y-t a hover állítja)
-    m.walkPhase+=dt*(4+m.speed); const sw=Math.sin(m.walkPhase)*0.6;
-    m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(m.walkPhase))*0.06;
-    m.arms.L.rotation.x=0.5+Math.sin(m.walkPhase)*0.3; m.arms.R.rotation.x=0.5-Math.sin(m.walkPhase)*0.3; };
+    if(T.id==='wisp'){ const s=Math.sin(m.hoverPh||0); m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.25+s*0.14,0.1); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.25-s*0.14,0.1);
+      m.torso.rotation.z=Math.sin((m.hoverPh||0)*0.7)*0.08; m.head.rotation.z=Math.sin((m.hoverPh||0)*0.5)*0.06; return; }   // LIDÉRC: lebegő imbolygás (a p.y-t a hover állítja)
+    m.walkPhase+=dt*(4+m.speed); const ph=m.walkPhase, sw=Math.sin(ph)*0.6;
+    m.legs.L.rotation.x=sw; m.legs.R.rotation.x=-sw; p.y=GROUND_Y+Math.abs(Math.sin(ph))*0.07;
+    m.arms.L.rotation.x=0.5+Math.sin(ph)*0.35; m.arms.R.rotation.x=0.5-Math.sin(ph)*0.35;
+    // bütyök-vonszoló testbeszéd: váll-billegés a léptekre + tartás-dőlés + lomha fej-ellenbólintás
+    m.torso.rotation.z=Math.sin(ph)*0.075;
+    m.torso.rotation.x=(T.postureLean||0)+Math.abs(Math.sin(ph))*0.05;
+    m.head.rotation.z=Math.sin(ph+0.6)*0.05; m.head.rotation.x=-Math.abs(Math.sin(ph))*0.05; };
   const moveToward=(mult)=>{ const step=m.speed*mult*(m.slowMul||1)*dt; const ox=p.x, oz=p.z;
     p.x+=dx/d*step; p.z+=dz/d*step; let _pm=pushMob(p.x,p.z,(m.bodyR||0.5)*0.9); p.x=_pm.x; p.z=_pm.z;   // ELEM: slowMul; + nem megy át fán/kövön (mob solids)
     // ANTI-BESZORULÁS (első lépés): ha az akadály miatt alig haladt, oldalazzon el mellette egy irányba, amíg ki nem szabadul
@@ -3286,7 +3291,16 @@ function trollAI(m, dt, t){
     if(m.atkPhase<=0){ m.atkCd-=dt; m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,0.5,0.15); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,0.5,0.15); if(m.atkCd<=0) startAtk(dur,kind); return; }
     m.atkT+=dt; const u=Math.min(1,m.atkT/m.atkDur); m.atkPhase=u;
     const fn=ATK[kind]; if(fn) fn(m,u,lunge);
-    if(!m.atkHit && u>=(ATK_HITFRAC[kind]||0.5)){ m.atkHit=true; if(player.pos.y-1.7 < p.y+1.9*m.scale){ onHit(); } else { m.atkCd=0.4; endAtk(); return; } }   // függőleges hatótáv-kapu megtartva
+    if(!m.atkHit && u>=(ATK_HITFRAC[kind]||0.5)){ m.atkHit=true;
+      // BECSAPÓDÁS-EFFEKT az ütés pillanatában (találattól függetlenül — a csapás a földet/levegőt éri)
+      { const ix=p.x+(dx/d)*1.1*m.scale, iz=p.z+(dz/d)*1.1*m.scale;
+        if(kind==='gruntSmash'||kind==='bruteSlam'){ const big=(kind==='bruteSlam');
+          EFX.ring(ix,GROUND_Y+0.05,iz,big?0xd8c8a8:0xbfcab0,0.30,(big?2.8:1.7)*m.scale,0.35,0.55);
+          for(let i2=0;i2<(big?10:6);i2++) RP.spawn(ix+rand(-0.3,0.3),GROUND_Y+0.1,iz+rand(-0.3,0.3), rand(-1.5,1.5),rand(0.5,2.2),rand(-1.5,1.5), pick([0x8a795c,0xa89a78,0x6f7a5a]), rand(0.4,0.7),0.05, rand(0.3,0.6), 4,1);
+          if(big){ SMK.spawn(ix,GROUND_Y+0.2,iz,0,0.8,0,0x3a3428,0.5,1.6,0.8,-0.5,1,0.4); }
+        } else if(kind==='scoutClaw'||kind==='shardJab'){ sparks.burst(ix,p.y+1.2*m.scale,iz,6,0xd8e0c8,4,0.3); }
+        else if(kind==='wispBite'){ sparks.burst(ix,p.y+1.2*m.scale,iz,8,0x9fe3ff,4,0.35); } }
+      if(player.pos.y-1.7 < p.y+1.9*m.scale){ onHit(); } else { m.atkCd=0.4; endAtk(); return; } }   // függőleges hatótáv-kapu megtartva
     if(u>=1) endAtk();
   };
   switch(T.id){
@@ -3313,7 +3327,8 @@ function trollAI(m, dt, t){
       // pozicionálás: közel hátrál, távol közelít a varázs-sávba
       if(d<5.0){ moveToward(-0.8); walkAnim(); }
       else if(d>T.castRange+2){ moveToward(0.7); walkAnim(); }
-      else { m.arms.L.rotation.x=0.5+Math.sin(t*2)*0.15; m.arms.R.rotation.x=0.5+Math.cos(t*2)*0.15; }
+      else { m.arms.L.rotation.x=0.5+Math.sin(t*2)*0.15; m.arms.R.rotation.x=0.5+Math.cos(t*2)*0.15;
+        m.torso.rotation.x=(T.postureLean||0)+Math.sin(t*1.5)*0.03; m.head.rotation.z=Math.sin(t*1.1)*0.04; }   // idle: ringatózó kántálás
       // MÓD A: NAGY TÁVRÓL arkán lövedék (telegrafált felhúzás -> lövés)
       if(d>T.castRange && d<T.castMax){ if(m.casting<=0){ m.castTimer-=dt; if(m.castTimer<=0) m.casting=T.castWind; }
         if(m.casting>0){ m.casting-=dt; m.arms.R.rotation.x=-0.9; if(m.staffCrystal) m.staffCrystal.material.emissiveIntensity=1.4+2.2*(1-Math.max(0,m.casting)/T.castWind);
@@ -3337,7 +3352,8 @@ function trollAI(m, dt, t){
     case 'spitter': {
       if(d<T.bandMin){ moveToward(-0.9); walkAnim(); }
       else if(d>T.bandMax){ moveToward(0.8); walkAnim(); }
-      else { m.arms.L.rotation.x=0.3; m.arms.R.rotation.x=0.3; }
+      else { m.arms.L.rotation.x=0.3; m.arms.R.rotation.x=0.3;
+        m.torso.rotation.x=(T.postureLean||0)+Math.sin(t*1.8)*0.035; m.torso.rotation.z=Math.sin(t*0.9)*0.02; }   // idle-légzés (a duzzadó epe-has él)
       m.rangedTimer-=dt;
       if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.6; spitterFire(m); if(wave>10) spitterFire(m, rand(0.10,0.22)*(Math.random()<0.5?1:-1)); }   // FEJLESZTÉS: a 2. lövedék CSAK wave 10 felett (mint a brute-osztódás)
       break;
