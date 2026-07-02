@@ -1176,16 +1176,20 @@ const servingMat= std({color:0xc7d2ec, roughness:.5, metalness:.25}); // nock-po
 /* --- a teljes íj-stave fél-profilja (a markolattól a tipig), Z = előre-hajlás (belly) --- */
 const HALF=0.50;                 // fél-magasság (magas longbow sziluett)
 // pontok: [x(oldal), y(fel), z(előre)] — a longbow finom egyszeres D-íve, a tip enyhén előre fordul
+/* KONVENCIÓ: lokális +Z = a JÁTÉKOS (húr) felé, -Z = a CÉL felé.
+   Felajzott íj: a két tip a HÚRVONALON ül (z=+0.100) — nyugalomban a húr EGYENES közöttük.
+   A stave a markolat körül hajlik a legelőrébb (a húrtól legtávolabb) = fesztáv (brace height). */
 const limbProfile=[
-  [0.000, 0.000, 0.040],        // markolat-tő (has a néző felé) — MÉLYEBB ív, hogy rendes íjnak nézzen ki
-  [0.006, 0.120, 0.026],
-  [0.011, 0.245,-0.006],
-  [0.015, 0.360,-0.055],
-  [0.016, 0.450,-0.098],        // a végtag szépen elível a nézőtől (hát)
-  [0.012, 0.500,-0.126],        // tip felé elvékonyodik és enyhén vissza-kanyarodik (recurve)
-  [0.008, 0.510,-0.138]         // nock-pont (horn)
+  [0.000, 0.000, 0.008],        // markolat-tő
+  [0.006, 0.120,-0.016],
+  [0.011, 0.245,-0.036],        // a has legmélyebb előre-hajlása (a húrtól legtávolabb)
+  [0.015, 0.360,-0.026],
+  [0.016, 0.450, 0.020],
+  [0.012, 0.500, 0.074],        // tip felé elvékonyodik és visszaível a húrvonalra
+  [0.008, 0.512, 0.100]         // tip / nock-pont — PONTOSAN a húrvonalon
 ];
-const TIP_U=[0.008, 0.510,-0.138], TIP_L=[0.008,-0.510,-0.138];
+const TIP_U=[0.008, 0.512, 0.100], TIP_L=[0.008,-0.512, 0.100];
+const Z_TIP=0.100;              // a nyugalmi (felajzott) húrvonal z-je — a húr nyugalomban ezen fut, EGYENESEN
 
 function staveTube(pts, r0, r1){
   const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2])));
@@ -1231,26 +1235,26 @@ buildLimb(limbU, 1); buildLimb(limbL, -1);
 
 /* --- karcsú, ívelt riser (markolat-váz) + bőr-fogás + nyíl-polc — nem "duci henger" ---
    Vékony, lapos-oldalú riser, ami a markolatnál enyhén kiöblösödik, a végtagok felé elvékonyodik. */
-const riserCore=mesh(new THREE.CylinderGeometry(0.017,0.017,0.235,12), staveWood, 0,0,0.014);
+const riserCore=mesh(new THREE.CylinderGeometry(0.017,0.017,0.235,12), staveWood, 0,0,-0.006);
 riserCore.scale.set(0.82,1,1.35);            // keskeny oldalt, kissé mély elöl-hátul (lapos lencse-szelvény, nem kör)
 riserCore.castShadow=true; bow.add(riserCore);
 // a riser a végtagokba olvad: két rövid kúp a tetején/alján
-[[1,0.16],[-1,0.16]].forEach(([s,y])=>{ const c=mesh(new THREE.CylinderGeometry(0.010,0.017,0.09,10), staveWood, 0,s*y,0.012); c.scale.z=1.3; bow.add(c); });
+[[1,0.16],[-1,0.16]].forEach(([s,y])=>{ const c=mesh(new THREE.CylinderGeometry(0.010,0.017,0.09,10), staveWood, 0,s*y,-0.006); c.scale.z=1.3; bow.add(c); });
 // finom markolat-kiöblösödés csak a tenyér magasságában (elegáns swell, nem gömb)
-const gripSwell=mesh(new THREE.CylinderGeometry(0.021,0.021,0.10,12), staveWood, 0,-0.005,0.016); gripSwell.scale.set(0.85,1,1.25); bow.add(gripSwell);
+const gripSwell=mesh(new THREE.CylinderGeometry(0.021,0.021,0.10,12), staveWood, 0,-0.005,-0.004); gripSwell.scale.set(0.85,1,1.25); bow.add(gripSwell);
 // vékony bőr-fogás (feszes gyűrűk a tenyér körül)
 const wrap=new THREE.Group(); bow.add(wrap);
 for(let i=0;i<6;i++){
-  const ring=mesh(new THREE.TorusGeometry(0.0225,0.004,8,18), gripLeather, 0,-0.050+i*0.020,0.016);
+  const ring=mesh(new THREE.TorusGeometry(0.0225,0.004,8,18), gripLeather, 0,-0.050+i*0.020,-0.004);
   ring.rotation.x=Math.PI/2; ring.scale.set(0.9,1,1.2); ring.castShadow=true; wrap.add(ring);
 }
 // nyíl-polc + ablak (a riser jobb oldalán, hogy a nyíl rajta üljön)
-const shelf=mesh(new THREE.BoxGeometry(0.055,0.014,0.040), staveWood, 0.030,0.052,0.030); shelf.castShadow=true; bow.add(shelf);
-const rest =mesh(new THREE.CylinderGeometry(0.0035,0.0035,0.045,6), gripLeather, 0.046,0.060,0.030); rest.rotation.z=Math.PI/2; bow.add(rest);
+const shelf=mesh(new THREE.BoxGeometry(0.055,0.014,0.040), staveWood, 0.030,0.052,0.008); shelf.castShadow=true; bow.add(shelf);
+const rest =mesh(new THREE.CylinderGeometry(0.0035,0.0035,0.045,6), gripLeather, 0.046,0.060,0.008); rest.rotation.z=Math.PI/2; bow.add(rest);
 // ELEM-BERAKÁS: vésett, izzó csík a markolat hasán + rúna-gyöngy a polc alatt — az aktuális elem színére vált (updateNockElement)
 const bowInlayMat=new THREE.MeshStandardMaterial({color:0x0d1a24, emissive:0x36c5ff, emissiveIntensity:0.15, roughness:.4, flatShading:true});
-{ const strip=mesh(new THREE.BoxGeometry(0.007,0.125,0.006), bowInlayMat, 0,0,0.063); bow.add(strip);
-  const rune=mesh(new THREE.OctahedronGeometry(0.013,0), bowInlayMat, 0.030,0.032,0.042); bow.add(rune); }
+{ const strip=mesh(new THREE.BoxGeometry(0.007,0.125,0.006), bowInlayMat, 0,0,0.020); bow.add(strip);
+  const rune=mesh(new THREE.OctahedronGeometry(0.013,0), bowInlayMat, 0.030,0.030,0.020); bow.add(rune); }
 
 /* --- húr (két szakasz a nock-ig) + nock-pont (string-pull point) --- */
 const nock=new THREE.Group(); bow.add(nock);
@@ -1299,7 +1303,7 @@ bow.add(nockArrow);
 /* --- feszítés/lövés animációs állapot --- */
 const BOW_BASE_X=0.34, BOW_BASE_Y=-0.10, BOW_BASE_Z=-0.62, BOW_BASE_ROTZ=0.13;
 const FOV_BASE=camera.fov;
-let prevCharge=0, bowKick=0, bowKickRot=0, relTwang=0, idleT=0, drawNockIn=1;
+let prevCharge=0, bowKick=0, bowKickRot=0, relTwang=0, idleT=0, drawNockIn=1, drawT=0;
 // ÚJRATÖLTÉS-animáció: egyszer-sülő hang/impulzus-jelzők (lövéskor/húzáskor/cancelkor nullázódnak)
 let raspFired=false, swingFired=false, tapFired=false, seatFired=false;
 // élő íj-hangoló: B = be/ki, J/L yaw, I/K pitch, U/O roll, N/M méret, P tükör
@@ -2581,7 +2585,7 @@ addEventListener('mousemove',e=>{
   else if(dragLook&&running){ applyLook(e.clientX-lastMX,e.clientY-lastMY); lastMX=e.clientX; lastMY=e.clientY; }
 });
 
-function startDraw(){ if(running&&player.alive&&shotCd<=0){ drawing=true; charge=0; raspFired=swingFired=tapFired=seatFired=false; } }   // reload alatt nem lehet újrahúzni
+function startDraw(){ if(running&&player.alive&&shotCd<=0){ drawing=true; charge=0; drawT=0; drawNockIn=0; raspFired=swingFired=tapFired=seatFired=false; } }   // reload alatt nem lehet újrahúzni
 function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban (panic mid-reload)
   if(!(running&&player.alive) || meleeCd>0) return;
   meleeCd=MELEE_CD; if(AUD.whoosh) AUD.whoosh();
@@ -2948,12 +2952,14 @@ function update(dt,t){
   // ÚJRATÖLTÉS present-póz delták (alapból 0; a reload-ág tölti) — a lenti bow-írásokhoz ADDITÍVAN adódnak
   let presentY=0, presentZ=0, presentRotX=0, presentRotZ=0;
   if(drawing && running){ charge=Math.min(RUNM.drawCap, charge+dt*1.5*RUNM.drawMul); powwrap.classList.add('on'); powwrap.classList.remove('reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width=(Math.min(1,charge)*100)+'%'; powfill.style.background=(charge<MIN_CHARGE?'#b5462e':''); nockArrow.visible=true; nockArrow.scale.setScalar(1);
-    // BETÖLTÉS: a húzás legelején a nyíl alulról-jobbról felúszik a húrra, majd onnan feszül hátra
-    drawNockIn=Math.min(1, charge/0.16);
-    if(drawNockIn<1){ const fe=easeOutCubic(drawNockIn);
-      nockArrow.position.set(lerp(0.12,0.046,fe), lerp(-0.42,0.060,fe), lerp(0.14,0.04,fe)*bowAdj.mz);
-      nockArrow.rotation.set(lerp(-0.5,0,fe), lerp(0.5,0,fe), lerp(0.7,0,fe)); }
-    else nockArrow.rotation.set(0,0,0);
+    // NYÍL-RÁHELYEZÉS (~0.2 mp, VALÓS idő): a nyíl a tegez felől a húrhoz kerül, a VÉGE (nock)
+    // a nyugalmi húrvonalra ül — és csak EZUTÁN kezd hátrafeszülni a húrral együtt (lásd pull).
+    drawT+=dt; drawNockIn=Math.min(1, drawT/0.20);
+    if(drawNockIn<1){ const fe=easeOutCubic(drawNockIn), gz=Z_TIP-0.775;   // gz: a nyílcsoport z-je, amikor a vég a húron van
+      nockArrow.position.set(lerp(0.16,0.046,fe), lerp(-0.30,0.060,fe), lerp(gz+0.28,gz,fe));
+      nockArrow.rotation.set(lerp(-0.35,0,fe), lerp(0.30,0,fe), lerp(0.5,0,fe)); }
+    else { nockArrow.rotation.set(0,0,0);
+      if(!seatFired){ seatFired=true; if(AUD.nock) AUD.nock(); } }   // a nyíl "bekattan" a húrra
     if(currentElement==='base' && nockArrow._glow) nockArrow._glow.material.opacity=0; animateNock(t); }
   else if(running && shotCd>0){
     // === ÍJ-ÚJRATÖLTÉS: a cooldown alatt üres, FELAJZOTT íj (csak a húr látszik) — a nyíl MAJD a húzáskor kerül a húrra ===
@@ -2975,17 +2981,20 @@ function update(dt,t){
   if(prevCharge>0.12 && charge<=0.0001){ bowKick=1; bowKickRot=1; relTwang=0.14; camera.fov=FOV_BASE+5.5; camera.updateProjectionMatrix(); }
   prevCharge=charge;
 
-  // húr/nyíl hátrahúzás a tölts szerint + elengedéskor előre-csattanó twang
-  const PULL=0.30, BRACE=0.088;   // BRACE = felajzott alaphelyzet: a húr nyugalomban is jól elemelkedik az íjtól (látható ideg)
+  // === ÍJ-FIZIKA ===
+  // NYUGALOM: a nock-pont PONTOSAN a húrvonalon (Z_TIP) ül -> a húr EGYENES vonal a két tip közt.
+  // HÚZÁS: a nock-pont hátracsúszik (V-alak), a nyíl VÉGE végig a húr-ponton marad, a szárak behajlanak.
+  // ELENGEDÉS: pull->0, a twang az EGYENES alaphelyzet körül lengeti ki a húrt, a szárak visszacsapnak.
+  const PULL=0.30;
   const twang = (relTwang>0 ? Math.sin(relTwang*70)*0.020*relTwang*7 : 0);
-  const pull  = BRACE + charge*PULL + twang;
-  nock.position.set(0,0,-Math.max(0,pull)*bowAdj.mz);           // húr a néző felé (görbület-tükörrel kompenzálva)
-  // a nyíl a nockkal csúszik — DE reload alatt a reload-ág vezérli, és a húzás-eleji "felúszás" alatt a fenti nock-in
-  if(!(running && shotCd>0 && !drawing) && !(drawing && drawNockIn<1)) nockArrow.position.set(0.046,0.060, (-pull+0.04)*bowAdj.mz);
+  const pull  = charge*PULL*easeOutCubic(drawNockIn) + twang;   // hátrahúzás CSAK a nyíl-ráhelyezés után indul
+  nock.position.set(0.008, 0.060, Z_TIP + Math.max(0,pull));
+  // a nyíl VÉGE (a modellben +0.775) a húr-ponton ül és azzal együtt csúszik hátra
+  if(drawing && drawNockIn>=1) nockArrow.position.set(0.046, 0.060, Z_TIP + Math.max(0,pull) - 0.775);
 
-  // a végtagok valódi hajlása (longbow szép ívben görbül), elengedéskor visszacsapódik
-  let flex=0.05 + charge*0.22;   // 0.05 = felajzott alap-feszülés (a braced íj végtagjai enyhén behúzva)
-  if(bowKick>0){ flex += -bowKick*0.12*Math.cos(bowKick*11); }
+  // a szárak valódi behajlása húzáskor (a tipek a húr után fordulnak), elengedéskor visszacsapódnak
+  let flex=Math.min(0.36, charge*0.30)*easeOutCubic(drawNockIn);
+  if(bowKick>0){ flex += -bowKick*0.10*Math.cos(bowKick*11); }
   limbU.rotation.x=flex; limbL.rotation.x=-flex;
 
   setString();
@@ -3972,7 +3981,7 @@ window.addEventListener('coop-net-ready', coopConnect, { once:true });
 /* ===================== /CO-OP ===================== */
 
 /* ===================== Állapot-vezérlés ===================== */
-function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; shotCd=0; meleeCd=0; lmbHeld=false; powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width='0%'; powfill.style.background=''; nockArrow.visible=false; nock.position.set(0,0,0);
+function cancelDraw(){ drawing=false; charge=0; prevCharge=0; bowKick=0; bowKickRot=0; relTwang=0; shotCd=0; meleeCd=0; lmbHeld=false; powwrap.classList.remove('on','reload','ready'); if(powlabel) powlabel.textContent=''; powfill.style.width='0%'; powfill.style.background=''; nockArrow.visible=false; drawT=0; drawNockIn=1; nock.position.set(0.008,0.060,Z_TIP);
   // megszakított reload (halál/szünet) helyreállítása: nyíl nyugalmi pózba + jelzők nullára
   raspFired=swingFired=tapFired=seatFired=false; nockArrow.position.set(0.046,0.060,0.04*bowAdj.mz); nockArrow.rotation.set(0,0,0); nockArrow.scale.setScalar(1); if(nockArrow._glow) nockArrow._glow.material.opacity=0; }
 function resetGame(){
