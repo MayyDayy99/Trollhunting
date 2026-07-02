@@ -154,7 +154,7 @@
 <div id="hurt"></div>
 <div id="wither"></div>
 <div id="toast"></div>
-<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-02.8</div></div></div>
+<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-02.9</div></div></div>
 
 <div id="start" class="screen">
   <div class="card">
@@ -1117,6 +1117,11 @@ const plankMat=std({color:0x835a32, roughness:.82, bumpMap:SKIN_N, bumpScale:0.0
 const ropeMat =std({color:0x5e4326, roughness:.96});      // sodrott kötél
 const postMat =std({color:0x6e4a2c, roughness:.9});       // végoszlop / tartóláb
 function buildRopeBridge(ax,az,atop, bx,bz,btop){
+  // PEREM-HORGONY: a hívó a fedélzet-KÖZÉPPONTOKAT adja át, de a híd minden eleme (palló, kötél,
+  // végoszlop) a fedélzet SZÉLÉNÉL horgonyzik (E behúzás) -> a kötelek az oszlopoknál érnek véget,
+  // és semmi nem lóg át a fedélzet fölött / nem végződik a levegőben.
+  { const fx=bx-ax, fz=bz-az, fs=Math.hypot(fx,fz), E=1.55;
+    ax+=fx/fs*E; az+=fz/fs*E; bx-=fx/fs*E; bz-=fz/fs*E; }
   const dxb=bx-ax, dzb=bz-az, span=Math.hypot(dxb,dzb);
   const ux=dxb/span, uz=dzb/span, qx=-uz, qz=ux;           // hossz- és keresztirány
   const yaw=Math.atan2(ux,uz);                              // pallók forgatása a hossztengelyre
