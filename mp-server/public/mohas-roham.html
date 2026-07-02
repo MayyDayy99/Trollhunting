@@ -3099,7 +3099,9 @@ function frame(){
   requestAnimationFrame(frame);
   const t=clock.getElapsedTime(); const dt=Math.min(t-prevT,0.05); prevT=t;
   update(dt,t);
+  if(window.__shotPose){ const p=window.__shotPose; camera.position.set(p[0],p[1],p[2]); camera.lookAt(p[3],p[4],p[5]); }
   renderer.render(scene,camera);
+  if(window.__shotPose){ window.__ri=renderer.info.render; window.__shotReady=true; }
 }
 // ELŐMELEGÍTÉS: induláskor egyszer felépítünk + kirenderelünk minden troll-típust és FX-et (a völgyben, a képernyőn kívül),
 // hogy a shaderek leforduljanak és a bufferek feltöltődjenek MOST — így menet közben nincs akadás. Töltőképernyő addig.
@@ -3135,6 +3137,30 @@ function warmup(done){
   })();
 }
 warmup(frame);
+
+/* ===== ?shot=1 : DEV screenshot mód — fix kameraállások + trolltípus-sor (játékmenetet nem érinti) ===== */
+if(/[?&]shot=1/.test(location.search)){
+  const SHOT_POSES=[
+    [0, 2.1, 3.5,   0, 1.2, -6],     // 0: trolltípus-sor közelről
+    [0, 9, 22,      0, 1, 0],        // 1: tisztás totál
+    [4, 1.7, 6,    -16, 4, -26],     // 2: fák / lombkorona / horizont
+    [0, 1.6, 2,     0, 1.0, -6],     // 3: troll-sor szemmagasságból
+  ];
+  let shotIdx=0;
+  window.__nextShot=()=>{ shotIdx=(shotIdx+1)%SHOT_POSES.length; window.__shotPose=SHOT_POSES[shotIdx]; return shotIdx; };
+  const bootShot=setInterval(()=>{
+    const l=document.getElementById('loading');
+    if(l && l.classList.contains('hide')){
+      clearInterval(bootShot);
+      document.querySelectorAll('.screen').forEach(e=>e.classList.add('hide'));
+      const hud=document.getElementById('hud'); if(hud) hud.style.display='none';
+      for(const [i,ty] of ['grunt','scout','brute','shaman','spitter','wisp','shard'].entries()){
+        try{ const m=makeMonster(ty,1.0,100,2.5); m.g.position.set(-9+i*3, GROUND_Y, -6); m.g.rotation.y=0; }catch(_e){}
+      }
+      window.__shotPose=SHOT_POSES[0];
+    }
+  },50);
+}
 
 /* ===================== CO-OP (OPT-IN: only active with ?room=CODE) =====================
    Single-player is 100% unchanged when there is no ?room — `coop` stays null and every
