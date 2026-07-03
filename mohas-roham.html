@@ -95,6 +95,44 @@
   .card button.gfxbtn{font:800 13px/1 inherit;letter-spacing:.08em;padding:9px 14px;border-radius:10px;
     background:#1b2942;color:#a9bcdc;box-shadow:none;}
   .card button.gfxbtn.on{background:#7fe2ff;color:#061018;}
+  /* --- Főmenü: 3 lapos ismertető (Alapok / Elemek / Taktika) — a JÁTÉK gomb mindig látszik --- */
+  .menucard{max-width:640px;padding:30px 30px 26px;}
+  .menucard .tagline{margin:4px 0 10px;}
+  .mtabs{display:flex;gap:6px;justify-content:center;margin:8px 0 0;}
+  .card button.mtab{font:800 12px/1 inherit;letter-spacing:.14em;text-transform:uppercase;padding:9px 16px;border-radius:999px;
+    background:transparent;color:#7d92b8;box-shadow:none;border:1px solid transparent;transition:color .15s, background .15s, border-color .15s;}
+  .card button.mtab:hover{color:#c3d4f0;filter:none;}
+  .card button.mtab.on{color:#7fe2ff;border-color:rgba(127,226,255,.35);background:rgba(127,226,255,.07);}
+  .mpager{display:flex;align-items:stretch;gap:2px;margin:8px -8px 0;}
+  .mviewport{overflow:hidden;flex:1;}
+  .mtrack{display:flex;transition:transform .38s cubic-bezier(.22,.8,.24,1);}
+  .mpage{flex:0 0 100%;min-height:270px;padding:14px 10px 8px;box-sizing:border-box;text-align:left;}
+  .card button.mnav{flex:0 0 34px;height:34px;align-self:center;font:800 17px/1 inherit;padding:0;border-radius:50%;
+    background:rgba(22,34,58,.55);color:#7d92b8;box-shadow:none;border:1px solid rgba(180,200,240,.16);}
+  .card button.mnav:hover{color:#cfe6ff;background:rgba(127,226,255,.06);filter:none;}
+  .mdots{display:flex;gap:7px;justify-content:center;margin:4px 0 16px;}
+  .mdots span{width:7px;height:7px;border-radius:50%;background:#2a3c5e;transition:background .2s, transform .2s;}
+  .mdots span.on{background:#7fe2ff;transform:scale(1.3);}
+  .kbd{display:inline-block;font:700 12px/1 ui-monospace,Consolas,monospace;color:#ffe7b8;background:#16223a;
+    border:1px solid rgba(190,215,255,.22);border-bottom-width:2px;border-radius:6px;padding:4px 8px;vertical-align:middle;}
+  .mgrid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;font:600 13px/1.5 inherit;color:#bccbe6;}
+  .mrow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .mtip{font:600 12.5px/1.6 inherit;color:#a9bcdc;margin-top:13px;}
+  .mtip.dim{color:#8fa6c9;}
+  .mtip b{color:#ffe7b8;font-weight:800;}
+  .mh{font:700 11px/1.4 inherit;letter-spacing:.16em;color:#8fa6c9;text-transform:uppercase;margin:2px 0 10px;}
+  .elist{display:flex;flex-direction:column;gap:7px;}
+  .el{display:flex;align-items:baseline;gap:10px;padding:7px 12px;border-radius:10px;background:rgba(22,34,58,.55);
+    border-left:3px solid var(--c);font:600 13px/1.45 inherit;color:#bccbe6;}
+  .el b{color:var(--c);font-weight:900;white-space:nowrap;letter-spacing:.03em;}
+  .el span{flex:1;}
+  .rchips{display:flex;flex-wrap:wrap;gap:7px;}
+  .rchip{font:600 12.5px/1.3 inherit;color:#bccbe6;background:rgba(22,34,58,.55);border:1px solid rgba(180,200,240,.14);
+    border-radius:999px;padding:8px 12px;}
+  .mstart{border-top:1px solid rgba(180,200,240,.14);padding-top:16px;}
+  .mstart .gfxrow{margin-bottom:14px;align-items:center;}
+  .gfxlab{font:700 11px/1 inherit;letter-spacing:.2em;color:#7d92b8;margin-right:6px;align-self:center;}
+  @media (max-width:560px){ .mgrid2{grid-template-columns:1fr;} .card button.mnav{display:none;} .menucard{padding:24px 18px 22px;} }
   #coopWaitList li{display:flex;align-items:center;gap:8px;padding:3px 0;font:700 15px/1.3 inherit;color:#c3d4f0;}
   #coopWaitList li .pd{width:8px;height:8px;border-radius:50%;background:#5fe0ff;flex:none;box-shadow:0 0 6px rgba(95,224,255,.7);}
   #coopWaitList li.me{color:#ffe9c0;} #coopWaitList li.me .pd{background:#ffd27a;}
@@ -154,42 +192,79 @@
 <div id="hurt"></div>
 <div id="wither"></div>
 <div id="toast"></div>
-<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.2</div></div></div>
+<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.3</div></div></div>
 
 <div id="start" class="screen">
-  <div class="card">
+  <div class="card menucard">
     <div class="eyebrow">Mohás világ · íjász túlélő</div>
     <h1>MOHÁS&nbsp;ROHAM</h1>
-    <p>A mohás trollok hordákban özönlenek a tisztásra. Te vagy az utolsó íjász.</p>
-    <div class="keys">
-      <b>Egér</b> = célzás &nbsp;·&nbsp; <b>Tartsd a bal egért</b> = íj feszítése, <b>engedd el</b> = lövés<br>
-      <b>WASD</b> = mozgás &nbsp;·&nbsp; <b>Szóköz</b> = ugrás &nbsp;·&nbsp; <b>Shift</b> = futás &nbsp;·&nbsp; <b>Esc</b> = szünet<br>
-      Minél tovább feszíted, annál erősebb és gyorsabb a nyíl. Fejlövés = dupla sebzés!
+    <p class="tagline">A mohás trollok hordákban özönlenek a tisztásra. Te vagy az utolsó íjász.</p>
+
+    <div class="mtabs">
+      <button class="mtab on" data-pg="0">Alapok</button>
+      <button class="mtab" data-pg="1">Elemek</button>
+      <button class="mtab" data-pg="2">Taktika</button>
     </div>
-    <div class="brief">
-      <div class="brief-h">Elemi nyilak — válts az 1–5 gombokkal</div>
-      <div class="brief-grid">
-        <div><b style="color:#cfe0ff">1 · ALAP</b> — sima, gyors nyíl</div>
-        <div><b style="color:#ff7a3d">2 · TŰZ</b> — folyamatos égés, átterjed</div>
-        <div><b style="color:#7fd0ff">3 · JÉG</b> — lassít, 3× = teljes fagy</div>
-        <div><b style="color:#9fdc4a">4 · MÉREG</b> — mérgez + maradó gázfelhő</div>
-        <div><b style="color:#b48cff">5 · VILLÁM</b> — bénít + szomszédra láncol</div>
-        <div><b style="color:#cfe0ff">⛓ Töltés</b> — minél tovább húzod, annál erősebb</div>
+    <div class="mpager">
+      <button class="mnav" id="mPrev" aria-label="Előző oldal">‹</button>
+      <div class="mviewport">
+        <div class="mtrack" id="mTrack">
+
+          <section class="mpage"><!-- 1 · ALAPOK -->
+            <div class="mgrid2">
+              <div class="mrow"><span class="kbd">Egér</span> célzás</div>
+              <div class="mrow"><span class="kbd">Bal gomb</span> feszít · elengedve lő</div>
+              <div class="mrow"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> mozgás</div>
+              <div class="mrow"><span class="kbd">Shift</span> futás</div>
+              <div class="mrow"><span class="kbd">Szóköz</span> ugrás</div>
+              <div class="mrow"><span class="kbd">Esc</span> szünet</div>
+              <div class="mrow"><span class="kbd">1</span>…<span class="kbd">5</span> elemi nyíl váltása</div>
+              <div class="mrow"><span class="kbd">R</span> VIHAR, ha a sáv tele</div>
+            </div>
+            <div class="mtip">Minél tovább feszíted az íjat, annál erősebb és gyorsabb a nyíl — a <b>fejlövés dupla sebzés</b>.</div>
+            <div class="mtip dim">A trollok a perem barlangjaiból törnek elő — a radar mutatja, merről jön a következő hullám.</div>
+          </section>
+
+          <section class="mpage"><!-- 2 · ELEMEK -->
+            <div class="elist">
+              <div class="el" style="--c:#cfe0ff"><b>1 · ALAP</b><span>sima, gyors nyíl — mindig megbízható</span></div>
+              <div class="el" style="--c:#ff7a3d"><b>2 · TŰZ</b><span>folyamatos égés, átterjed a közeli trollokra — a fákat is felgyújtja</span></div>
+              <div class="el" style="--c:#7fd0ff"><b>3 · JÉG</b><span>lassít; három találat teljesen megfagyaszt</span></div>
+              <div class="el" style="--c:#9fdc4a"><b>4 · MÉREG</b><span>mérgez és maradó gázfelhőt hagy — a sámán gyógyítását is elnémítja</span></div>
+              <div class="el" style="--c:#b48cff"><b>5 · VILLÁM</b><span>bénít és a szomszéd trollokra láncol — vizes talajon messzebbre</span></div>
+            </div>
+            <div class="mtip">Az elem ereje a <b>feszítéssel</b> nő. Minden trollfajnak más a gyengéje: <b>szürke sercegés</b> = ellenáll · <b>erős felvillanás</b> = gyenge pont.</div>
+          </section>
+
+          <section class="mpage"><!-- 3 · TAKTIKA -->
+            <div class="mh">Reakciók — egy elem a trollon + egy másik nyíl = robbanás</div>
+            <div class="rchips">
+              <span class="rchip">🧊+⚡ <b style="color:#9fd0ff">Fagytúltöltés</b></span>
+              <span class="rchip">🔥+🧊 <b style="color:#e8f0ff">Gőzrobbanás</b></span>
+              <span class="rchip">🔥+☠️ <b style="color:#ff9a3d">Mérges gyújtás</b></span>
+              <span class="rchip">☠️+⚡ <b style="color:#c8e26a">Galván permet</b></span>
+              <span class="rchip">🧊×3 <b style="color:#bfe6ff">Teljes fagy</b></span>
+            </div>
+            <div class="mtip"><b style="color:#ffd27a">VIHAR (R):</b> reakciók és fejlövések töltik — aktiválva az egész pályát elárasztja a kezedben lévő elem.</div>
+            <div class="mtip"><b style="color:#ffd27a">Magaslatok:</b> a rámpákon felfuthatsz a lombház-fedélzetekre és a kötélhidakra — a közelharcos trollok nem érnek fel, de a köpködők onnan is levadásznak.</div>
+            <div class="mtip"><b style="color:#ffd27a">Túlélés:</b> a zöld élet-gömbök gyógyítanak és újratermődnek · 5 hullámonként a <b>Kovácsműhelyben</b> költheted el a pontjaidat.</div>
+          </section>
+
+        </div>
       </div>
-      <div class="brief-h">Reakciók — rakj egy elemet a trollra, robbantsd egy másikkal</div>
-      <div class="brief-react">
-        🧊+⚡ <b style="color:#9fd0ff">Fagytúltöltés</b> &nbsp;·&nbsp; 🔥+🧊 <b style="color:#e8f0ff">Gőzrobbanás</b> &nbsp;·&nbsp; 🔥+☠️ <b style="color:#ff9a3d">Mérges gyújtás</b> &nbsp;·&nbsp; ☠️+⚡ <b style="color:#c8e26a">Galván permet</b>
+      <button class="mnav" id="mNext" aria-label="Következő oldal">›</button>
+    </div>
+    <div class="mdots"><span class="on"></span><span></span><span></span></div>
+
+    <div class="mstart">
+      <div class="gfxrow">
+        <span class="gfxlab">GRAFIKA</span>
+        <button class="gfxbtn" data-gfx="low">ALACSONY</button>
+        <button class="gfxbtn" data-gfx="medium">KÖZEPES</button>
+        <button class="gfxbtn" data-gfx="high">MAGAS</button>
       </div>
-      <div class="brief-hint">Minden troll más elemre gyenge — a <b>szürke sercegés</b> = ellenáll, az <b>erős felvillanás</b> = gyenge pont.</div>
-      <div class="brief-hint"><b style="color:#ffd27a">Környezet:</b> a tűz felgyújtja a fákat · víz/tócsa vezeti a villámot &nbsp;·&nbsp; <b style="color:#ffd27a">VIHAR (R):</b> reakciókkal töltöd fel, majd az egész pályát elárasztja az aktuális elem.</div>
+      <button id="startBtn">JÁTÉK ▶</button>
     </div>
-    <div class="gfx-h">GRAFIKA</div>
-    <div class="gfxrow">
-      <button class="gfxbtn" data-gfx="low">ALACSONY</button>
-      <button class="gfxbtn" data-gfx="medium">KÖZEPES</button>
-      <button class="gfxbtn" data-gfx="high">MAGAS</button>
-    </div>
-    <button id="startBtn">JÁTÉK ▶</button>
   </div>
 </div>
 
@@ -4198,6 +4273,27 @@ const _shopGo=document.getElementById('shopGoBtn'); if(_shopGo) _shopGo.addEvent
 document.getElementById('startBtn').addEventListener('click',beginPlay);
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);
 document.querySelectorAll('.gfxbtn').forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); applyGraphics(b.dataset.gfx,true); }));
+// --- Főmenü-lapozó (Alapok / Elemek / Taktika): fülek + nyilak + pöttyök + ←/→ + érintés-húzás.
+//     Körbejár, és teljesen független a JÁTÉK gombtól (az mindig látszik a lapok alatt).
+(function(){
+  const track=document.getElementById('mTrack'); if(!track) return;
+  const tabs=[...document.querySelectorAll('#start .mtab')];
+  const dots=[...document.querySelectorAll('#start .mdots span')];
+  const N=tabs.length; let pg=0;
+  function go(p){ pg=(p%N+N)%N; track.style.transform='translateX(-'+(pg*100)+'%)';
+    tabs.forEach((t,i)=>t.classList.toggle('on',i===pg));
+    dots.forEach((d,i)=>d.classList.toggle('on',i===pg)); }
+  tabs.forEach((t,i)=>t.addEventListener('click',e=>{ e.stopPropagation(); go(i); }));
+  document.getElementById('mPrev').addEventListener('click',e=>{ e.stopPropagation(); go(pg-1); });
+  document.getElementById('mNext').addEventListener('click',e=>{ e.stopPropagation(); go(pg+1); });
+  document.addEventListener('keydown',e=>{ const sc=document.getElementById('start');
+    if(!sc || sc.classList.contains('hide')) return;
+    if(e.key==='ArrowLeft') go(pg-1); else if(e.key==='ArrowRight') go(pg+1); });
+  let tx=null; const vp=document.querySelector('#start .mviewport');
+  vp.addEventListener('touchstart',e=>{ tx=e.touches[0].clientX; },{passive:true});
+  vp.addEventListener('touchend',e=>{ if(tx===null) return; const dx=e.changedTouches[0].clientX-tx; tx=null;
+    if(Math.abs(dx)>40) go(pg+(dx<0?1:-1)); },{passive:true});
+})();
 document.getElementById('restartBtn').addEventListener('click',beginPlay);
 
 })();
