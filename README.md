@@ -6,8 +6,7 @@ and a deep **elemental arrow system**. The whole game is one self-contained HTML
 file (Three.js r128, no build step), with an optional **2–4 player co-op**
 server.
 
-**▶ Play single-player: https://mayyday99.github.io/GameDev/**
-*(works once GitHub Pages is enabled — see [GitHub Pages](#github-pages-single-player-hosting) below)*
+**▶ Play single-player: https://mayydayy99.github.io/GameDev/**
 
 ---
 
@@ -71,12 +70,14 @@ npm start
 ```
 
 **Playing with friends on your LAN.** Invite links default to `localhost`, which
-other devices can't reach. Put your machine's LAN IPv4 in **[`mp-server/.env`](mp-server/.env)**:
+other devices can't reach. Copy **[`mp-server/.env.example`](mp-server/.env.example)**
+to `mp-server/.env` and put your machine's LAN IPv4 in it:
 ```
 HOST_IP=192.168.x.x
 ```
 then (re)start the server — the lobby and in-game HUD will hand out
 `http://192.168.x.x:PORT/...` links that work from any device on the network.
+(`mp-server/.env` is git-ignored since it's machine-specific.)
 
 > Co-op is **server-authoritative** (waves, monster sim, elemental status,
 > reactions, chains, scoring) and strictly **opt-in** via `?room=CODE`.
@@ -86,14 +87,12 @@ then (re)start the server — the lobby and in-game HUD will hand out
 
 ## GitHub Pages (single-player hosting)
 
-The single-player game is auto-published to GitHub Pages by
+The single-player game auto-publishes to GitHub Pages via
 **[`.github/workflows/pages.yml`](.github/workflows/pages.yml)** on every push
 that touches `mohas-roham.html` (it copies the file to `index.html` and
 deploys — co-op is **not** hosted here, since it needs the WebSocket server).
-
-**One-time setup:** in the repo go to **Settings → Pages → Build and deployment
-→ Source: _GitHub Actions_**. The next push (or a manual *Run workflow*) deploys
-to the URL at the top of this README.
+The build tag shown on the loading screen matches the deployed commit, so you
+can always confirm you're playing the latest version.
 
 ---
 
@@ -106,7 +105,7 @@ to the URL at the top of this README.
 | `elemental-ingame.js` | Canonical elemental cinematic-FX reference (`makeRichPool`/`EFX`). |
 | `mp-server/server.js` | Node `ws` co-op server (server-authoritative waves + elemental sim). |
 | `mp-server/public/` | Served copy of the game, `net-client.js` (co-op glue), `index.html` lobby. |
-| `mp-server/.env` | `HOST_IP` for LAN invite links. |
+| `mp-server/.env.example` | Template for `mp-server/.env` (`HOST_IP` for LAN invite links; the real `.env` is git-ignored). |
 
 ---
 
