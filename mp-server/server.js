@@ -669,7 +669,7 @@ function spawnMonster(room) {
   const type = rollTrollType(N);
   const st = TYPE_STATS[type] || TYPE_STATS.grunt;
   // gentle wave QUALITY scaling (matches client spawnMonster): per-type muls applied
-  const baseHp = 24 + N * 8 + Math.max(0, N - 5) * 3;
+  const baseHp = 24 + N * 8 + Math.max(0, N - 5) * 3;   // MEGJEGYZÉS: az SP-kliens görbéje ennél meredekebb w20+ után (mohas-roham.html spawnMonster) — co-op tükrözés follow-up
   const baseSp = 1.5 + N * 0.10;
   const hp = Math.max(1, Math.round(baseHp * st.hpMul));
   const speed = Math.min(baseSp * st.speedMul, st.speedCap);

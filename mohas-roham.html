@@ -143,7 +143,11 @@
   #shop:not(.hide) .shopwrap{ animation: shopRise .42s cubic-bezier(.2,.9,.25,1) both; }
   @keyframes shopFade{ from{opacity:0} to{opacity:1} }
   @keyframes shopRise{ from{opacity:0; transform:translateY(34px) scale(.93)} to{opacity:1; transform:none} }
-  #shop .shopwrap{max-width:980px;width:94%;padding:22px 24px;}
+  #shop .shopwrap{max-width:980px;width:94%;padding:22px 24px;max-height:94vh;display:flex;flex-direction:column;}
+  #shop .shop-lanes{overflow-y:auto;min-height:0;}
+  .upcard.locked{opacity:.5;filter:saturate(.4);cursor:default;}
+  .upcard.locked:hover{transform:none;filter:saturate(.4);}
+  .uc-cost.lock{color:#8fa6c9;background:rgba(120,140,180,.15);}
   .shop-top{display:flex;justify-content:space-between;align-items:baseline;}
   .shop-title{font:900 26px/1 inherit;letter-spacing:.08em;background:linear-gradient(90deg,#7fe2ff,#fff,#ffd27a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
   .shop-pts{font:800 22px/1 inherit;color:#ffd27a;}
@@ -153,7 +157,7 @@
   .lane-h{font:800 12px/1 inherit;letter-spacing:.14em;text-transform:uppercase;margin:2px 0 10px;text-align:center;}
   .lane-atk .lane-h{color:#ff7a3d;} .lane-def .lane-h{color:#7fd0ff;} .lane-mys .lane-h{color:#b48cff;}
   .lane-cards{display:flex;flex-direction:column;gap:9px;}
-  .upcard{border-radius:12px;padding:10px 12px;cursor:pointer;background:rgba(18,28,48,.7);border:1px solid rgba(180,200,240,.16);transition:transform .1s, filter .12s;}
+  .upcard{border-radius:12px;padding:8px 10px;cursor:pointer;background:rgba(18,28,48,.7);border:1px solid rgba(180,200,240,.16);transition:transform .1s, filter .12s;}
   .upcard:hover{transform:translateY(-3px);filter:brightness(1.1);}
   .upcard .uc-top{display:flex;align-items:center;gap:8px;}
   .upcard .uc-glyph{font-size:18px;line-height:1;}
@@ -192,7 +196,7 @@
 <div id="hurt"></div>
 <div id="wither"></div>
 <div id="toast"></div>
-<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.3</div></div></div>
+<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.4</div></div></div>
 
 <div id="start" class="screen">
   <div class="card menucard">
@@ -247,7 +251,7 @@
             </div>
             <div class="mtip"><b style="color:#ffd27a">VIHAR (R):</b> reakciók és fejlövések töltik — aktiválva az egész pályát elárasztja a kezedben lévő elem.</div>
             <div class="mtip"><b style="color:#ffd27a">Magaslatok:</b> a rámpákon felfuthatsz a lombház-fedélzetekre és a kötélhidakra — a közelharcos trollok nem érnek fel, de a köpködők onnan is levadásznak.</div>
-            <div class="mtip"><b style="color:#ffd27a">Túlélés:</b> a zöld élet-gömbök gyógyítanak és újratermődnek · 5 hullámonként a <b>Kovácsműhelyben</b> költheted el a pontjaidat.</div>
+            <div class="mtip"><b style="color:#ffd27a">Túlélés:</b> a zöld élet-gömbök gyógyítanak és újratermődnek · minden 5. hullám <b>⚔ elit trollokat</b> hoz (extra pont!), utána a <b>Kovácsműhelyben</b> költheted el a pontjaid.</div>
           </section>
 
         </div>
@@ -1848,7 +1852,7 @@ function fireVihar(){   // VIHAR ultimate: az aktuális elemet 3 stackkel rász�
   if(coop){ coop.send({t:'ult', el:el}); toast('VIHAR! ('+def.name+')'); if(AUD.head)AUD.head(); return; }   // co-op: a szerver alkalmazza + broadcastolja a nova-t mindenkinek
   EFX.flash(px,GROUND_Y+2,pz, def.glow, 1, ARENA_R*1.1, 0.6); EFX.ring(px,GROUND_Y+0.05,pz, def.trail, 1, ARENA_R, 0.9, 0.95); EFX.light(px,GROUND_Y+3,pz, def.glow, 9, 0.7);
   shake=Math.max(shake,0.7); if(AUD.head)AUD.head(); toast('VIHAR! ('+def.name+')');
-  for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; o.hurtFlash=0.25; o.hp-=8;
+  for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; o.hurtFlash=0.25; o.hp-=(8+(RUNM.viharDmg||0));   // FEJLESZTÉS: Vihar-Mester
     if(el!=='base') applyStatus(o, el, null, 3);
     const b=o.g.position, by=b.y+(o.bodyCY||1); for(let i=0;i<6;i++) RP.spawn(b.x,by,b.z, rand(-2,2),rand(0,3),rand(-2,2), def.glow, 0.5,0.03,0.4, 1,1.2);
     if(o.hp<=0&&o.alive) killMonster(o,false); }
@@ -2914,7 +2918,8 @@ function drawRadar(t){
     const ux=wd>1e-4?px/wd:0, uy=wd>1e-4?py/wd:0, dxs=cx+ux*rr, dys=cy+uy*rr;
     rctx.globalAlpha=mo.dying>0?Math.max(0,1-mo.dying):1;
     if(clamped){ rctx.beginPath(); rctx.arc(dxs,dys,3,0,6.283); rctx.strokeStyle=threatCss(mo); rctx.lineWidth=1.5; rctx.stroke(); }
-    else { rctx.beginPath(); rctx.arc(dxs,dys,mo.scale>1.05?3.6:2.8,0,6.283); rctx.fillStyle=threatCss(mo); rctx.fill(); }
+    else { rctx.beginPath(); rctx.arc(dxs,dys,mo.scale>1.05?3.6:2.8,0,6.283); rctx.fillStyle=threatCss(mo); rctx.fill();
+      if(mo.elite){ rctx.beginPath(); rctx.arc(dxs,dys,5.4,0,6.283); rctx.strokeStyle='#ffd27a'; rctx.lineWidth=1.4; rctx.stroke(); } }
     rctx.globalAlpha=1;
   }
   // játékos + nézés-ék
@@ -2925,31 +2930,42 @@ function drawRadar(t){
 }
 
 /* ===================== Hullám-rendszer / játékállapot ===================== */
-let running=false, wave=0, score=0, toSpawn=0, spawnTimer=0, aliveCount=0, intermission=0, spawnAngles=[];
+let running=false, wave=0, score=0, toSpawn=0, spawnTimer=0, aliveCount=0, intermission=0, spawnAngles=[], eliteToSpawn=0;
 // ===== FEJLESZTÉS-BOLT (Kovácsműhely): 5 hullámonként a SCORE-t költve, PER-RUN (nincs mentés) =====
 let shopOpen=false;
 const RUN={ dmg:0, hands:0, multishot:0, hp:0, regen:0, lifesteal:0, speed:0, ult:0, dot:0,
-           drawcap:0, pierce:0, ricochet:0, elemradius:0, elempower:0 };   // rangok
+           drawcap:0, pierce:0, ricochet:0, elemradius:0, elempower:0,
+           crit:0, elite:0, orbs:0, lastchance:0, pontkov:0, vihar:0, szilank:0 };   // rangok
 const RUNM={ dmgMul:1, drawMul:1, reloadMul:1, multishot:false, regen:0, lifesteal:0, ultMul:1, dotMul:1, spdMul:1,
-             multishotN:0, drawCap:1, pierce:0, ricochet:0, elemRadiusMul:1, elemPowerMul:1 };   // élő szorzók
+             multishotN:0, drawCap:1, pierce:0, ricochet:0, elemRadiusMul:1, elemPowerMul:1,
+             crit:0, eliteMul:1, orbHeal:30, orbRespawn:20, lastStand:0, scoreMul:1, viharDmg:0, shardNova:0 };   // élő szorzók
+// 21 kártya, Brotato-mintájú tier-kapuzással (minWave): 1. bolt = alap-tier, H10 = szorzó-tier, H15 = finisher-tier.
+// Katalógus-össz ~178k pont; a fókuszált build (~119k) a ~25. hullámra kész — a TELJES katalógus egy futamban nem megvehető.
 const SHOP_DEFS=[
-  // ATK — meredekebb létrák, magasabb sapkák + ALAP-nyíl kártyák
-  {id:'dmg',       hu:'Szakás Hegy',      lane:'atk', glyph:'➳', eff:'+15% nyíl-sebzés',          cap:6, costs:[800,1300,2000,3000,4400,6200]},
-  {id:'hands',     hu:'Fürge Kéz',        lane:'atk', glyph:'➤', eff:'+15% húzás, -10% töltés',   cap:5, costs:[700,1200,1900,2900,4200]},
-  {id:'multishot', hu:'Megosztott Lövés', lane:'atk', glyph:'✸', eff:'+1 nyíl lövésenként (szórás)', cap:3, costs:[2400,4200,6800]},
-  {id:'drawcap',   hu:'Mély Feszítés',    lane:'atk', glyph:'⟱', eff:'+25% max-felhúzás: keményebb, laposabb, távolabb', cap:3, costs:[1600,2800,4400]},
-  {id:'pierce',    hu:'Áttörő Hegy',      lane:'atk', glyph:'➹', eff:'az ALAP nyíl átüt +1 trollon /rang', cap:3, costs:[2000,3400,5200]},
-  {id:'ricochet',  hu:'Pattanó Nyíl',     lane:'atk', glyph:'↻', eff:'az ALAP nyíl a legközelebbi trollra pattan +1× /rang', cap:2, costs:[2600,4400]},
+  // ATK
+  {id:'dmg',       hu:'Szakás Hegy',      lane:'atk', glyph:'➳', eff:'+15% nyíl-sebzés',          cap:6, costs:[800,1400,2200,3400,5000,7200]},
+  {id:'hands',     hu:'Fürge Kéz',        lane:'atk', glyph:'➤', eff:'+15% húzás, -10% töltés',   cap:5, costs:[700,1300,2100,3200,4600]},
+  {id:'crit',      hu:'Kritikus Lövés',   lane:'atk', glyph:'✧', eff:'+8% esély / rang: a nyíl ×2 sebzést üt', cap:3, costs:[1500,2600,4200]},
+  {id:'drawcap',   hu:'Mély Feszítés',    lane:'atk', glyph:'⟱', eff:'+25% max-felhúzás: keményebb, laposabb, távolabb', cap:3, costs:[1700,3000,4800], minWave:10},
+  {id:'multishot', hu:'Megosztott Lövés', lane:'atk', glyph:'✸', eff:'+1 nyíl lövésenként (szórás)', cap:3, costs:[2600,4600,7400], minWave:10},
+  {id:'pierce',    hu:'Áttörő Hegy',      lane:'atk', glyph:'➹', eff:'az ALAP nyíl átüt +1 trollon /rang', cap:3, costs:[2200,3800,5800], minWave:10},
+  {id:'elite',     hu:'Elit-Vadász',      lane:'atk', glyph:'⚔', eff:'+20% sebzés / rang az ELIT trollok ellen', cap:3, costs:[1800,3000,4400], minWave:10},
+  {id:'ricochet',  hu:'Pattanó Nyíl',     lane:'atk', glyph:'↻', eff:'az ALAP nyíl a legközelebbi trollra pattan +1× /rang', cap:2, costs:[2800,4800], minWave:15},
   // DEF
   {id:'hp',        hu:'Edzett Bőr',       lane:'def', glyph:'♥', eff:'+30 max élet (gyógyít is)', cap:5, costs:[500,900,1400,2100,3100]},
   {id:'regen',     hu:'Moha-gyógyulás',   lane:'def', glyph:'✚', eff:'+1.2 élet / mp',            cap:4, costs:[600,1100,1800,2800]},
-  {id:'lifesteal', hu:'Életfaló',         lane:'def', glyph:'✦', eff:'ölés gyógyít +4 / fej +8',  cap:3, costs:[1400,2400,3800]},
   {id:'speed',     hu:'Fürge Láb',        lane:'def', glyph:'➜', eff:'+8% mozgás-sebesség',       cap:4, costs:[600,1050,1700,2700]},
-  // MYS — elemi; a sugár/erő co-opban SZERVER-vezérelt -> spOnly
+  {id:'orbs',      hu:'Gyógyító Gömbök',  lane:'def', glyph:'❋', eff:'élet-gömb +20 gyógyítás és 6mp-cel gyorsabb újraéledés / rang', cap:2, costs:[900,1600]},
+  {id:'lifesteal', hu:'Életfaló',         lane:'def', glyph:'✦', eff:'ölés gyógyít +4 / fej +8',  cap:3, costs:[1400,2400,3800], minWave:10},
+  {id:'lastchance',hu:'Utolsó Esély',     lane:'def', glyph:'⭐', eff:'1×/futam: a halálos ütést 1 élettel túléled + 2s sérthetetlenség', cap:1, costs:[3500], minWave:15},
+  // MYS
   {id:'ult',       hu:'Vihar-Vezeték',    lane:'mys', glyph:'⚡', eff:'+30% VIHAR-töltés',         cap:4, costs:[600,1100,1800,2800]},
-  {id:'dot',       hu:'Maró Méreg',       lane:'mys', glyph:'☠', eff:'+40% tűz/méreg DoT',        cap:3, costs:[1100,2000,3200], spOnly:true},
-  {id:'elemradius',hu:'Robbanó Szív',     lane:'mys', glyph:'◎', eff:'+30% elemi AoE-sugár',     cap:3, costs:[1500,2600,4000], spOnly:true},
-  {id:'elempower', hu:'Őselem',           lane:'mys', glyph:'✷', eff:'+20% elemi erő (sebzés+státusz)', cap:3, costs:[1800,3000,4800], spOnly:true},
+  {id:'pontkov',   hu:'Pontkovács',       lane:'mys', glyph:'❂', eff:'+10% pont / rang minden ölésből', cap:3, costs:[1000,1800,3000], spOnly:true},
+  {id:'dot',       hu:'Maró Méreg',       lane:'mys', glyph:'☠', eff:'+40% tűz/méreg DoT',        cap:3, costs:[1100,2000,3200], spOnly:true, minWave:10},
+  {id:'elemradius',hu:'Robbanó Szív',     lane:'mys', glyph:'◎', eff:'+30% elemi AoE-sugár',     cap:3, costs:[1500,2600,4000], spOnly:true, minWave:10},
+  {id:'elempower', hu:'Őselem',           lane:'mys', glyph:'✷', eff:'+20% elemi erő (sebzés+státusz)', cap:3, costs:[1800,3000,4800], spOnly:true, minWave:15},
+  {id:'vihar',     hu:'Vihar-Mester',     lane:'mys', glyph:'☈', eff:'a VIHAR csapás-sebzése 8 → 35 → 62', cap:2, costs:[2400,4000], spOnly:true, minWave:15},
+  {id:'szilank',   hu:'Szilánk-vihar',    lane:'mys', glyph:'❄', eff:'a FAGYOTT troll halálakor jég-robbanás sebzi a környezőket (2. rang: bármely jeges trollra)', cap:2, costs:[3600,5800], spOnly:true, minWave:15},
 ];
 function applyUpgrades(){
   RUNM.dmgMul    = 1 + 0.15*RUN.dmg;
@@ -2967,14 +2983,23 @@ function applyUpgrades(){
   RUNM.ricochet  = RUN.ricochet;                   // ALAP-nyíl pattanások száma
   RUNM.elemRadiusMul = 1 + 0.30*RUN.elemradius;    // Robbanó Szív
   RUNM.elemPowerMul  = 1 + 0.20*RUN.elempower;     // Őselem (splash-frac + státusz-dps)
+  RUNM.crit      = 0.08*RUN.crit;                  // Kritikus Lövés: esély a ×2-re
+  RUNM.eliteMul  = 1 + 0.20*RUN.elite;             // Elit-Vadász
+  RUNM.orbHeal   = 30 + 20*RUN.orbs;               // Gyógyító Gömbök (SP)
+  RUNM.orbRespawn= Math.max(8, 20 - 6*RUN.orbs);
+  RUNM.lastStand = RUN.lastchance;                 // Utolsó Esély
+  RUNM.scoreMul  = 1 + 0.10*RUN.pontkov;           // Pontkovács
+  RUNM.viharDmg  = 27*RUN.vihar;                   // Vihar-Mester: 8 -> 35 -> 62
+  RUNM.shardNova = RUN.szilank;                    // Szilánk-vihar
   player.maxHp   = 100 + 30*RUN.hp;
   STATUS_CFG.fire.dps   = 7 * RUNM.dotMul * RUNM.elemPowerMul;
   STATUS_CFG.poison.dps = 4 * RUNM.dotMul * RUNM.elemPowerMul;
 }
 function startWave(n){
   wave=n; toSpawn=4+n*2; spawnTimer=0; intermission=0;
+  eliteToSpawn=(n%5===0 && !coop) ? 2+Math.floor(n/10) : 0;   // ELIT HULLÁM minden 5.-en (SP-only, mint a bolt): w5:2, w10:3, w15:3, w20:4...
   spawnAngles=[]; for(let i=0;i<toSpawn;i++) spawnAngles.push(CAVES[(Math.random()*CAVES.length)|0].ang); // FÁZIS 5: barlang-irányok a radar-előrejelzéshez
-  waveN.textContent='HULLÁM '+n; AUD.wave(); toast('HULLÁM '+n);
+  waveN.textContent='HULLÁM '+n; AUD.wave(); toast(eliteToSpawn?('HULLÁM '+n+' — ⚔ ELIT HULLÁM! ('+eliteToSpawn+' elit)'):('HULLÁM '+n));
   resetHpOrbs();   // FÁZIS 4: minden hullám frissíti az élet-gömböket (fenntartás)
 }
 function pickTrollType(){
@@ -2999,10 +3024,18 @@ function rollMonsterEl(id){ return Math.random()<EL_NULL_CHANCE ? null : EL_ORDE
 function spawnMonster(){
   const ca=(spawnAngles.length ? spawnAngles.shift() : CAVES[(Math.random()*CAVES.length)|0].ang);
   let cave=CAVES[0], bd=9; for(const c of CAVES){ let dd=Math.abs(c.ang-ca); if(dd>Math.PI) dd=2*Math.PI-dd; if(dd<bd){ bd=dd; cave=c; } }   // a popolt szöghöz tartozó barlang
-  const id=pickTrollType(), T=TROLL_TYPES[id];
-  const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3, baseSp=(1.9+wave*0.12)*rand(0.85,1.15);   // NAGYOBB PÁLYA: +25% alaptempó, hogy a hullám-ritmus megmaradjon
-  const sc=baseSc*T.scaleMul, hp=Math.round(baseHp*T.hpMul), sp=Math.min(baseSp*T.speedMul, T.speedCap);
+  const isElite=(eliteToSpawn>0); if(isElite) eliteToSpawn--;   // az elitek a hullám ELEJÉN jönnek
+  let id=pickTrollType();
+  if(isElite && !(id==='grunt'||id==='brute'||id==='spitter'||id==='wisp')) id=pick(['grunt','grunt','brute','spitter','wisp']);   // elit sámán/kobold kizárva (frusztráló)
+  const T=TROLL_TYPES[id];
+  // GÖRBE: lineáris a futam alatt + enyhe rásegítés w20 után + négyzetes fal a w25-ös erő-csúcs után (endless mód) — SP-tükör; a co-op HP-t az mp-server/server.js sorsolja (régi képlet)!
+  const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3+6*Math.max(0,wave-20)+0.35*Math.pow(Math.max(0,wave-25),2), baseSp=(1.9+wave*0.12)*rand(0.85,1.15);
+  const sc=baseSc*T.scaleMul*(isElite?1.3:1), hp=Math.round(baseHp*T.hpMul*(isElite?2.8:1)), sp=Math.min(baseSp*T.speedMul, T.speedCap);   // elit: nagyobb + szívósabb, de NEM gyorsabb (kite-olható)
   const m=makeMonster(id, sc, hp, sp, rollMonsterEl(id));
+  if(isElite){ m.elite=true; m.dmgMul*=1.5;   // elit: ×1.5 sebzés + arany aura + izzóbb szem
+    const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffd27a,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending}));
+    aura.scale.setScalar(2.6*(m.scale||1)); aura.position.y=(m.bodyCY||1.1); m.g.add(aura); m.eliteAura=aura;
+    if(m.eyes) m.eyes.forEach(e=>e.material.emissiveIntensity=(e.material.emissiveIntensity||1)*1.5); }
   const inx=-cave.x/R_CAVE, inz=-cave.z/R_CAVE;   // befelé (központ felé) egységvektor
   m.g.position.set(cave.x + inx*2.4 + rand(-0.9,0.9), GROUND_Y, cave.z + inz*2.4 + rand(-0.9,0.9));   // a barlang szája előtt bújik elő, majd befelé indul
   monsters.push(m); aliveCount++;
@@ -3043,12 +3076,12 @@ function updateHpOrbs(dt,t){
       if(running && player.alive && player.hp < player.maxHp){
         const dx=player.pos.x-o.x, dz=player.pos.z-o.z;
         if(Math.hypot(dx,dz) < ORB_R && Math.abs(player.feet-o.baseY) < 2.2){
-          if(coopActive()){ if(coop) coop.sendHeal(ORB_HEAL); } else setHp(player.hp + ORB_HEAL);   // FIX: co-opban szerver-hiteles gyógyulás (a lokális setHp-t a szerver-state visszaállítaná + hamis hurt-flasht villantana -> úgy nézne ki, mintha LEVONNA)
-          o.alive=false; o.respawn=ORB_RESPAWN; o.g.visible=false;
+          if(coopActive()){ if(coop) coop.sendHeal(ORB_HEAL); } else setHp(player.hp + RUNM.orbHeal);   // FIX: co-opban szerver-hiteles gyógyulás; SP-ben a Gyógyító Gömbök fejlesztés skálázza
+          o.alive=false; o.respawn=(coopActive()?ORB_RESPAWN:RUNM.orbRespawn); o.g.visible=false;
           const oy=o.baseY+1.0;
           EFX.ring(o.x,o.baseY+0.05,o.z,0x6fff8f,0.4,2.0,0.5,0.85); EFX.flash(o.x,oy,o.z,0x9fff9f,0.5,2.2,0.3); EFX.light(o.x,oy,o.z,0x6fff8f,3.5,0.4);
           for(let i=0;i<22;i++){ const a=rand(0,6.28),s=rand(1,3.5); RP.spawn(o.x,oy,o.z,Math.cos(a)*s,rand(1,3),Math.sin(a)*s,pick([0x7fff9f,0xcaffd0,0xffffff]),rand(0.5,0.9),0.04,rand(0.5,0.9),-0.5,1.2); }
-          if(AUD.heal) AUD.heal(); toast('+'+ORB_HEAL+' ÉLET');
+          if(AUD.heal) AUD.heal(); toast('+'+(coopActive()?ORB_HEAL:RUNM.orbHeal)+' ÉLET');
         }
       }
     } else { o.respawn-=dt; if(o.respawn<=0){ o.alive=true; o.g.visible=true; EFX.ring(o.x,o.baseY+0.05,o.z,0x6fff8f,0.3,1.2,0.4,0.6); } }   // 20s után visszatér
@@ -3064,11 +3097,31 @@ function playerHurtFX(amount){
   if(AUD.hurt) AUD.hurt();
 }
 function damagePlayer(d){
-  const before=player.hp; setHp(player.hp-d);
+  if(player.invulnT>0) return;   // Utolsó Esély: rövid sérthetetlenség
+  const before=player.hp;
+  if(player.hp-d<=0 && RUNM.lastStand && !player.lastStandUsed && player.alive){   // FEJLESZTÉS: Utolsó Esély (1x/futam)
+    player.lastStandUsed=true; player.invulnT=2.0; setHp(1); playerHurtFX(before-1);
+    shake=Math.max(shake,0.8); toast('⭐ UTOLSÓ ESÉLY! 2 mp sérthetetlenség');
+    EFX.ring(player.pos.x,GROUND_Y+0.05,player.pos.z,0xffd27a,0.5,5.0,0.6,0.9); EFX.light(player.pos.x,player.pos.y,player.pos.z,0xffd27a,5,0.5);
+    return; }
+  setHp(player.hp-d);
   if(player.hp<before) playerHurtFX(before-player.hp);
   if(player.hp<=0 && player.alive){ player.alive=false; gameOver(); }
 }
 function addScore(n){ score+=n; scoreN.textContent=score; }
+// GÖRBE: melee alap-sebzés — w20 után meredekebb, hogy a kimaxolt build ellen is maradjon halál-veszély (~4-6 ütés)
+function meleeBase(){ return 10 + wave*0.6 + 0.5*Math.max(0, wave-20); }
+// FEJLESZTÉS: Szilánk-vihar — a fagyott troll halála jég-novát robbant (kis AoE + jég-státusz; lánc-nova max 3 mélységig)
+function iceNova(src, depth){
+  const p=src.g.position, R=4.0*RUNM.elemRadiusMul, py=p.y+(src.bodyCY||1);
+  EFX.flash(p.x,py,p.z,0xbfe6ff,0.6,3.6,0.25); EFX.ring(p.x,GROUND_Y+0.05,p.z,0x9fd2ff,0.5,R,0.5,0.9); EFX.light(p.x,py,p.z,0x9fd0ff,4,0.35);
+  for(let i=0;i<24;i++) RP.spawn(p.x,py,p.z, rand(-6,6),rand(0,4),rand(-6,6), pick([0x9fe3ff,0xe2f6ff,0xffffff]), rand(0.4,0.7),0.02, rand(0.4,0.8), 5,0.8);
+  const dmg=30+0.2*(src.maxHp||40);
+  for(const tg of nearestTrolls(p.x,p.z,src,R,6)){ if(!tg.alive||tg.dying>0) continue;
+    tg.hurtFlash=0.2; tg.hp-=dmg; applyStatus(tg,'ice',null,RUNM.shardNova>=2?2:1);
+    if(tg.hp<=0 && tg.alive){ tg._novaDepth=(depth||1)+1; killMonster(tg,false); } }
+  shake=Math.max(shake,0.25); gainUlt(2);
+}
 // NAGY TROLL OSZTÓDÁS: a Kőbunkó halálkor 2 kisebb Kőszilánkra esik szét (a szilánkok noSplit -> nincs végtelen kaszkád)
 function spawnSplitShards(parent){
   const px=parent.g.position.x, pz=parent.g.position.z;
@@ -3117,10 +3170,13 @@ function killMonster(m, headshot){
     case 'split': gore.burst(bx,by,bz,26,0x6f7a72,9,0.55); gore.burst(bx,by,bz,12,0xc98a3a,7,0.6); sparks.burst(bx,by,bz,16,0xffb24d,7,0.5); EFX.ring(bx,GROUND_Y+0.05,bz,0xc98a3a,0.5,3.6,0.5,0.85); EFX.flash(bx,by,bz,0xffce5a,0.5,3.0,0.22); shake=Math.max(shake,0.4); break;
     default: gore.burst(bx,by,bz,24,0x5f9168,6,0.4); gore.burst(bx,by,bz,10,0x2c4636,5,0.3); shake=Math.max(shake,0.18); break;
   }
+  const wasFrozen=(m.frozenSolid>0), wasIced=(m.statusEl==='ice'||!!m.iceShell);   // Szilánk-vihar: a shatterShell nullázza -> ELŐTTE mentjük
   if(m.iceShell) shatterShell(m);   // fagyott troll: a jégburok szétpattan, hogy LÁTSZÓDJON a halál-animáció
   elementalDeath(m);   // ELEM: element-keyed death flourish (ash / shatter / melt / char)
-  if(m.typeId==='shaman'){ addScore(60); toast('SÁMÁN LETERÍTVE!'); }
-  addScore(headshot?150:100);
+  if(!coop && RUNM.shardNova>0 && (wasFrozen || (RUNM.shardNova>=2 && wasIced)) && (m._novaDepth||1)<=3) iceNova(m, m._novaDepth||1);   // FEJLESZTÉS: Szilánk-vihar (lánc max 3 mélységig)
+  if(m.elite){ const eb=Math.round(300*RUNM.scoreMul); addScore(eb); toast('⚔ ELIT LEDÖNTVE! +'+eb); }
+  if(m.typeId==='shaman'){ addScore(Math.round(60*RUNM.scoreMul)); toast('SÁMÁN LETERÍTVE!'); }
+  addScore(Math.round((headshot?150:(m.typeId==='shard'?40:100))*RUNM.scoreMul));   // GAZDASÁG: a szilánk (brute-osztódás) csak 40 pont — különben a split rejtett bevétele 100%-olhatóvá tenné a katalógust
   if(RUNM.lifesteal>0) setHp(player.hp + (headshot?8:4)*RUNM.lifesteal);   // FEJLESZTÉS: Életfaló (ölés gyógyít, fej dupla)
 }
 
@@ -3153,6 +3209,7 @@ function update(dt,t){
     else if(player.feet<=support){ player.feet=support; player.vy=0; player.onGround=true; }
     else player.onGround=false;
     player.pos.y=player.feet+1.7+(player.onGround?Math.sin(t*8)*Math.min(len,1)*0.04:0); // szemmagasság + járás-bólogatás
+    if(player.invulnT>0) player.invulnT-=dt;   // Utolsó Esély sérthetetlenség lecsengése
     if(RUNM.regen>0 && player.hp<player.maxHp) setHp(player.hp + RUNM.regen*dt);   // FEJLESZTÉS: Moha-gyógyulás (regen, csak futó+élő állapotban)
   }
 
@@ -3280,13 +3337,14 @@ function update(dt,t){
       c.set(m.g.position.x, m.g.position.y+m.bodyCY*0.42, m.g.position.z);
       if(segDist(a.prev,a.g.position,c)<m.bodyR*0.72){ hit=m; dmgMul=0.6; break; }             // LÁB ×0.6 (alacsonyabb, kisebb gömb, kevesebb sebzés)
     }
-    if(hit){ const dmg=a.dmg*dmgMul;
+    if(hit){ let dmg=a.dmg*dmgMul;
+      if(RUNM.crit>0 && Math.random()<RUNM.crit){ dmg*=2; const _q=a.g.position; EFX.flash(_q.x,_q.y,_q.z,0xffe7b8,0.35,1.8,0.16); }   // FEJLESZTÉS: Kritikus Lövés (×2)
       const _absorbed = a.el!=='base' && hit.el && hit.el===a.el;   // ROSSZ-ELEM BÜNTETÉS: a troll SAJÁT (innate) elemével lőve -> ELNYELI (gyógyul), nem sebződik. Motiválja a sima nyilat / ellen-elemet.
       if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg, a.el, a.charge); } // CO-OP: a szerver dönt sebzés/heal/kill felől; az absorb-tellt a 'absorb' elFx hozza
       else if(_absorbed){   // SP elnyelés: kis heal + tell, NINCS sebzés / reakció / státusz
         const _heal=Math.min(dmg*0.20, (hit.maxHp||hit.hp)-hit.hp); if(_heal>0) hit.hp=Math.min(hit.maxHp||hit.hp, hit.hp+_heal);
         hit.hurtFlash=0; absorbTell(hit, a.el); }
-      else { const wasStatus=hit.statusEl; const _rz=(hit.resist&&hit.resist[a.el])?hit.resist[a.el]:1; const _dmg=dmg*(hit.frozenSolid>0?1.5:1)*_rz; hit.hp-=_dmg; hit.hurtFlash=(_rz>1.3?0.3:0.15);   // törékeny ×1.5 + per-troll resist
+      else { const wasStatus=hit.statusEl; const _rz=(hit.resist&&hit.resist[a.el])?hit.resist[a.el]:1; const _dmg=dmg*(hit.frozenSolid>0?1.5:1)*_rz*(hit.elite?RUNM.eliteMul:1); hit.hp-=_dmg; hit.hurtFlash=(_rz>1.3?0.3:0.15);   // törékeny ×1.5 + per-troll resist
         if(_rz<0.6){ const _q=a.g.position; for(let i=0;i<4;i++) RP.spawn(_q.x,_q.y,_q.z,rand(-1,1),rand(0,1.5),rand(-1,1),0x8a8f99,0.3,0.02,0.3,1,1); }   // ELLENÁLL: szürke sercegés (rossz elem)
         const _skip=elementMechanic(a.g.position, a.el, hit, dmg, head, wasStatus, a.charge, a.resonant); if(!_skip) applyStatus(hit, a.el, a.charge); if(head) gainUlt(2); }   // ELEM-REACT: reakció/alap + rezonancia; fejlövés tölti a VIHAR-t
       const hp=a.g.position;
@@ -3514,6 +3572,7 @@ function trollAI(m, dt, t){
   const T=m.type, p=m.g.position;
   const dx=player.pos.x-p.x, dz=player.pos.z-p.z, d=Math.hypot(dx,dz)||0.0001;
   m.g.rotation.y=Math.atan2(dx,dz);
+  if(m.eliteAura) m.eliteAura.material.opacity=0.42+0.25*Math.abs(Math.sin(t*3));
   if(T.id==='wisp'){ m.hoverPh=(m.hoverPh||0)+dt*2.0; p.y=GROUND_Y+0.55+Math.sin(m.hoverPh)*0.18;   // LIDÉRC: lebeg a talaj fölött (nem jár) -> félreismerhetetlen szellem
     if(m.elAura) m.elAura.material.opacity=0.45+Math.abs(Math.sin(t*2.5))*0.25; }
   if(T.id==='shaman'){ const pulse=0.6+Math.abs(Math.sin(t*3))*0.6;
@@ -3584,7 +3643,7 @@ function trollAI(m, dt, t){
         const raise=raiseAmt(1.5);
         if(raise>0){ m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,-0.7,raise); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,-0.7,raise);
           m.arms.L.rotation.z=0.5*raise; m.arms.R.rotation.z=-0.5*raise; } }   // karmok szétnyitva, ugrásra kész
-      else meleeAttack('scoutClaw',0.38,()=>{ m.atkCd=0.55; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });   // gyorsabb harapás
+      else meleeAttack('scoutClaw',0.38,()=>{ m.atkCd=0.55; damagePlayer(meleeBase()*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });   // gyorsabb harapás
       break;
     }
     case 'brute': {
@@ -3595,7 +3654,7 @@ function trollAI(m, dt, t){
           m.arms.L.rotation.z=0.35*raise; m.arms.R.rotation.z=-0.35*raise;   // mindkét ököl fel, széttartva
           m.torso.rotation.x=(T.postureLean||0)-0.25*raise; }
       }
-      else meleeAttack('bruteSlam',1.5,()=>{ m.atkCd=2.2; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1));
+      else meleeAttack('bruteSlam',1.5,()=>{ m.atkCd=2.2; damagePlayer(meleeBase()*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1));
         const kb=3.2; player.pos.x+=dx/d*kb; player.pos.z+=dz/d*kb;
         { const r=resolveMove(player.pos.x, player.pos.z, player.feet); player.pos.x=r.x; player.pos.z=r.z; }
         clampToBoundary();
@@ -3653,18 +3712,18 @@ function trollAI(m, dt, t){
           m.head.rotation.x=m.head.rotation.x-0.12*raise;                    // felnéz az ütéshez
         }
       }
-      else meleeAttack('gruntSmash',1.05,()=>{ m.atkCd=1.1; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }, true);
+      else meleeAttack('gruntSmash',1.05,()=>{ m.atkCd=1.1; damagePlayer(meleeBase()*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }, true);
       break;
     }
     case 'shard': {
       if(d>1.8 && m.atkPhase<=0){ moveToward(1.0); walkAnim();
         const raise=raiseAmt(1.8);
         if(raise>0){ m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,-0.6,raise); m.torso.rotation.z=0.12*raise; } }   // hátrahúzott döfő-kéz
-      else meleeAttack('shardJab',0.30,()=>{ m.atkCd=0.8; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });
+      else meleeAttack('shardJab',0.30,()=>{ m.atkCd=0.8; damagePlayer(meleeBase()*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); });
       break;
     }
     case 'wisp': { m.rangedTimer=(m.rangedTimer==null?T.rangedCd*rand(0.5,1.0):m.rangedTimer-dt);   // FEJLESZTÉS: távolról jég-lövedék, közelről harap; aura-szorzók
-      if(d<2.2){ meleeAttack('wispBite',0.45,()=>{ m.atkCd=0.9; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }); }
+      if(d<2.2){ meleeAttack('wispBite',0.45,()=>{ m.atkCd=0.9; damagePlayer(meleeBase()*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }); }
       else { if(d>T.bandMax){ moveToward(0.9*(m.wispBuff?(TROLL_TYPES.wisp.auraSpd||1.25):1)); } else if(d<T.bandMin){ moveToward(-0.7); } walkAnim();
         { const raise=raiseAmt(2.2); if(raise>0){ m.arms.L.rotation.x=lerp(m.arms.L.rotation.x,-0.35,raise); m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,-0.35,raise); m.head.rotation.x=lerp(m.head.rotation.x,-0.25*raise,0.5); } }   // hátrahúzódzó harapás-felvezetés
         if(m.rangedTimer<=0 && d>=T.bandMin-1 && d<=T.bandMax+3){ m.rangedTimer=T.rangedCd*rand(0.85,1.15); m.arms.R.rotation.x=-0.7; wispFire(m); } }
@@ -3676,7 +3735,7 @@ function trollAI(m, dt, t){
         if(raise>0){ m.arms.R.rotation.x=lerp(m.arms.R.rotation.x,-1.95,raise); m.arms.R.rotation.z=-0.5*raise;
           m.torso.rotation.x=(T.postureLean||0)-0.22*raise; }
       }
-      else meleeAttack('gruntSmash',1.0,()=>{ m.atkCd=1.3; damagePlayer((10+wave*0.6)*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }, true);
+      else meleeAttack('gruntSmash',1.0,()=>{ m.atkCd=1.3; damagePlayer(meleeBase()*m.dmgMul*(m.wispBuff?(TROLL_TYPES.wisp.auraDmg||1.35):1)); }, true);
     }
   }
 }
@@ -4273,6 +4332,7 @@ function resetGame(){
   resetBombs(); resetAbolts(); beamTube.visible=false; player.witherT=0;   // SÁMÁN: lövedékek + nyaláb + gyengítés nullára
   cancelDraw();
   for(const k in RUN) RUN[k]=0; applyUpgrades(); closeShop(true);   // FEJLESZTÉS: per-run reset (rangok 0, statok alapra, bolt zárva)
+  player.lastStandUsed=false; player.invulnT=0; eliteToSpawn=0;   // Utolsó Esély + elit-számláló vissza
   player.pos.set(0,1.7,0); player.yaw=0; player.pitch=0; player.hp=player.maxHp; player.alive=true; player.vy=0; player.feet=0; player.onGround=true; player.jumpReady=true;
   setHp(player.maxHp); score=0; scoreN.textContent='0'; aliveCount=0; toSpawn=0; intermission=0;
   resetHpOrbs();   // FÁZIS 4: élet-gömbök vissza
@@ -4305,10 +4365,10 @@ function renderShop(){
     for(const d of SHOP_DEFS){
       if(d.lane!==lane) continue;
       if(d.spOnly && coop) continue;   // Maró Méreg rejtve co-opban (DoT szerver-oldali)
-      const rank=RUN[d.id], maxed=rank>=d.cap, cost=maxed?0:d.costs[rank];
-      const card=document.createElement('div'); card.className='upcard'; card.dataset.id=d.id;
-      const costCls=maxed?'max':(score>=cost?'afford':'poor');
-      const costTxt=maxed?'MAX':('−'+fmtPts(cost));
+      const rank=RUN[d.id], maxed=rank>=d.cap, locked=(!maxed && d.minWave && wave<d.minWave), cost=maxed?0:d.costs[rank];
+      const card=document.createElement('div'); card.className='upcard'+(locked?' locked':''); card.dataset.id=d.id;
+      const costCls=maxed?'max':(locked?'lock':(score>=cost?'afford':'poor'));
+      const costTxt=maxed?'MAX':(locked?('H'+d.minWave+'-TŐL'):('−'+fmtPts(cost)));
       card.innerHTML='<div class="uc-top"><span class="uc-glyph">'+d.glyph+'</span><span class="uc-name">'+d.hu+'</span></div>'
         +'<div class="uc-eff">'+d.eff+'</div>'
         +'<div class="uc-row"><span class="uc-pips">'+pips(rank,d.cap)+'</span><span class="uc-cost '+costCls+'">'+costTxt+'</span></div>';
@@ -4319,6 +4379,7 @@ function renderShop(){
 }
 function buyUpgrade(id){
   const d=SHOP_DEFS.find(function(x){ return x.id===id; }); if(!d) return false;
+  if(d.minWave && wave<d.minWave) return false;   // tier-kapu: még zárolt
   const rank=RUN[id]; if(rank>=d.cap) return false;
   const cost=d.costs[rank];
   if(score<cost){   // nincs elég pont -> piros rázás, nincs hang
@@ -4376,7 +4437,7 @@ document.querySelectorAll('.gfxbtn').forEach(b=> b.addEventListener('click', e=>
 document.getElementById('restartBtn').addEventListener('click',beginPlay);
 
 // --- fejlesztői/teszt-hook: csak #dev hash-sel aktív (Playwright-verifikációhoz; játékos-úton inert) ---
-if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgrades, addScore, startWave, freezeEncase, freezeFull, killMonster, openShop, applyStatus, renderer, player,
+if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgrades, addScore, startWave, freezeEncase, freezeFull, killMonster, openShop, applyStatus, renderer, player, damagePlayer,
   get wave(){return wave}, get score(){return score} };
 
 })();
