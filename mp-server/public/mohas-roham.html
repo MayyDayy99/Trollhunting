@@ -196,7 +196,7 @@
 <div id="hurt"></div>
 <div id="wither"></div>
 <div id="toast"></div>
-<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.5</div></div></div>
+<div id="loading"><div style="text-align:center"><div class="ltitle">MOHÁS ROHAM</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.6</div></div></div>
 
 <div id="start" class="screen">
   <div class="card menucard">
@@ -454,8 +454,8 @@ const woodMat=std({color:0x7b5433,roughness:.85,bumpMap:SKIN_N,bumpScale:0.02});
 const woodDark=std({color:0x3b2a1e,roughness:.95});
 const rockMat=std({color:0x59637a,roughness:.95,bumpMap:SKIN_N,bumpScale:0.05});
 const mossMat=std({color:0x93c584,roughness:0.92,map:MOSS_T,bumpMap:MOSS_T,bumpScale:0.06});   // világos szorzó: az sRGB-dekódolt (sötétebb) textúrát kompenzálja   // sötét akcentus, picit kevésbé matt -> faceted highlight-lépcső
-const rockDark=std({color:0x272c38,roughness:.97,bumpMap:SKIN_N,bumpScale:0.05});   // FÁZIS 5: sötét barlang-szikla
-const caveMouthMat=new THREE.MeshBasicMaterial({color:0x05070a});                    // FÁZIS 5: a barlang fekete szája ("üreg", nem tükröz fényt)
+const rockDark=std({color:0x2f3546,roughness:.97,bumpMap:SKIN_N,bumpScale:0.05,emissive:0x171d2b,emissiveIntensity:0.55});   // FÁZIS 5: sötét barlang-szikla — emissive-padló, hogy az árnyékos oldal se essen az égnél sötétebb "lyukba" a magas fedélzetről nézve
+const caveMouthMat=new THREE.MeshBasicMaterial({color:0x0b1526,fog:true});           // FÁZIS 5: a barlang szája — SÖTÉT NAVY üreg (nem tükröz fényt), de nem az égnél sötétebb kivágás; a fog a távoli barlangokat az égbe olvasztja
 const stemMat=std({color:0xe8dcc2,roughness:.8});
 const capMat=std({color:0xc44a43,roughness:.7});
 const glowCapM=new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.2,roughness:.6,flatShading:true});
@@ -4437,7 +4437,7 @@ document.querySelectorAll('.gfxbtn').forEach(b=> b.addEventListener('click', e=>
 document.getElementById('restartBtn').addEventListener('click',beginPlay);
 
 // --- fejlesztői/teszt-hook: csak #dev hash-sel aktív (Playwright-verifikációhoz; játékos-úton inert) ---
-if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgrades, addScore, startWave, freezeEncase, freezeFull, killMonster, openShop, applyStatus, renderer, player, damagePlayer,
+if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgrades, addScore, startWave, freezeEncase, freezeFull, killMonster, openShop, applyStatus, renderer, player, damagePlayer, camera, scene, THREE, CAVES,
   get wave(){return wave}, get score(){return score} };
 
 })();
