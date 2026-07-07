@@ -3970,10 +3970,11 @@ function coopMakePeer(id, name){
   bow.add(mesh(new THREE.SphereGeometry(0.024,6,5), woodDark, 0, 0.46,-0.175));   // upper nock tip
   bow.add(mesh(new THREE.CylinderGeometry(0.030,0.030,0.15,7), woodDark, 0,0,0.005));  // leather grip wrap at the belly
   bow.add(mesh(new THREE.CylinderGeometry(0.006,0.006,0.92,4), tuskMat, 0,0,-0.175));  // straight bowstring (nock to nock)
+  bow.scale.setScalar(1.9);   // ~2x nagyobb, prominensebb íj — a grip-origó körül skálázódik, így a kézben marad
 
   // --- COOP-COLOR: per-player cloak trim + sash + glózó háti tegez-toll a játékos színében ---
   g.add(mesh(new THREE.CylinderGeometry(0.235,0.235,0.05,9), trimMat, 0,1.66,0));                 // színes gallér-szegély
-  const sash=mesh(new THREE.BoxGeometry(0.07,0.5,0.04), trimMat, 0,1.28,0.2); sash.rotation.z=0.5; g.add(sash); // mell-sash
+  // mell-sash KIVÉVE — fura kék téglalapként olvasott a hason
   g.add(mesh(new THREE.CylinderGeometry(0.05,0.06,0.42,7), woodDark, -0.14,1.5,-0.22));            // háti tegez
   for(let i=0;i<3;i++){ const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:colHex,transparent:true,opacity:0.85,depthWrite:false,blending:THREE.AdditiveBlending})); fl.scale.setScalar(0.12); fl.position.set(-0.14+(i-1)*0.04,1.74,-0.22); g.add(fl); }
 
