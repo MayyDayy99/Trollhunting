@@ -3955,21 +3955,21 @@ function coopMakePeer(id, name){
   armR.add(mesh(new THREE.CylinderGeometry(0.075,0.06,0.50,6), clothMat, 0,-0.25,0));  // sleeve
   armR.add(mesh(new THREE.SphereGeometry(0.07,7,6), skinMat, 0,-0.50,0));              // string hand
 
-  // --- bow: slim recurve (2 wood arcs) + a taut bone-pale string, gripped in the LEFT hand, vertical, aimed +Z ---
+  // --- bow: ONE smooth recurve stave (CatmullRom -> Tube) + a straight pale string, held upright in the LEFT hand, aimed +Z.
+  //     Attached to the BODY (g) at the computed hand point — NOT to the tilted arm — so no compound rotations = clean & predictable. ---
   const bow = new THREE.Group();
-  bow.position.set(0,-0.62,0.10);            // seat in the left hand, just ahead of the fist
-  armL.rotation.x = -1.15;                   // (already set) keep grip forward
-  bow.rotation.x = Math.PI/2;                // undo the forward-arm tilt so the bow stands upright in world
-  armL.add(bow);
-  [-1,1].forEach(s=>{                          // upper + lower limb, mirrored
-    const limb = mesh(new THREE.TorusGeometry(0.34,0.022,5,12,Math.PI*0.62), woodMat, 0,0,0);
-    limb.rotation.z = s>0 ? (Math.PI*0.5 - Math.PI*0.31) : (Math.PI*1.5 - Math.PI*0.31);
-    bow.add(limb);
-    bow.add(mesh(new THREE.SphereGeometry(0.026,6,5), woodDark, 0,s*0.55,0));  // recurve nock tip
-  });
-  bow.add(mesh(new THREE.CylinderGeometry(0.034,0.034,0.30,7), woodDark, 0,0,0));  // riser/grip
-  const strg = mesh(new THREE.CylinderGeometry(0.008,0.008,1.06,4), tuskMat, 0,0,-0.30); // bowstring (pale)
-  bow.add(strg);
+  bow.position.set(0.20,1.30,0.52);          // forward left-hand grip point (chest height, out front)
+  g.add(bow);
+  const bowCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0,-0.46,-0.175), new THREE.Vector3(0,-0.40,-0.115), new THREE.Vector3(0,-0.22,-0.035),
+    new THREE.Vector3(0, 0.00, 0.000),                                    // belly (grip) bulges toward +Z target
+    new THREE.Vector3(0, 0.22,-0.035), new THREE.Vector3(0, 0.40,-0.115), new THREE.Vector3(0, 0.46,-0.175)
+  ]);
+  const stave = new THREE.Mesh(new THREE.TubeGeometry(bowCurve, 28, 0.018, 6, false), woodMat); stave.castShadow=true; bow.add(stave);
+  bow.add(mesh(new THREE.SphereGeometry(0.024,6,5), woodDark, 0,-0.46,-0.175));   // lower nock tip
+  bow.add(mesh(new THREE.SphereGeometry(0.024,6,5), woodDark, 0, 0.46,-0.175));   // upper nock tip
+  bow.add(mesh(new THREE.CylinderGeometry(0.030,0.030,0.15,7), woodDark, 0,0,0.005));  // leather grip wrap at the belly
+  bow.add(mesh(new THREE.CylinderGeometry(0.006,0.006,0.92,4), tuskMat, 0,0,-0.175));  // straight bowstring (nock to nock)
 
   // --- COOP-COLOR: per-player cloak trim + sash + glózó háti tegez-toll a játékos színében ---
   g.add(mesh(new THREE.CylinderGeometry(0.235,0.235,0.05,9), trimMat, 0,1.66,0));                 // színes gallér-szegély
