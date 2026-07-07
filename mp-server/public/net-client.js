@@ -1,5 +1,5 @@
 // =============================================================================
-//  net-client.js — Mohas Roham CO-OP networking stub (vanilla browser module)
+//  net-client.js — Troll Hunting CO-OP networking stub (vanilla browser module)
 // =============================================================================
 //
 //  A dependency-free, build-free ES module. Drop it next to the game and import

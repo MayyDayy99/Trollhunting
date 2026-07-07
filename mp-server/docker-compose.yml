@@ -1,5 +1,5 @@
 # =============================================================================
-#  Mohas Roham co-op server — docker-compose
+#  Troll Hunting co-op server — docker-compose
 # =============================================================================
 #  Run:    docker compose up --build
 #  Then:   open http://localhost:8080  (lobby) or .../mohas-roham.html (game)

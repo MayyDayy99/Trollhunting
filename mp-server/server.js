@@ -1,11 +1,11 @@
 // =============================================================================
-//  Mohas Roham — CO-OP MULTIPLAYER SERVER (skeleton / scaffolding)
+//  Troll Hunting — CO-OP MULTIPLAYER SERVER (skeleton / scaffolding)
 // =============================================================================
 //
 //  WHAT THIS IS
 //  ------------
 //  A genuinely-runnable *server skeleton* for turning the single-file archery
-//  game "Mohas Roham" (first-person bow vs. waves of mossy trolls) into a
+//  game "Troll Hunting" (first-person bow vs. waves of mossy trolls) into a
 //  2–4 player CO-OP wave-survival experience: several archers share ONE arena
 //  and fight the SAME wave together.
 //
@@ -348,7 +348,7 @@ wss.on('connection', (ws) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
-  send(ws, { t: 'hello', message: 'Mohas Roham co-op server. Send {t:"join"} to start.' });
+  send(ws, { t: 'hello', message: 'Troll Hunting co-op server. Send {t:"join"} to start.' });
 
   ws.on('message', (raw) => {
     let msg;
