@@ -4344,7 +4344,11 @@ function resetGame(){
   cancelDraw();
   for(const k in RUN) RUN[k]=0; applyUpgrades(); closeShop(true);   // FEJLESZTÉS: per-run reset (rangok 0, statok alapra, bolt zárva)
   player.lastStandUsed=false; player.invulnT=0; eliteToSpawn=0;   // Utolsó Esély + elit-számláló vissza
-  player.pos.set(0,1.7,0); player.yaw=0; player.pitch=0; player.hp=player.maxHp; player.alive=true; player.vy=0; player.feet=0; player.onGround=true; player.jumpReady=true;
+  let _sx=0;   // CO-OP SPAWN-SZÓRÁS: ne essen mindenki ugyanoda (különben egymásba lógtok + a társ+íj kitakarja a pályát)
+  if(coopActive()){ const _ids=coopWaitRoster.map(p=>p.id).sort(); const _i=_ids.indexOf(coopMyId);
+    if(_i>=0 && _ids.length>1){ _sx=(_i-(_ids.length-1)/2)*2.6; }                                                              // roster-index -> egy sorban, egymás mellett
+    else if(coopMyId){ let _h=0; for(let _k=0;_k<coopMyId.length;_k++) _h=(_h*31+coopMyId.charCodeAt(_k))|0; _sx=((((_h%5)+5)%5)-2)*1.5; } }   // fallback: id-hash eltolás, ha nincs roster
+  player.pos.set(_sx,1.7,0); player.yaw=0; player.pitch=0; player.hp=player.maxHp; player.alive=true; player.vy=0; player.feet=0; player.onGround=true; player.jumpReady=true;
   setHp(player.maxHp); score=0; scoreN.textContent='0'; aliveCount=0; toSpawn=0; intermission=0;
   resetHpOrbs();   // FÁZIS 4: élet-gömbök vissza
   if(coop) coopOnReset(); // FIX: co-op könyvelés ürítése + revive új játéknál
