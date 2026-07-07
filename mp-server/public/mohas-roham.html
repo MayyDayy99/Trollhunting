@@ -3981,7 +3981,8 @@ function coopMakePeer(id, name){
   g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
   scene.add(g);
   const peer = { g, name:name||'Archer', color:colHex,
-                 buf:[], has:false, lastX:0, lastZ:0 };  // buf: timestamped snapshots for interpolation
+                 buf:[], has:false, lastX:0, lastZ:0,
+                 armR, armL, bow, armRB:[armR.rotation.x,armR.rotation.y,armR.rotation.z], armLB:[armL.rotation.x,armL.rotation.y,armL.rotation.z], drawT:0 };  // + húzás-animáció refek (kar-alap-forgatások + timer)
   coopPeers.set(id, peer);
   if(coopHudEl) coopUpdateHudPlayers();
   return peer;
@@ -4093,6 +4094,14 @@ function coopInterp(dt){
   const renderTime = coopNow() - COOP_INTERP_DELAY_MS;   // render everyone slightly in the past
   // ---- peers: sample buffered transform, keep local walk-cycle facing ----
   for(const p of coopPeers.values()){
+    // HÚZÁS: lövéskor indított húz->elenged (a jobb/húr-kar hátrahúz + visszaenged; bal/íj-kar enyhén megfeszül). Bufferig-független.
+    if(p.drawT>0 && p.armR){
+      p.drawT=Math.max(0,p.drawT-dt);
+      const DUR=0.42, t=1-p.drawT/DUR, amt=Math.sin(Math.min(1,t)*Math.PI);   // 0->1 (teljes húzás középen) ->0
+      p.armR.rotation.set(p.armRB[0]-0.62*amt, p.armRB[1]+0.36*amt, p.armRB[2]);
+      p.armL.rotation.set(p.armLB[0]-0.10*amt, p.armLB[1], p.armLB[2]);
+      if(p.drawT===0){ p.armR.rotation.set(p.armRB[0],p.armRB[1],p.armRB[2]); p.armL.rotation.set(p.armLB[0],p.armLB[1],p.armLB[2]); }   // vissza az alap-pózba
+    }
     if(!p.has || p.buf.length===0) continue;
     if(coopSampleBuf(p.buf, renderTime, _coopSample)){
       p.g.position.set(_coopSample.x, _coopSample.y, _coopSample.z);
@@ -4137,6 +4146,7 @@ function coopShowPeerArrow(a){
   tr.wrap.visible=true; tr.active=true; tr.life=0; tr.el=a.el;
   tr.vx=a.dir.x; tr.vy=a.dir.y; tr.vz=a.dir.z; tr.sp=(22+ (a.power||0)*30);
   sparks.burst(a.from.x,a.from.y,a.from.z,4, (a.el&&a.el!=='base'&&EL[a.el])?EL[a.el].glow:0xffd27a, 4, 0.25);
+  const _pr = (a.id!=null) ? coopPeers.get(a.id) : null; if(_pr) _pr.drawT = 0.42;   // HÚZÁS: a lövő társon indul a húz->elenged animáció
 }
 function coopUpdatePeerArrows(dt){
   for(const tr of coopPeerArrows){ if(!tr.active) continue;
