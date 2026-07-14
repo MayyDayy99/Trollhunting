@@ -19,7 +19,7 @@ server.
 | **WASD** | Move · **Space** jump · **Shift** run · **Esc** pause |
 | **1–5** | Arrow element: `1` ALAP · `2` TŰZ 🔥 · `3` JÉG 🧊 · `4` MÉREG ☠️ · `5` VILLÁM ⚡ |
 | **R** | VIHAR ultimate (when the meter is full) |
-| **Phone / touch** | Left joystick to move · drag right side to aim · hold **Lövés** to draw and release to fire · touch buttons for jump, run, melee, pause, VIHAR, and arrow elements |
+| **Phone / touch** | Left joystick to move · drag right side to aim · hold either **LŐ** button to draw and release to fire · touch buttons for jump, run, melee, pause, VIHAR, and arrow elements |
 
 Longer draw = stronger, faster arrow **and** stronger elemental effect.
 Headshots deal double damage.
