@@ -233,6 +233,8 @@
   .touch .card{max-width:min(640px,94vw);padding:22px 18px;}
   .touch .mpage{min-height:210px;}
   .touch .mobile-actions,.touch .mobile-elements,#mobileMove{user-select:none;-webkit-user-select:none;}
+  #langBtn{position:fixed;left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));z-index:30;width:52px;height:38px;border-radius:999px;
+    border:1px solid rgba(190,238,178,.24);background:rgba(8,14,28,.38);color:#d8f4dc;font:900 12px/1 -apple-system,'Segoe UI',sans-serif;letter-spacing:.08em;box-shadow:0 8px 24px rgba(0,0,0,.28);backdrop-filter:blur(5px);cursor:pointer;}
   @media (orientation:portrait) and (pointer:coarse){
     .touch #rotateHint{display:flex;}
     .touch .mobile-actions,.touch .mobile-elements,.touch #mobileMove,.touch #mobileLook,.touch #mobileShootAlt,.touch #mobilePause,.touch #mobileFullscreen,.touch #mobileRotate{opacity:.25;}
@@ -240,6 +242,7 @@
 </style>
 </head>
 <body>
+<button id="langBtn" aria-label="Language">EN</button>
 <div id="hud">
   <div id="cross">
     <div class="dot"></div>
@@ -436,6 +439,63 @@ const HAS_COARSE_POINTER = typeof matchMedia==='function' && matchMedia('(pointe
 const HAS_FINE_POINTER = typeof matchMedia==='function' && matchMedia('(pointer: fine)').matches;
 const MOBILE_INPUT = HAS_COARSE_POINTER || ((navigator.maxTouchPoints||0) > 1 && !HAS_FINE_POINTER);
 document.documentElement.classList.toggle('touch', MOBILE_INPUT);
+const LANG_KEY='mr_lang';
+const I18N={
+  hu:{
+    title:'Troll Hunting — íjász túlélő', langButton:'EN', langAria:'Váltás angol nyelvre', langToast:'Magyar nyelv',
+    hud:{ wave:'HULLÁM {n}', trolls:'trollok: {n}', score:'pont', hp:'Életerő', reload:'TÖLTÉS…', ult:'VIHAR', ultReady:'VIHAR KÉSZ — R' },
+    loading:{ main:'TROLL HUNTING', sub:'BETÖLTÉS…' },
+    mobile:{ shoot:'LŐ', shootAltAria:'Bal oldali lövés', melee:'ÜT', jump:'UGR', sprint:'FUT', ult:'Vihar', pauseAria:'Szünet', fullscreen:'FULL', fullscreenAria:'Teljes képernyő', rotate:'FORD', rotateAria:'Fekvő mód', rotateHint:'Fordítsd fekvőbe a telefont a kényelmes játékhoz.' },
+    elements:{ base:'ALAP', fire:'TŰZ', ice:'JÉG', poison:'MÉREG', lightning:'VILLÁM' },
+    menu:{
+      eyebrow:'Mohás világ · íjász túlélő', tagline:'A mohás trollok hordákban özönlenek a tisztásra. Te vagy az utolsó íjász.',
+      tabs:['Alapok','Elemek','Taktika'], prev:'Előző oldal', next:'Következő oldal',
+      basics:'<div class="mgrid2"><div class="mrow desktopctl"><span class="kbd">Egér</span> célzás</div><div class="mrow desktopctl"><span class="kbd">Bal gomb</span> feszít · elengedve lő</div><div class="mrow desktopctl"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> mozgás</div><div class="mrow desktopctl"><span class="kbd">Shift</span> futás</div><div class="mrow desktopctl"><span class="kbd">Szóköz</span> ugrás</div><div class="mrow desktopctl"><span class="kbd">Esc</span> szünet</div><div class="mrow desktopctl"><span class="kbd">1</span>…<span class="kbd">5</span> elemi nyíl váltása</div><div class="mrow desktopctl"><span class="kbd">R</span> VIHAR, ha a sáv tele</div><div class="mrow mobilectl"><span class="kbd">Bal karika</span> mozgás</div><div class="mrow mobilectl"><span class="kbd">Jobb oldal húzás</span> célzás</div><div class="mrow mobilectl"><span class="kbd">Lövés</span> nyomva feszít · elengedve lő</div><div class="mrow mobilectl"><span class="kbd">Elem-gombok</span> nyíltípus váltása</div><div class="mrow mobilectl"><span class="kbd">Ugrás/Futás/Ütés</span> akciók</div><div class="mrow mobilectl"><span class="kbd">Vihar</span> ultimate, ha a sáv tele</div></div><div class="mtip">Minél tovább feszíted az íjat, annál erősebb és gyorsabb a nyíl — a <b>fejlövés dupla sebzés</b>.</div><div class="mtip dim">A trollok a perem barlangjaiból törnek elő — a radar mutatja, merről jön a következő hullám.</div>',
+      elements:'<div class="elist"><div class="el" style="--c:#cfe0ff"><b>1 · ALAP</b><span>sima, gyors nyíl — mindig megbízható</span></div><div class="el" style="--c:#ff7a3d"><b>2 · TŰZ</b><span>folyamatos égés, átterjed a közeli trollokra — a fákat is felgyújtja</span></div><div class="el" style="--c:#7fd0ff"><b>3 · JÉG</b><span>lassít; három találat teljesen megfagyaszt</span></div><div class="el" style="--c:#9fdc4a"><b>4 · MÉREG</b><span>mérgez és maradó gázfelhőt hagy — a sámán gyógyítását is elnémítja</span></div><div class="el" style="--c:#b48cff"><b>5 · VILLÁM</b><span>bénít és a szomszéd trollokra láncol — vizes talajon messzebbre</span></div></div><div class="mtip">Az elem ereje a <b>feszítéssel</b> nő. Minden trollfajnak más a gyengéje: <b>szürke sercegés</b> = ellenáll · <b>erős felvillanás</b> = gyenge pont.</div>',
+      tactics:'<div class="mh">Reakciók — egy elem a trollon + egy másik nyíl = robbanás</div><div class="rchips"><span class="rchip">🧊+⚡ <b style="color:#9fd0ff">Fagytúltöltés</b></span><span class="rchip">🔥+🧊 <b style="color:#e8f0ff">Gőzrobbanás</b></span><span class="rchip">🔥+☠️ <b style="color:#ff9a3d">Mérges gyújtás</b></span><span class="rchip">☠️+⚡ <b style="color:#c8e26a">Galván permet</b></span><span class="rchip">🧊×3 <b style="color:#bfe6ff">Teljes fagy</b></span></div><div class="mtip"><b style="color:#ffd27a">VIHAR (R):</b> reakciók és fejlövések töltik — aktiválva az egész pályát elárasztja a kezedben lévő elem.</div><div class="mtip"><b style="color:#ffd27a">Magaslatok:</b> a rámpákon felfuthatsz a lombház-fedélzetekre és a kötélhidakra — a közelharcos trollok nem érnek fel, de a köpködők onnan is levadásznak.</div><div class="mtip"><b style="color:#ffd27a">Túlélés:</b> a zöld élet-gömbök gyógyítanak és újratermődnek · minden 5. hullám <b>⚔ elit trollokat</b> hoz (extra pont!), utána a <b>Kovácsműhelyben</b> költheted el a pontjaid.</div>',
+      graphics:'GRAFIKA', low:'ALACSONY', medium:'KÖZEPES', high:'MAGAS', start:'JÁTÉK ▶'
+    },
+    pause:{ eyebrow:'Szünet', title:'SZÜNET', hint:'Kattints a folytatáshoz.', resume:'FOLYTATÁS ▶' },
+    shop:{ title:'KOVÁCSMŰHELY', points:'PONT', waveDone:'HULLÁM {wave} TELJESÍTVE — VÁSÁROLJ, AMENNYIT BÍRSZ', next:'TOVÁBB → HULLÁM {wave}', foot:'Minden fejlesztés a futamra szól', lanes:{atk:'TÁMADÁS', def:'VÉDELEM', mys:'ELEMI-MISZTIKA'}, locked:'H{wave}-TŐL',
+      upgrades:{ dmg:['Szakás Hegy','+15% nyíl-sebzés'], hands:['Fürge Kéz','+15% húzás, -10% töltés'], crit:['Kritikus Lövés','+8% esély / rang: a nyíl ×2 sebzést üt'], drawcap:['Mély Feszítés','+25% max-felhúzás: keményebb, laposabb, távolabb'], multishot:['Megosztott Lövés','+1 nyíl lövésenként (szórás)'], pierce:['Áttörő Hegy','az ALAP nyíl átüt +1 trollon /rang'], elite:['Elit-Vadász','+20% sebzés / rang az ELIT trollok ellen'], ricochet:['Pattanó Nyíl','az ALAP nyíl a legközelebbi trollra pattan +1× /rang'], hp:['Edzett Bőr','+30 max élet (gyógyít is)'], regen:['Moha-gyógyulás','+1.2 élet / mp'], speed:['Fürge Láb','+8% mozgás-sebesség'], orbs:['Gyógyító Gömbök','élet-gömb +20 gyógyítás és 6mp-cel gyorsabb újraéledés / rang'], lifesteal:['Életfaló','ölés gyógyít +4 / fej +8'], lastchance:['Utolsó Esély','1×/futam: a halálos ütést 1 élettel túléled + 2s sérthetetlenség'], ult:['Vihar-Vezeték','+30% VIHAR-töltés'], pontkov:['Pontkovács','+10% pont / rang minden ölésből'], dot:['Maró Méreg','+40% tűz/méreg DoT'], elemradius:['Robbanó Szív','+30% elemi AoE-sugár'], elempower:['Őselem','+20% elemi erő (sebzés+státusz)'], vihar:['Vihar-Mester','a VIHAR csapás-sebzése 8 → 35 → 62'], szilank:['Szilánk-vihar','a FAGYOTT troll halálakor jég-robbanás sebzi a környezőket (2. rang: bármely jeges trollra)'] }
+    },
+    over:{ eyebrow:'Elestél', title:'VÉGE', restart:'ÚJRA ▶', stat:'Elért hullám: <b>{wave}</b> &nbsp;·&nbsp; Pont: <b>{score}</b>' },
+    coop:{ waitEyebrow:'CO-OP · VÁRÓTEREM', waitTitle:'VÁRÓTEREM', room:'Szoba:', startTogether:'A csapat együtt indul. Bárki megnyomhatja a STARTOT.', team:'Csapat', start:'START ▶', starting:'INDÍTÁS…', together:'mindenki egyszerre indul', you:'Te', playing:'játszik', players:'Players', copy:'COPY INVITE LINK', copied:'COPIED ✓', reconnect:'CO-OP újracsatlakozva: ', connected:'connected', reconnecting:'reconnecting…' },
+    toast:{ fsUnsupported:'A teljes képernyőt ez a böngésző nem támogatja', fsDenied:'Teljes képernyő: engedélyezd a böngészőben', landscapeRequested:'Fekvő mód kérve', rotatePhone:'Fordítsd fekvőbe a telefont', wave:'HULLÁM {n}', eliteWave:'HULLÁM {n} — ⚔ ELIT HULLÁM! ({count} elit)', wisp:'❄ LIDÉRC felbukkan — lebegő szellem!', heal:'+{n} ÉLET', lastChance:'⭐ UTOLSÓ ESÉLY! 2 mp sérthetetlenség', eliteDown:'⚔ ELIT LEDÖNTVE! +{n}', shamanDown:'SÁMÁN LETERÍTVE!', waveDone:'HULLÁM {n} TELJESÍTVE', headshot:'FEJLÖVÉS!', absorb:'ELNYELTE!', elemHint:'1–5: VÁLTS ELEMI NYILAT — TŰZ · JÉG · MÉREG · VILLÁM', vihar:'VIHAR! ({element})', viharPlain:'VIHAR!', overload:'FAGYTÚLTÖLTÉS!', steam:'GŐZROBBANÁS!', ignite:'MÉRGES GYÚJTÁS!', galvanic:'GALVÁN PERMET!', rot:'FAGYOS ROTHADÁS!' }
+  },
+  en:{
+    title:'Troll Hunting — archer survivor', langButton:'HU', langAria:'Switch to Hungarian', langToast:'English language',
+    hud:{ wave:'WAVE {n}', trolls:'trolls: {n}', score:'score', hp:'Health', reload:'RELOADING…', ult:'STORM', ultReady:'STORM READY — R' },
+    loading:{ main:'TROLL HUNTING', sub:'LOADING…' },
+    mobile:{ shoot:'FIRE', shootAltAria:'Left fire button', melee:'HIT', jump:'JUMP', sprint:'RUN', ult:'Storm', pauseAria:'Pause', fullscreen:'FULL', fullscreenAria:'Fullscreen', rotate:'TURN', rotateAria:'Landscape mode', rotateHint:'Rotate your phone to landscape for comfortable play.' },
+    elements:{ base:'BASE', fire:'FIRE', ice:'ICE', poison:'POISON', lightning:'LIGHTNING' },
+    menu:{
+      eyebrow:'Mossy realm · archer survivor', tagline:'Moss-covered trolls pour into the clearing in waves. You are the last archer.',
+      tabs:['Basics','Elements','Tactics'], prev:'Previous page', next:'Next page',
+      basics:'<div class="mgrid2"><div class="mrow desktopctl"><span class="kbd">Mouse</span> aim</div><div class="mrow desktopctl"><span class="kbd">Left click</span> hold to draw · release to fire</div><div class="mrow desktopctl"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> move</div><div class="mrow desktopctl"><span class="kbd">Shift</span> sprint</div><div class="mrow desktopctl"><span class="kbd">Space</span> jump</div><div class="mrow desktopctl"><span class="kbd">Esc</span> pause</div><div class="mrow desktopctl"><span class="kbd">1</span>…<span class="kbd">5</span> switch elemental arrows</div><div class="mrow desktopctl"><span class="kbd">R</span> STORM when the meter is full</div><div class="mrow mobilectl"><span class="kbd">Left stick</span> move</div><div class="mrow mobilectl"><span class="kbd">Drag right side</span> aim</div><div class="mrow mobilectl"><span class="kbd">Fire</span> hold to draw · release to shoot</div><div class="mrow mobilectl"><span class="kbd">Element buttons</span> switch arrow type</div><div class="mrow mobilectl"><span class="kbd">Jump/Run/Hit</span> actions</div><div class="mrow mobilectl"><span class="kbd">Storm</span> ultimate when the meter is full</div></div><div class="mtip">The longer you draw the bow, the stronger and faster the arrow — <b>headshots deal double damage</b>.</div><div class="mtip dim">Trolls break out from caves around the rim — the radar shows where the next wave is coming from.</div>',
+      elements:'<div class="elist"><div class="el" style="--c:#cfe0ff"><b>1 · BASE</b><span>plain, fast arrow — always reliable</span></div><div class="el" style="--c:#ff7a3d"><b>2 · FIRE</b><span>burns over time, spreads to nearby trolls — can ignite trees too</span></div><div class="el" style="--c:#7fd0ff"><b>3 · ICE</b><span>slows enemies; three hits freeze them solid</span></div><div class="el" style="--c:#9fdc4a"><b>4 · POISON</b><span>poisons and leaves a lingering gas cloud — also silences shaman healing</span></div><div class="el" style="--c:#b48cff"><b>5 · LIGHTNING</b><span>stuns and chains to nearby trolls — travels farther through wet ground</span></div></div><div class="mtip">Element power scales with <b>draw strength</b>. Every troll type has different weaknesses: <b>gray crackle</b> = resisted · <b>bright flash</b> = weak point.</div>',
+      tactics:'<div class="mh">Reactions — one element on a troll + another arrow = explosion</div><div class="rchips"><span class="rchip">🧊+⚡ <b style="color:#9fd0ff">Frost overload</b></span><span class="rchip">🔥+🧊 <b style="color:#e8f0ff">Steam burst</b></span><span class="rchip">🔥+☠️ <b style="color:#ff9a3d">Toxic ignition</b></span><span class="rchip">☠️+⚡ <b style="color:#c8e26a">Galvanic spray</b></span><span class="rchip">🧊×3 <b style="color:#bfe6ff">Deep freeze</b></span></div><div class="mtip"><b style="color:#ffd27a">STORM (R):</b> charged by reactions and headshots — activates your current element across the whole arena.</div><div class="mtip"><b style="color:#ffd27a">High ground:</b> run up ramps to treehouse decks and rope bridges — melee trolls cannot climb there, but spitters can still hunt you down.</div><div class="mtip"><b style="color:#ffd27a">Survival:</b> green health orbs heal and respawn · every 5th wave brings <b>⚔ elite trolls</b> for bonus points, then you can spend points in the <b>Forge</b>.</div>',
+      graphics:'GRAPHICS', low:'LOW', medium:'MEDIUM', high:'HIGH', start:'PLAY ▶'
+    },
+    pause:{ eyebrow:'Paused', title:'PAUSED', hint:'Click to continue.', resume:'RESUME ▶' },
+    shop:{ title:'FORGE', points:'SCORE', waveDone:'WAVE {wave} CLEARED — BUY AS MUCH AS YOU CAN', next:'NEXT → WAVE {wave}', foot:'Upgrades last for this run only', lanes:{atk:'ATTACK', def:'DEFENSE', mys:'ELEMENTAL MYSTICISM'}, locked:'WAVE {wave}+',
+      upgrades:{ dmg:['Serrated Tip','+15% arrow damage'], hands:['Quick Hands','+15% draw speed, -10% reload'], crit:['Critical Shot','+8% chance/rank: arrows deal ×2 damage'], drawcap:['Deep Draw','+25% max draw: harder, flatter, farther'], multishot:['Split Shot','+1 extra arrow per shot (spread)'], pierce:['Piercing Tip','BASE arrows pierce +1 troll/rank'], elite:['Elite Hunter','+20% damage/rank against ELITE trolls'], ricochet:['Ricochet Arrow','BASE arrows bounce to the nearest troll +1×/rank'], hp:['Hardened Skin','+30 max health and heals immediately'], regen:['Moss Mending','+1.2 health/sec'], speed:['Fleet Foot','+8% movement speed'], orbs:['Healing Orbs','health orbs heal +20 and respawn 6s faster/rank'], lifesteal:['Life Eater','kills heal +4 / headshots +8'], lastchance:['Last Chance','1×/run: survive a lethal hit at 1 HP + 2s invulnerability'], ult:['Storm Conduit','+30% STORM charge'], pontkov:['Score Smith','+10% score/rank from every kill'], dot:['Corrosive Poison','+40% fire/poison DoT'], elemradius:['Explosive Heart','+30% elemental AoE radius'], elempower:['Primal Element','+20% elemental power (damage + status)'], vihar:['Storm Master','STORM strike damage 8 → 35 → 62'], szilank:['Shard Storm','frozen trolls explode on death and damage nearby enemies (rank 2: any icy troll)'] }
+    },
+    over:{ eyebrow:'You fell', title:'GAME OVER', restart:'RETRY ▶', stat:'Wave reached: <b>{wave}</b> &nbsp;·&nbsp; Score: <b>{score}</b>' },
+    coop:{ waitEyebrow:'CO-OP · LOBBY', waitTitle:'LOBBY', room:'Room:', startTogether:'The team starts together. Anyone can press START.', team:'Team', start:'START ▶', starting:'STARTING…', together:'everyone starts at the same time', you:'You', playing:'playing', players:'Players', copy:'COPY INVITE LINK', copied:'COPIED ✓', reconnect:'CO-OP reconnected: ', connected:'connected', reconnecting:'reconnecting…' },
+    toast:{ fsUnsupported:'This browser does not support fullscreen', fsDenied:'Fullscreen: allow it in your browser', landscapeRequested:'Landscape mode requested', rotatePhone:'Rotate your phone to landscape', wave:'WAVE {n}', eliteWave:'WAVE {n} — ⚔ ELITE WAVE! ({count} elite)', wisp:'❄ WISP appears — a floating spirit!', heal:'+{n} HEALTH', lastChance:'⭐ LAST CHANCE! 2s invulnerability', eliteDown:'⚔ ELITE DOWN! +{n}', shamanDown:'SHAMAN DOWN!', waveDone:'WAVE {n} CLEARED', headshot:'HEADSHOT!', absorb:'ABSORBED!', elemHint:'1–5: SWITCH ELEMENTAL ARROWS — FIRE · ICE · POISON · LIGHTNING', vihar:'STORM! ({element})', viharPlain:'STORM!', overload:'FROST OVERLOAD!', steam:'STEAM BURST!', ignite:'TOXIC IGNITION!', galvanic:'GALVANIC SPRAY!', rot:'FROZEN ROT!' }
+  }
+};
+function fmtI18n(s, vars){ return String(s).replace(/\{(\w+)\}/g,function(_,k){ return vars&&vars[k]!=null ? vars[k] : ''; }); }
+function tr(path, vars){ const parts=path.split('.'); let v=I18N[lang]||I18N.hu; for(const p of parts){ v=v&&v[p]; } if(v==null){ v=I18N.hu; for(const p of parts){ v=v&&v[p]; } } if(v==null) return path; return (typeof v==='string') ? fmtI18n(v, vars) : v; }
+function initLang(){
+  const q=new URLSearchParams(location.search).get('lang');
+  if(q==='hu'||q==='en'){ try{ localStorage.setItem(LANG_KEY,q); }catch(_e){} return q; }
+  try{ const saved=localStorage.getItem(LANG_KEY); if(saved==='hu'||saved==='en') return saved; }catch(_e){}
+  return ((navigator.language||'').toLowerCase().startsWith('hu')) ? 'hu' : 'en';
+}
+let lang=initLang();
+document.documentElement.lang=lang;
 
 /* SOLIDS ütközés-konstansok — KORÁN deklarálva: a tree()/rock()/buildLandmarks() már
    regisztrál ütközőt, ezért ezeknek a const-oknak előbb kell léteznie (TDZ-elkerülés). */
@@ -1561,7 +1621,7 @@ bowTuneEl.style.cssText='position:fixed;left:12px;top:12px;z-index:20;display:no
 document.body.appendChild(bowTuneEl);
 function applyBowAdj(){ bow.scale.set(bowAdj.s*bowAdj.mx, bowAdj.s, bowAdj.s*bowAdj.mz);
   nockArrow.rotation.y=(bowAdj.mz>0?Math.PI:0); // nyíl-hegy iránya a görbület-tükörhöz igazítva
-  bowTuneEl.textContent='ÍJ HANGOLÁS  (B = kilép)\nJ/L yaw='+bowAdj.ry.toFixed(2)+'   I/K pitch='+bowAdj.rx.toFixed(2)+'\nU/O roll='+bowAdj.rz.toFixed(2)+'   N/M méret='+bowAdj.s.toFixed(2)+'\nP balra-jobbra='+bowAdj.mx+'   Z görbület-tükör='+bowAdj.mz+'\n=> írd meg a számokat, és beégetem'; }
+  bowTuneEl.textContent=(lang==='hu'?'ÍJ HANGOLÁS  (B = kilép)':'BOW TUNING  (B = exit)')+'\nJ/L yaw='+bowAdj.ry.toFixed(2)+'   I/K pitch='+bowAdj.rx.toFixed(2)+'\nU/O roll='+bowAdj.rz.toFixed(2)+'   N/M '+(lang==='hu'?'méret':'size')+'='+bowAdj.s.toFixed(2)+'\nP '+(lang==='hu'?'balra-jobbra':'left-right')+'='+bowAdj.mx+'   Z '+(lang==='hu'?'görbület-tükör':'curve mirror')+'='+bowAdj.mz+'\n=> '+(lang==='hu'?'írd meg a számokat, és beégetem':'send me these numbers and I will bake them in'); }
 applyBowAdj();
 // KÖZELHARC vágás-ív: jól látható, képernyőn átsuhanó fénylő ív az ütésnél (a kiválasztott elem színében) — kamerára szerelt
 const slashArc=(function(){
@@ -1891,7 +1951,7 @@ function buildElementHUD(){
     const chip=document.createElement('div'); chip.dataset.el=id;
     chip.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 9px;border-radius:10px;background:rgba(14,22,40,.6);border:1px solid rgba(180,200,240,.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:all .12s';
     const sw=document.createElement('div'); sw.style.cssText='width:22px;height:5px;border-radius:3px;background:'+def.ui;
-    const lab=document.createElement('div'); lab.textContent=(i+1)+' '+def.name; lab.style.cssText='font:700 9px/1 inherit;letter-spacing:.04em;color:#9db4d6';
+    const lab=document.createElement('div'); lab.textContent=(i+1)+' '+elementName(id); lab.style.cssText='font:700 9px/1 inherit;letter-spacing:.04em;color:#9db4d6';
     chip.appendChild(sw); chip.appendChild(lab); wrap.appendChild(chip); });
   document.body.appendChild(wrap); _elHud=wrap; updateElementHUD();
 }
@@ -1924,7 +1984,7 @@ function buildUltHud(){
   const w=document.createElement('div'); w.id='ulthud';
   w.style.cssText='position:fixed;left:50%;bottom:60px;transform:translateX(-50%);z-index:6;width:230px;height:8px;border-radius:6px;background:rgba(14,22,40,.55);border:1px solid rgba(180,200,240,.18);overflow:hidden;pointer-events:none';
   const bar=document.createElement('div'); bar.style.cssText='height:100%;width:0%;transition:width .15s,background .2s'; w.appendChild(bar);
-  const lab=document.createElement('div'); lab.id='ultlab'; lab.textContent='VIHAR'; lab.style.cssText='position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:6;font:800 10px/1 -apple-system,\'Segoe UI\',sans-serif;letter-spacing:.16em;color:#9db4d6;pointer-events:none';
+  const lab=document.createElement('div'); lab.id='ultlab'; lab.textContent=tr('hud.ult'); lab.style.cssText='position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:6;font:800 10px/1 -apple-system,\'Segoe UI\',sans-serif;letter-spacing:.16em;color:#9db4d6;pointer-events:none';
   document.body.appendChild(w); document.body.appendChild(lab); _ultBar=bar;
 }
 let _ultLab=null, _ultChip=null, _ultChipEl=null, _lastUlt=-1, _lastElHud=null;
@@ -1937,13 +1997,13 @@ function updateUltHud(){
   _lastUlt=ult; _lastElHud=currentElement; const full=ult>=100;
   _ultBar.style.width=Math.min(100,ult)+'%'; _ultBar.style.background=full?'linear-gradient(90deg,#ffd27a,#fff)':def.ui;
   if(!_ultLab) _ultLab=document.getElementById('ultlab');
-  if(_ultLab){ _ultLab.textContent=full?'VIHAR KÉSZ — R':'VIHAR'; _ultLab.style.color=full?'#ffd27a':'#9db4d6'; }
+  if(_ultLab){ _ultLab.textContent=full?tr('hud.ultReady'):tr('hud.ult'); _ultLab.style.color=full?'#ffd27a':'#9db4d6'; }
 }
 function fireVihar(){   // VIHAR ultimate: az aktuális elemet 3 stackkel rászórja az EGÉSZ pályára (előkészít a reakciókhoz)
   if(ult<100 || !running) return; ult=0; const el=currentElement, def=EL[el]||EL.base; const px=player.pos.x, pz=player.pos.z;
-  if(coop){ coop.send({t:'ult', el:el}); toast('VIHAR! ('+def.name+')'); if(AUD.head)AUD.head(); return; }   // co-op: a szerver alkalmazza + broadcastolja a nova-t mindenkinek
+  if(coop){ coop.send({t:'ult', el:el}); toast(tr('toast.vihar',{element:elementName(el)})); if(AUD.head)AUD.head(); return; }   // co-op: a szerver alkalmazza + broadcastolja a nova-t mindenkinek
   EFX.flash(px,GROUND_Y+2,pz, def.glow, 1, ARENA_R*1.1, 0.6); EFX.ring(px,GROUND_Y+0.05,pz, def.trail, 1, ARENA_R, 0.9, 0.95); EFX.light(px,GROUND_Y+3,pz, def.glow, 9, 0.7);
-  shake=Math.max(shake,0.7); if(AUD.head)AUD.head(); toast('VIHAR! ('+def.name+')');
+  shake=Math.max(shake,0.7); if(AUD.head)AUD.head(); toast(tr('toast.vihar',{element:elementName(el)}));
   for(const o of monsters){ if(!o.alive||o.dying>0||coopIsRemote(o)) continue; o.hurtFlash=0.25; o.hp-=(8+(RUNM.viharDmg||0));   // FEJLESZTÉS: Vihar-Mester
     if(el!=='base') applyStatus(o, el, null, 3);
     const b=o.g.position, by=b.y+(o.bodyCY||1); for(let i=0;i<6;i++) RP.spawn(b.x,by,b.z, rand(-2,2),rand(0,3),rand(-2,2), def.glow, 0.5,0.03,0.4, 1,1.2);
@@ -2100,30 +2160,30 @@ function applyReaction(id, pos, hit, dmg, charge){
       tg.hp-=dmg*0.6; tg.hurtFlash=0.15; tg.rooted=Math.max(tg.rooted||0,1.6); if(tg.iceShell) shatterShell(tg);
       for(let i=0;i<8;i++) RP.spawn(b.x,by,b.z,rand(-3,3),rand(-2,3),rand(-3,3),pick([0x9fe3ff,0xffffff]),0.4,0.02,0.3,2,1);
       if(tg.hp<=0&&tg.alive) killMonster(tg,false); }
-    shake=Math.max(shake,0.5); toast('FAGYTÚLTÖLTÉS!'); if(AUD.head)AUD.head();
+    shake=Math.max(shake,0.5); toast(tr('toast.overload')); if(AUD.head)AUD.head();
   } else if(id==='steam'){                                    // GŐZROBBANÁS — tűz+jég
     hit.hp-=dmg*0.9; hit.hurtFlash=0.18; if(hit.statusEl==='fire'||hit.statusEl==='ice') clearStatus(hit); hit.frozenSolid=0; hit.wet=Math.max(hit.wet||0,2.5); spawnZone('steam', hit.g.position.x, hit.g.position.z); spawnZone('puddle', hit.g.position.x, hit.g.position.z);
     EFX.flash(px,py,pz,0xffffff,0.5,3.2,0.26); EFX.ring(px,GROUND_Y+0.05,pz,0xe8f0ff,0.4,3.4,0.4,0.8);
     for(let i=0;i<18;i++) SMK.spawn(px+rand(-0.3,0.3),py+rand(0,0.5),pz+rand(-0.3,0.3),rand(-1,1),rand(0.5,1.6),rand(-1,1),0xdfeaf2,0.8,2.2,rand(0.7,1.2),-0.5,0.8,0.7);
     const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,3.5,3); for(const tg of near) tg.rooted=Math.max(tg.rooted||0,0.3);
-    shake=Math.max(shake,0.2); toast('GŐZROBBANÁS!'); if(AUD.hit)AUD.hit(); return true;   // ne tegyen rá újra tüzet
+    shake=Math.max(shake,0.2); toast(tr('toast.steam')); if(AUD.hit)AUD.hit(); return true;   // ne tegyen rá újra tüzet
   } else if(id==='ignite'){                                   // MÉRGES GYÚJTÁS — tűz+méreg
     const stacks=hit.statusStacks||1, R=4.5*1.3*(0.75+0.5*charge); hit.hp-=dmg*1.0 + (12+3*stacks); hit.hurtFlash=0.2;   // a sebző R most a zöld gyűrűig ér (egyetlen ×1.3 szorzó, itt)
     EFX.flash(px,py,pz,0xff8a2a,0.7,R*0.85,0.3); EFX.ring(px,GROUND_Y+0.05,pz,0x9fdc4a,0.4,R,0.45,0.85); EFX.light(px,py,pz,0xff7a3d,4.5,0.35);   // gyűrű = R (= sebző sugár)
     for(let i=0;i<34;i++){ const a=rand(0,6.28),pp=Math.acos(rand(-1,1)),sp=rand(2,8); RP.spawn(px,py,pz,Math.sin(pp)*Math.cos(a)*sp,Math.abs(Math.cos(pp)*sp)+rand(0,2),Math.sin(pp)*Math.sin(a)*sp,pick([0xff5a2a,0xff8a3a,0xffc24d,0x9fdc4a]),rand(0.5,1),0.04,rand(0.5,0.9),-1.5,1.3); }
     for(let i=0;i<6;i++) SMK.spawn(px+rand(-0.3,0.3),py,pz+rand(-0.3,0.3),rand(-0.6,0.6),rand(1,2),rand(-0.6,0.6),0x281a10,0.7,2,rand(0.8,1.3),-1,0.8,0.5);
     const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,R,6); for(const tg of near){ tg.hp-=dmg*0.5; tg.hurtFlash=0.15; applyStatus(tg,'fire',null,1); if(tg.hp<=0&&tg.alive) killMonster(tg,false); }
-    spawnZone('fire', hit.g.position.x, hit.g.position.z); shake=Math.max(shake,0.45); toast('MÉRGES GYÚJTÁS!'); if(AUD.head)AUD.head();
+    spawnZone('fire', hit.g.position.x, hit.g.position.z); shake=Math.max(shake,0.45); toast(tr('toast.ignite')); if(AUD.head)AUD.head();
   } else if(id==='galvanic'){                                 // GALVÁN PERMET — méreg+villám
     hit.hp-=dmg*0.5; hit.hurtFlash=0.15; const near=nearestTrolls(hit.g.position.x,hit.g.position.z,hit,8,3); let prev=hit;
     for(const tg of near){ const a=prev.g.position, ay=a.y+(prev.bodyCY||1), b=tg.g.position, by=b.y+(tg.bodyCY||1);
       EFX.bolt(a.x,ay,a.z,b.x,by,b.z,0x9fdc4a,0.14,0.4); EFX.flash(b.x,by,b.z,0xc8e26a,0.3,1.6,0.2);
       for(let i=0;i<6;i++) RP.spawn(b.x,by,b.z,rand(-2,2),rand(0,3),rand(-2,2),pick([0x9fdc4a,0xc8e26a]),0.4,0.03,0.35,1,1.2);
       tg.hp-=dmg*0.4; tg.hurtFlash=0.12; tg.rooted=Math.max(tg.rooted||0,0.6); applyStatus(tg,'poison',null,1); if(tg.hp<=0&&tg.alive) killMonster(tg,false); prev=tg; }
-    shake=Math.max(shake,0.2); toast('GALVÁN PERMET!');
+    shake=Math.max(shake,0.2); toast(tr('toast.galvanic'));
   } else if(id==='frostrot'){                                 // FAGYOS ROTHADÁS — jég méregre: tartsd a mérget, fagyaszd be
     freezeEncase(hit); hit.frozenSolid=Math.max(hit.frozenSolid||0,1.2); hit.slowMul=Math.min(hit.slowMul||1,0.35);
-    EFX.flash(px,py,pz,0xbfe6ff,0.4,2.4,0.24); EFX.ring(px,GROUND_Y+0.05,pz,0x9fd2ff,0.3,2.6,0.4,0.8); toast('FAGYOS ROTHADÁS!'); return true;   // ne írja felül a mérget jéggel
+    EFX.flash(px,py,pz,0xbfe6ff,0.4,2.4,0.24); EFX.ring(px,GROUND_Y+0.05,pz,0x9fd2ff,0.3,2.6,0.4,0.8); toast(tr('toast.rot')); return true;   // ne írja felül a mérget jéggel
   }
   return false;
 }
@@ -2869,7 +2929,7 @@ lockHint.style.cssText='position:fixed;left:50%;bottom:96px;transform:translateX
   'font:600 14px/1.4 -apple-system,"Segoe UI",sans-serif;color:#cfe0ff;background:rgba(8,14,28,.55);'+
   'border:1px solid rgba(180,200,240,.25);padding:7px 14px;border-radius:10px;pointer-events:none;'+
   'opacity:0;transition:opacity .2s;text-shadow:0 2px 8px rgba(0,0,0,.8);text-align:center;';
-lockHint.textContent='Kattints az egér rögzítéséhez · vagy húzd a jobb egérgombot a nézéshez';
+lockHint.textContent=lang==='hu'?'Kattints az egér rögzítéséhez · vagy húzd a jobb egérgombot a nézéshez':'Click to lock the mouse · or drag with right mouse button to look';
 document.body.appendChild(lockHint);
 function showLockHint(on){ lockHint.style.opacity=on?'1':'0'; }
 
@@ -2972,6 +3032,87 @@ const hpfill=document.getElementById('hpfill'), hpghost=document.getElementById(
   startScreen=document.getElementById('start'), pauseScreen=document.getElementById('pause'), overScreen=document.getElementById('over');
 let toastT=null;
 function toast(txt){ toastEl.textContent=txt; toastEl.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('show'),1400); }
+function setText(sel, txt){ const el=document.querySelector(sel); if(el) el.textContent=txt; }
+function setHtml(sel, html){ const el=document.querySelector(sel); if(el) el.innerHTML=html; }
+function setWaveHud(n){ if(waveN) waveN.textContent=tr('hud.wave',{n:n}); }
+function setTrollHud(n){ if(waveLeft) waveLeft.textContent=tr('hud.trolls',{n:n}); }
+function elementName(id){ return tr('elements.'+id); }
+function shopUpgradeName(d){ const x=I18N[lang].shop.upgrades[d.id]; return x ? x[0] : d.hu; }
+function shopUpgradeEff(d){ const x=I18N[lang].shop.upgrades[d.id]; return x ? x[1] : d.eff; }
+function setLang(next, save, announce){
+  lang=(next==='hu')?'hu':'en';
+  document.documentElement.lang=lang;
+  if(save){ try{ localStorage.setItem(LANG_KEY,lang); }catch(_e){} }
+  applyI18n();
+  if(announce) toast(tr('langToast'));
+}
+function applyI18n(){
+  document.title=tr('title');
+  const langBtn=document.getElementById('langBtn');
+  if(langBtn){ langBtn.textContent=tr('langButton'); langBtn.setAttribute('aria-label',tr('langAria')); }
+  setText('#score small', tr('hud.score'));
+  setText('#hpwrap .lab', tr('hud.hp'));
+  setWaveHud(wave||1); setTrollHud((aliveCount||0)+(toSpawn||0));
+  setText('#loading .ltitle', tr('loading.main'));
+  setText('#loading .lsub', tr('loading.sub'));
+  setText('#start .eyebrow', tr('menu.eyebrow'));
+  setText('#start .tagline', tr('menu.tagline'));
+  document.querySelectorAll('#start .mtab').forEach((b,i)=>{ b.textContent=tr('menu.tabs')[i]; });
+  const prev=document.getElementById('mPrev'), next=document.getElementById('mNext');
+  if(prev) prev.setAttribute('aria-label',tr('menu.prev'));
+  if(next) next.setAttribute('aria-label',tr('menu.next'));
+  const pages=document.querySelectorAll('#mTrack .mpage');
+  if(pages[0]) pages[0].innerHTML=tr('menu.basics');
+  if(pages[1]) pages[1].innerHTML=tr('menu.elements');
+  if(pages[2]) pages[2].innerHTML=tr('menu.tactics');
+  document.querySelectorAll('.gfxlab,.gfx-h').forEach(e=>e.textContent=tr('menu.graphics'));
+  document.querySelectorAll('.gfxbtn[data-gfx="low"]').forEach(e=>e.textContent=tr('menu.low'));
+  document.querySelectorAll('.gfxbtn[data-gfx="medium"]').forEach(e=>e.textContent=tr('menu.medium'));
+  document.querySelectorAll('.gfxbtn[data-gfx="high"]').forEach(e=>e.textContent=tr('menu.high'));
+  setText('#startBtn', tr('menu.start'));
+  setText('#pause .eyebrow', tr('pause.eyebrow'));
+  setText('#pause h1', tr('pause.title'));
+  setText('#pause p', tr('pause.hint'));
+  setText('#resumeBtn', tr('pause.resume'));
+  setText('#shop .shop-title', tr('shop.title'));
+  setHtml('#shop .shop-pts', tr('shop.points')+': <span id="shopPts">'+fmtPts(score||0)+'</span>');
+  setText('#shop .lane-atk .lane-h', tr('shop.lanes.atk'));
+  setText('#shop .lane-def .lane-h', tr('shop.lanes.def'));
+  setText('#shop .lane-mys .lane-h', tr('shop.lanes.mys'));
+  setText('#shop .shop-foot', tr('shop.foot'));
+  setText('#over .eyebrow', tr('over.eyebrow'));
+  setText('#over h1', tr('over.title'));
+  setText('#restartBtn', tr('over.restart'));
+  const overStat=document.getElementById('overStat'); if(overStat) overStat.innerHTML=tr('over.stat',{wave:wave||0,score:score||0});
+  setText('#coopWait .eyebrow', tr('coop.waitEyebrow'));
+  setText('#coopWait h1', tr('coop.waitTitle'));
+  const coopP=document.querySelector('#coopWait p'); if(coopP){ coopP.innerHTML=tr('coop.room')+' <b id="coopWaitCode" style="color:#7fe2ff;letter-spacing:.18em">'+(((coop&&coop.room)||_coopRoom)||'----')+'</b>'; coopWaitCodeEl=document.getElementById('coopWaitCode'); }
+  setText('#coopWait .keys', tr('coop.startTogether'));
+  const team=document.querySelector('#coopWait .brief-h'); if(team){ team.innerHTML=tr('coop.team')+' (<span id="coopWaitCount">'+(coopWaitRoster.length||1)+'</span>)'; coopWaitCountEl=document.getElementById('coopWaitCount'); }
+  setText('#coopStartBtn', tr('coop.start'));
+  setText('#coopWait .brief-hint', tr('coop.together'));
+  setText('#mobileShoot', tr('mobile.shoot'));
+  setText('#mobileShootAlt', tr('mobile.shoot'));
+  setText('#mobileMelee', tr('mobile.melee'));
+  setText('#mobileJump', tr('mobile.jump'));
+  setText('#mobileSprint', tr('mobile.sprint'));
+  setText('#mobileUlt', tr('mobile.ult'));
+  setText('#mobileFullscreen', tr('mobile.fullscreen'));
+  setText('#mobileRotate', tr('mobile.rotate'));
+  setText('#rotateHint', tr('mobile.rotateHint'));
+  const mAlt=document.getElementById('mobileShootAlt'); if(mAlt) mAlt.setAttribute('aria-label',tr('mobile.shootAltAria'));
+  const mPause=document.getElementById('mobilePause'); if(mPause) mPause.setAttribute('aria-label',tr('mobile.pauseAria'));
+  const mFull=document.getElementById('mobileFullscreen'); if(mFull) mFull.setAttribute('aria-label',tr('mobile.fullscreenAria'));
+  const mRot=document.getElementById('mobileRotate'); if(mRot) mRot.setAttribute('aria-label',tr('mobile.rotateAria'));
+  const short={hu:{base:'ALAP',fire:'TŰZ',ice:'JÉG',poison:'MÉR',lightning:'VILL'},en:{base:'BASE',fire:'FIRE',ice:'ICE',poison:'TOX',lightning:'BOLT'}}[lang];
+  document.querySelectorAll('.mobile-el').forEach(b=>{ b.textContent=short[b.dataset.el]||elementName(b.dataset.el); b.setAttribute('aria-label',elementName(b.dataset.el)); });
+  if(_elHud) _elHud.querySelectorAll('[data-el]').forEach(chip=>{ const id=chip.dataset.el, lab=chip.querySelector('div:last-child'); if(lab) lab.textContent=(EL_ORDER.indexOf(id)+1)+' '+elementName(id); });
+  if(lockHint) lockHint.textContent=lang==='hu'?'Kattints az egér rögzítéséhez · vagy húzd a jobb egérgombot a nézéshez':'Click to lock the mouse · or drag with right mouse button to look';
+  if(_ultLab){ _lastUlt=-1; updateUltHud(); }
+  if(shopOpen) renderShop(); else { const sub=document.getElementById('shopSub'); if(sub) sub.textContent=tr('shop.waveDone',{wave:wave||5}); const go=document.getElementById('shopGoBtn'); if(go) go.textContent=tr('shop.next',{wave:(wave||5)+1}); }
+  if(coopInWaitRoom) coopRenderWait();
+  if(coopHudEl){ if(coopHudCopyEl) coopHudCopyEl.textContent=tr('coop.copy'); const lbl=coopHudEl.querySelector('.lbl'); if(lbl) lbl.textContent=tr('coop.players'); coopUpdateHudPlayers(); coopSetStatus(coopConnected); }
+}
 // célkereszt vonalak
 const cross=document.getElementById('cross');
 ['t','b','l','r'].forEach(d=>{ const e=document.createElement('div'); e.className='ln '+d; cross.appendChild(e); });
@@ -3002,9 +3143,9 @@ function fullscreenEl(){ return document.fullscreenElement || document.webkitFul
 async function requestGameFullscreen(){
   const el=document.documentElement;
   const fn=el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  if(!fn){ toast('A teljes képernyőt ez a böngésző nem támogatja'); return false; }
+  if(!fn){ toast(tr('toast.fsUnsupported')); return false; }
   try{ const r=fn.call(el); if(r&&typeof r.then==='function') await r; return true; }
-  catch(_e){ toast('Teljes képernyő: engedélyezd a böngészőben'); return false; }
+  catch(_e){ toast(tr('toast.fsDenied')); return false; }
 }
 async function exitGameFullscreen(){
   const fn=document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
@@ -3026,11 +3167,11 @@ async function requestLandscapeMode(){
   try{
     if(screen.orientation && screen.orientation.lock){
       await screen.orientation.lock('landscape');
-      toast('Fekvő mód kérve');
+      toast(tr('toast.landscapeRequested'));
       return;
     }
   } catch(_e) {}
-  toast('Fordítsd fekvőbe a telefont');
+  toast(tr('toast.rotatePhone'));
 }
 function initMobileControls(){
   if(!MOBILE_INPUT) return;
@@ -3184,7 +3325,7 @@ function startWave(n){
   wave=n; toSpawn=4+n*2; spawnTimer=0; intermission=0;
   eliteToSpawn=(n%5===0 && !coop) ? 2+Math.floor(n/10) : 0;   // ELIT HULLÁM minden 5.-en (SP-only, mint a bolt): w5:2, w10:3, w15:3, w20:4...
   spawnAngles=[]; for(let i=0;i<toSpawn;i++) spawnAngles.push(CAVES[(Math.random()*CAVES.length)|0].ang); // FÁZIS 5: barlang-irányok a radar-előrejelzéshez
-  waveN.textContent='HULLÁM '+n; AUD.wave(); toast(eliteToSpawn?('HULLÁM '+n+' — ⚔ ELIT HULLÁM! ('+eliteToSpawn+' elit)'):('HULLÁM '+n));
+  setWaveHud(n); AUD.wave(); toast(eliteToSpawn?tr('toast.eliteWave',{n:n,count:eliteToSpawn}):tr('toast.wave',{n:n}));
   resetHpOrbs();   // FÁZIS 4: minden hullám frissíti az élet-gömböket (fenntartás)
 }
 function pickTrollType(){
@@ -3224,7 +3365,7 @@ function spawnMonster(){
   const inx=-cave.x/R_CAVE, inz=-cave.z/R_CAVE;   // befelé (központ felé) egységvektor
   m.g.position.set(cave.x + inx*2.4 + rand(-0.9,0.9), GROUND_Y, cave.z + inz*2.4 + rand(-0.9,0.9));   // a barlang szája előtt bújik elő, majd befelé indul
   monsters.push(m); aliveCount++;
-  if(id==='wisp'){ sparks.burst(m.g.position.x, GROUND_Y+1.0, m.g.position.z, 16, 0x9becff, 5, 0.7); if(!window.__wispSeen){ window.__wispSeen=1; toast('❄ LIDÉRC felbukkan — lebegő szellem!'); } }   // LIDÉRC TELEGRÁF: cián felvillanás + egyszeri figyelmeztetés
+  if(id==='wisp'){ sparks.burst(m.g.position.x, GROUND_Y+1.0, m.g.position.z, 16, 0x9becff, 5, 0.7); if(!window.__wispSeen){ window.__wispSeen=1; toast(tr('toast.wisp')); } }   // LIDÉRC TELEGRÁF: cián felvillanás + egyszeri figyelmeztetés
   if(Math.random()<0.5 && AUD.growl) AUD.growl();
 }
 // HP-csík + "kárnyom" szellem-csík: a fehér sáv az ELŐZŐ értéken marad, majd lassan lecsorog az újra -> a veszteség jól látszik
@@ -3266,7 +3407,7 @@ function updateHpOrbs(dt,t){
           const oy=o.baseY+1.0;
           EFX.ring(o.x,o.baseY+0.05,o.z,0x6fff8f,0.4,2.0,0.5,0.85); EFX.flash(o.x,oy,o.z,0x9fff9f,0.5,2.2,0.3); EFX.light(o.x,oy,o.z,0x6fff8f,3.5,0.4);
           for(let i=0;i<22;i++){ const a=rand(0,6.28),s=rand(1,3.5); RP.spawn(o.x,oy,o.z,Math.cos(a)*s,rand(1,3),Math.sin(a)*s,pick([0x7fff9f,0xcaffd0,0xffffff]),rand(0.5,0.9),0.04,rand(0.5,0.9),-0.5,1.2); }
-          if(AUD.heal) AUD.heal(); toast('+'+(coopActive()?ORB_HEAL:RUNM.orbHeal)+' ÉLET');
+          if(AUD.heal) AUD.heal(); toast(tr('toast.heal',{n:(coopActive()?ORB_HEAL:RUNM.orbHeal)}));
         }
       }
     } else { o.respawn-=dt; if(o.respawn<=0){ o.alive=true; o.g.visible=true; EFX.ring(o.x,o.baseY+0.05,o.z,0x6fff8f,0.3,1.2,0.4,0.6); } }   // 20s után visszatér
@@ -3286,7 +3427,7 @@ function damagePlayer(d){
   const before=player.hp;
   if(player.hp-d<=0 && RUNM.lastStand && !player.lastStandUsed && player.alive){   // FEJLESZTÉS: Utolsó Esély (1x/futam)
     player.lastStandUsed=true; player.invulnT=2.0; setHp(1); playerHurtFX(before-1);
-    shake=Math.max(shake,0.8); toast('⭐ UTOLSÓ ESÉLY! 2 mp sérthetetlenség');
+    shake=Math.max(shake,0.8); toast(tr('toast.lastChance'));
     EFX.ring(player.pos.x,GROUND_Y+0.05,player.pos.z,0xffd27a,0.5,5.0,0.6,0.9); EFX.light(player.pos.x,player.pos.y,player.pos.z,0xffd27a,5,0.5);
     return; }
   setHp(player.hp-d);
@@ -3359,8 +3500,8 @@ function killMonster(m, headshot){
   if(m.iceShell) shatterShell(m);   // fagyott troll: a jégburok szétpattan, hogy LÁTSZÓDJON a halál-animáció
   elementalDeath(m);   // ELEM: element-keyed death flourish (ash / shatter / melt / char)
   if(!coop && RUNM.shardNova>0 && (wasFrozen || (RUNM.shardNova>=2 && wasIced)) && (m._novaDepth||1)<=3) iceNova(m, m._novaDepth||1);   // FEJLESZTÉS: Szilánk-vihar (lánc max 3 mélységig)
-  if(m.elite){ const eb=Math.round(300*RUNM.scoreMul); addScore(eb); toast('⚔ ELIT LEDÖNTVE! +'+eb); }
-  if(m.typeId==='shaman'){ addScore(Math.round(60*RUNM.scoreMul)); toast('SÁMÁN LETERÍTVE!'); }
+  if(m.elite){ const eb=Math.round(300*RUNM.scoreMul); addScore(eb); toast(tr('toast.eliteDown',{n:eb})); }
+  if(m.typeId==='shaman'){ addScore(Math.round(60*RUNM.scoreMul)); toast(tr('toast.shamanDown')); }
   addScore(Math.round((headshot?150:(m.typeId==='shard'?40:100))*RUNM.scoreMul));   // GAZDASÁG: a szilánk (brute-osztódás) csak 40 pont — különben a split rejtett bevétele 100%-olhatóvá tenné a katalógust
   if(RUNM.lifesteal>0) setHp(player.hp + (headshot?8:4)*RUNM.lifesteal);   // FEJLESZTÉS: Életfaló (ölés gyógyít, fej dupla)
 }
@@ -3435,7 +3576,7 @@ function update(dt,t){
   else if(running && shotCd>0){
     // === ÍJ-ÚJRATÖLTÉS: a cooldown alatt üres, FELAJZOTT íj (csak a húr látszik) — a nyíl MAJD a húzáskor kerül a húrra ===
     const rp=Math.min(1, 1-shotCd/SHOT_CD);
-    powwrap.classList.add('on','reload'); if(powlabel) powlabel.textContent='TÖLTÉS…';
+    powwrap.classList.add('on','reload'); if(powlabel) powlabel.textContent=tr('hud.reload');
     powfill.style.width=(rp*100).toFixed(0)+'%'; powfill.style.background='';
     // az íj finoman leereszkedik, majd visszaemelkedik (a várakozás olvasható gesztusa) — nyíl nélkül
     const present = rp<0.25 ? easeOutCubic(rp/0.25) : rp<0.7 ? 1 : 1-easeInOut((rp-0.7)/0.3);
@@ -3536,7 +3677,7 @@ function update(dt,t){
       const hp=a.g.position;
       if(!_absorbed) elementalImpact(hp, a.el, head);   // ELEM: becsapódás-burst (absorbnál KIHAGYVA -> az absorbTell hordozza a "rossz elem" olvasatot)
       if(head) AUD.head(); else AUD.hit();
-      if(head && !_absorbed) toast('FEJLÖVÉS!');
+      if(head && !_absorbed) toast(tr('toast.headshot'));
       if(!coopIsRemote(hit)) a.hitSet.add(hit);
       if(!coopIsRemote(hit) && hit.hp<=0) killMonster(hit, head);
       let consumed = true;
@@ -3658,11 +3799,11 @@ function update(dt,t){
   /* --- hullám-vezérlés --- */
   if(running && !coopShouldSuppressLocalSpawner()){
     if(toSpawn>0 && aliveCount<14){ spawnTimer-=dt; if(spawnTimer<=0){ spawnMonster(); toSpawn--; spawnTimer=Math.max(0.25,1.0-wave*0.03); } }
-    else if(aliveCount===0 && intermission<=0){ toast('HULLÁM ' + wave + ' TELJESÍTVE'); addScore(50+wave*10); if(wave%5===0 && !coop){ openShop(); } else { intermission=3; } }   // FEJLESZTÉS: bónusz ELŐSZÖR (költhető), majd 5 hullámonként bolt (csak SP); a TOVÁBB gomb indítja a köv. hullámot
+    else if(aliveCount===0 && intermission<=0){ toast(tr('toast.waveDone',{n:wave})); addScore(50+wave*10); if(wave%5===0 && !coop){ openShop(); } else { intermission=3; } }   // FEJLESZTÉS: bónusz ELŐSZÖR (költhető), majd 5 hullámonként bolt (csak SP); a TOVÁBB gomb indítja a köv. hullámot
     if(intermission>0){ intermission-=dt; if(intermission<=0) startWave(wave+1); }
-    waveLeft.textContent='trollok: '+(aliveCount+toSpawn);
+    setTrollHud(aliveCount+toSpawn);
   }
-  else if(running && coop){ waveLeft.textContent='trollok: '+aliveCount; }
+  else if(running && coop){ setTrollHud(aliveCount); }
   if(coop) coopTick(dt); // FIX: peer-szinkron + interpoláció + sendInput szünetben/menüben/halál után is fusson
 
   /* --- effektek --- */
@@ -4029,7 +4170,7 @@ function coopWireWait(){ if(coopWaitWired) return; coopWaitWired=true;
   coopWaitEl=document.getElementById('coopWait'); coopWaitListEl=document.getElementById('coopWaitList');
   coopWaitCountEl=document.getElementById('coopWaitCount'); coopWaitCodeEl=document.getElementById('coopWaitCode');
   const b=document.getElementById('coopStartBtn');
-  if(b) b.addEventListener('click', function(){ if(coop){ coop.send({t:'start'}); b.disabled=true; b.textContent='INDÍTÁS…'; } });   // bárki indíthat; a szerver szinkronizál (NINCS helyi beginPlay)
+  if(b) b.addEventListener('click', function(){ if(coop){ coop.send({t:'start'}); b.disabled=true; b.textContent=tr('coop.starting'); } });   // bárki indíthat; a szerver szinkronizál (NINCS helyi beginPlay)
 }
 function coopRenderWait(){ if(!coopWaitListEl) return;
   if(coopWaitCodeEl) coopWaitCodeEl.textContent=((coop&&coop.room)||_coopRoom||'----');
@@ -4037,18 +4178,19 @@ function coopRenderWait(){ if(!coopWaitListEl) return;
   const frag=document.createDocumentFragment();
   for(const p of coopWaitRoster){ const li=document.createElement('li'); if(p.id===coopMyId) li.className='me';
     const dot=document.createElement('span'); dot.className='pd'; li.appendChild(dot);
-    li.appendChild(document.createTextNode(p.id===coopMyId?'Te':(p.name||'Archer')));
-    if(p.playing){ const t=document.createElement('span'); t.className='tag'; t.textContent='játszik'; li.appendChild(t); }
+    li.appendChild(document.createTextNode(p.id===coopMyId?tr('coop.you'):(p.name||'Archer')));
+    if(p.playing){ const t=document.createElement('span'); t.className='tag'; t.textContent=tr('coop.playing'); li.appendChild(t); }
     frag.appendChild(li); }
   coopWaitListEl.replaceChildren(frag);
 }
 function coopShowWait(){ coopWireWait(); coopInWaitRoom=true; coopRenderWait();
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
-  if(coopWaitEl){ const b=document.getElementById('coopStartBtn'); if(b){ b.disabled=false; b.textContent='START ▶'; } coopWaitEl.classList.remove('hide'); }
+  if(coopWaitEl){ const b=document.getElementById('coopStartBtn'); if(b){ b.disabled=false; b.textContent=tr('coop.start'); } coopWaitEl.classList.remove('hide'); }
   if(document.pointerLockElement) document.exitPointerLock(); }
 function coopHideWait(){ coopInWaitRoom=false; if(coopWaitEl) coopWaitEl.classList.add('hide'); }
 const _coopParams = new URLSearchParams(location.search);
 const _coopRoom   = _coopParams.get('room');      // null => single-player
+{ const b=document.getElementById('langBtn'); if(b) b.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); setLang(lang==='hu'?'en':'hu', true, true); }); applyI18n(); }
 
 function coopActive(){ return !!coop; }
 
@@ -4248,15 +4390,15 @@ function absorbTellAt(x, z, el){ const y=GROUND_Y+1.2, col=(TROLL_EL[el]&&TROLL_
   EFX.ring(x, GROUND_Y+0.05, z, col, 3.2, 0.4, 0.5, 0.85);   // BEFELÉ (r0>r1) -> 'beszívás', nem terjedő sebző-gyűrű
   EFX.flash(x, y, z, col, 0.5, 2.0, 0.28, 0.9); EFX.light(x, y, z, col, 2.4, 0.22);
   for(let i=0;i<10;i++){ const a=rand(0,6.28); RP.spawn(x+Math.cos(a)*0.6, y-0.4, z+Math.sin(a)*0.6, Math.cos(a)*1.2, rand(1.5,3.0), Math.sin(a)*1.2, col, rand(0.35,0.6), 0.02, rand(0.5,0.9), -1.0, 1.4); }
-  toast('ELNYELTE!'); if(AUD.hit) AUD.hit(); }
+  toast(tr('toast.absorb')); if(AUD.hit) AUD.hit(); }
 function absorbTell(m, el){ m.hurtFlash=0; absorbTellAt(m.g.position.x, m.g.position.z, el); }
 function reactionFxVisual(kind, x, z){ const y=GROUND_Y+1.2;
-  if(kind==='overload'){ EFX.flash(x,y,z,0x9fd0ff,0.6,3.8,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fd0ff,0.5,9,0.5,0.9); EFX.light(x,y,z,0xbfe6ff,4.5,0.3); shake=Math.max(shake,0.4); toast('FAGYTÚLTÖLTÉS!'); }
-  else if(kind==='steam'){ EFX.flash(x,y,z,0xffffff,0.5,3.2,0.26); for(let i=0;i<14;i++) SMK.spawn(x+rand(-0.3,0.3),y,z+rand(-0.3,0.3),rand(-1,1),rand(0.5,1.6),rand(-1,1),0xdfeaf2,0.8,2.2,0.9,-0.5,0.8,0.7); toast('GŐZROBBANÁS!'); }
-  else if(kind==='ignite'){ EFX.flash(x,y,z,0xff8a2a,0.7,5,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,5.5,0.45,0.85); EFX.light(x,y,z,0xff7a3d,4.5,0.35); shake=Math.max(shake,0.4); toast('MÉRGES GYÚJTÁS!'); }
-  else if(kind==='galvanic'){ EFX.flash(x,y,z,0xc8e26a,0.4,2.5,0.2); EFX.light(x,y,z,0x9fdc4a,2.2,0.2); toast('GALVÁN PERMET!'); }
+  if(kind==='overload'){ EFX.flash(x,y,z,0x9fd0ff,0.6,3.8,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fd0ff,0.5,9,0.5,0.9); EFX.light(x,y,z,0xbfe6ff,4.5,0.3); shake=Math.max(shake,0.4); toast(tr('toast.overload')); }
+  else if(kind==='steam'){ EFX.flash(x,y,z,0xffffff,0.5,3.2,0.26); for(let i=0;i<14;i++) SMK.spawn(x+rand(-0.3,0.3),y,z+rand(-0.3,0.3),rand(-1,1),rand(0.5,1.6),rand(-1,1),0xdfeaf2,0.8,2.2,0.9,-0.5,0.8,0.7); toast(tr('toast.steam')); }
+  else if(kind==='ignite'){ EFX.flash(x,y,z,0xff8a2a,0.7,5,0.3); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,5.5,0.45,0.85); EFX.light(x,y,z,0xff7a3d,4.5,0.35); shake=Math.max(shake,0.4); toast(tr('toast.ignite')); }
+  else if(kind==='galvanic'){ EFX.flash(x,y,z,0xc8e26a,0.4,2.5,0.2); EFX.light(x,y,z,0x9fdc4a,2.2,0.2); toast(tr('toast.galvanic')); }
   else if(kind==='frostrot'){ EFX.ring(x,GROUND_Y+0.05,z,0x9fd2ff,0.3,2.6,0.4,0.8); }
-  else if(kind==='nova'){ EFX.flash(x,GROUND_Y+2,z,0xffffff,1,ARENA_R*1.1,0.6); EFX.ring(x,GROUND_Y+0.05,z,0x9fd2ff,1,ARENA_R,0.9,0.95); EFX.light(x,GROUND_Y+3,z,0xffffff,9,0.7); shake=Math.max(shake,0.7); toast('VIHAR!'); }
+  else if(kind==='nova'){ EFX.flash(x,GROUND_Y+2,z,0xffffff,1,ARENA_R*1.1,0.6); EFX.ring(x,GROUND_Y+0.05,z,0x9fd2ff,1,ARENA_R,0.9,0.95); EFX.light(x,GROUND_Y+3,z,0xffffff,9,0.7); shake=Math.max(shake,0.7); toast(tr('toast.viharPlain')); }
 }
 /* ELEM co-op: a szerver monster_fx eseményeinek lejátszása (reakció/lánc/zóna/elemi halál) — vizuál-only */
 function coopHandleFx(fx){ if(!Array.isArray(fx)) return;
@@ -4319,7 +4461,7 @@ function coopInterp(dt){
 /* HUD from server authority (score + wave) */
 function coopApplyHud(s){
   if(typeof s.score==='number'){ score = s.score; scoreN.textContent = score; }
-  if(typeof s.wave==='number' && s.wave!==coopWaveNum){ coopWaveNum = s.wave; wave = s.wave; if(waveN) waveN.textContent = 'HULLÁM '+s.wave; }
+  if(typeof s.wave==='number' && s.wave!==coopWaveNum){ coopWaveNum = s.wave; wave = s.wave; setWaveHud(s.wave); }
 }
 
 /* peer arrow tracer (reuse a tiny pool, brief lifetime) */
@@ -4393,8 +4535,8 @@ function coopBuildHud(){
   const el = document.createElement('div'); el.id='coopHud';
   el.innerHTML =
     '<div class="ch"><span class="dot" id="coopDot"></span><span class="code" id="coopCode">----</span></div>'+
-    '<button id="coopCopy">COPY INVITE LINK</button>'+
-    '<div class="lbl">Players</div><ul id="coopPlayers"></ul>';
+    '<button id="coopCopy">'+tr('coop.copy')+'</button>'+
+    '<div class="lbl">'+tr('coop.players')+'</div><ul id="coopPlayers"></ul>';
   document.body.appendChild(el);
   coopHudEl = el;
   coopHudDotEl = el.querySelector('#coopDot');
@@ -4408,11 +4550,12 @@ function coopInviteUrl(){
   const u = new URL('./mohas-roham.html', location.href);
   if(coopHost) u.hostname=coopHost; // localhost -> LAN IP (a port marad)
   if(code) u.searchParams.set('room', code);
+  u.searchParams.set('lang', lang);
   return u.toString();
 }
 function coopCopyInvite(){
   const url = coopInviteUrl();
-  const done = ()=>{ if(coopHudCopyEl){ const t=coopHudCopyEl.textContent; coopHudCopyEl.textContent='COPIED ✓'; setTimeout(()=>{ if(coopHudCopyEl) coopHudCopyEl.textContent=t; },1200); } };
+  const done = ()=>{ if(coopHudCopyEl){ const t=coopHudCopyEl.textContent; coopHudCopyEl.textContent=tr('coop.copied'); setTimeout(()=>{ if(coopHudCopyEl) coopHudCopyEl.textContent=t; },1200); } };
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(url).then(done).catch(()=>coopCopyFallback(url, done));
   } else coopCopyFallback(url, done);
@@ -4423,7 +4566,7 @@ function coopCopyFallback(url, done){
 }
 function coopSetStatus(connected){
   coopConnected = !!connected;
-  if(coopHudDotEl){ coopHudDotEl.classList.toggle('on', coopConnected); coopHudDotEl.title = coopConnected ? 'connected' : 'reconnecting…'; }
+  if(coopHudDotEl){ coopHudDotEl.classList.toggle('on', coopConnected); coopHudDotEl.title = coopConnected ? tr('coop.connected') : tr('coop.reconnecting'); }
 }
 function coopUpdateHudRoom(){
   if(coopHudRoomEl) coopHudRoomEl.textContent = ((coop && coop.room) || _coopRoom || '----');
@@ -4432,7 +4575,7 @@ function coopUpdateHudPlayers(){
   if(!coopHudPlayersEl) return;
   const frag = document.createDocumentFragment();
   const me = document.createElement('li'); me.className='me';
-  me.innerHTML = '<span class="pd"></span>'; me.appendChild(document.createTextNode('You'));
+  me.innerHTML = '<span class="pd"></span>'; me.appendChild(document.createTextNode(tr('coop.you')));
   frag.appendChild(me);
   for(const p of coopPeers.values()){
     const li = document.createElement('li');
@@ -4470,7 +4613,7 @@ function coopConnect(){
   coop = connectCoop({
     room: _coopRoom==='NEW' ? undefined : _coopRoom,
     name: 'Archer',
-    onWelcome: (info)=>{ const reconnected = coopWelcomed; coopWelcomed=true; coopMyId=info.id; coopHost=info.host||coopHost; coopResync(info); if(typeof info.wave==='number') coopWaveNum=info.wave; coopSetStatus(true); toast((reconnected?'CO-OP újracsatlakozva: ':'CO-OP: ')+info.room);
+    onWelcome: (info)=>{ const reconnected = coopWelcomed; coopWelcomed=true; coopMyId=info.id; coopHost=info.host||coopHost; coopResync(info); if(typeof info.wave==='number') coopWaveNum=info.wave; coopSetStatus(true); toast((reconnected?tr('coop.reconnect'):'CO-OP: ')+info.room);
       if(Array.isArray(info.players)) coopWaitRoster=info.players.map(p=>({id:p.id,name:p.name,playing:!!p.playing}));
       if(!coopStarted && !running){ if(info.phase==='playing'){ coopHideWait(); beginPlay(); } else { coopShowWait(); } }   // FÁZIS-KAPU: 'lobby'->várószoba; 'playing'->late-join EGYBŐL beginPlay (különben üres aréna/láthatatlan troll)
     }, // v2: pid -> stabil id, ezért coopWelcomed-del detektálunk
@@ -4500,7 +4643,7 @@ function coopConnect(){
                          if(h.id!==coopMyId && !h.absorbed && h.el && h.el!=='base' && h.reactPos) elementalImpact({x:h.reactPos.x,y:GROUND_Y+1.2,z:h.reactPos.z}, h.el, h.headshot);   // társ találatának elemi becsapódása (absorbnál KIHAGYVA -> az 'absorb' elFx hozza a tellt)
                          if(h.killed && h.monsterId!=null){ const rm=coopRemoteById.get(h.monsterId); if(rm && h.el && h.el!=='base') rm.statusEl=h.el; coopKillRemote(h.monsterId, h.headshot); } },
     onMonsterFx:  (fx)=>{ coopHandleFx(fx); },   // ELEM: szerver reakció/lánc/zóna/elemi-halál FX
-    onSpawnWave:  (w)=>{ if(typeof w.wave==='number'){ coopWaveNum=w.wave; wave=w.wave; if(waveN) waveN.textContent='HULLÁM '+w.wave; AUD.wave(); toast('HULLÁM '+w.wave); } },
+    onSpawnWave:  (w)=>{ if(typeof w.wave==='number'){ coopWaveNum=w.wave; wave=w.wave; setWaveHud(w.wave); AUD.wave(); toast(tr('toast.wave',{n:w.wave})); } },
     onPlayerDown: (id)=>{ if(id===coopMyId && !coopDowned){ coopDowned=true; player.alive=false; gameOver(); } }, // FIX: szerver-vezérelt elesés
     onRoomState: (rs)=>{ if(Array.isArray(rs.players)) coopWaitRoster=rs.players.map(p=>({id:p.id,name:p.name,playing:!!p.playing}));
       if(coopInWaitRoom) coopRenderWait();
@@ -4545,13 +4688,13 @@ function beginPlay(){
   AUD.unlock(); resetGame(); ult=0; running=true; coopStarted=true; coopHideWait();
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
-  if(!window.__elHintShown){ window.__elHintShown=true; setTimeout(()=>{ if(running) toast('1–5: VÁLTS ELEMI NYILAT — TŰZ · JÉG · MÉREG · VILLÁM'); }, 1900); }  // felfedezhetőség: az elemi FX csak 2–5 nyíllal látszik
+  if(!window.__elHintShown){ window.__elHintShown=true; setTimeout(()=>{ if(running) toast(tr('toast.elemHint')); }, 1900); }  // felfedezhetőség: az elemi FX csak 2–5 nyíllal látszik
 }
 function pauseGame(){ if(shopOpen) return; if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
   if(document.pointerLockElement) document.exitPointerLock(); }
 function resumeGame(){ if(player.hp<=0) return; AUD.unlock(); running=true; pauseScreen.classList.add('hide'); ensureLock(); }
 function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.over();
-  document.getElementById('overStat').innerHTML='Elért hullám: <b>'+wave+'</b> &nbsp;·&nbsp; Pont: <b>'+score+'</b>';
+  document.getElementById('overStat').innerHTML=tr('over.stat',{wave:wave,score:score});
   pauseScreen.classList.add('hide'); startScreen.classList.add('hide'); overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
 
 // ===== FEJLESZTÉS-BOLT logika =====
@@ -4559,8 +4702,8 @@ function fmtPts(n){ return (''+n).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }   // e
 function pips(rank,cap){ let s=''; for(let i=0;i<cap;i++) s+= (i<rank?'●':'○'); return s; }
 function renderShop(){
   const ptsEl=document.getElementById('shopPts'); if(ptsEl) ptsEl.textContent=fmtPts(score);
-  const subEl=document.getElementById('shopSub'); if(subEl) subEl.textContent='HULLÁM '+wave+' TELJESÍTVE — VÁSÁROLJ, AMENNYIT BÍRSZ';
-  const goEl=document.getElementById('shopGoBtn'); if(goEl) goEl.textContent='TOVÁBB → HULLÁM '+(wave+1);
+  const subEl=document.getElementById('shopSub'); if(subEl) subEl.textContent=tr('shop.waveDone',{wave:wave});
+  const goEl=document.getElementById('shopGoBtn'); if(goEl) goEl.textContent=tr('shop.next',{wave:wave+1});
   for(const lane of ['atk','def','mys']){
     const host=document.querySelector('.lane-cards[data-lane="'+lane+'"]'); if(!host) continue; host.innerHTML='';
     for(const d of SHOP_DEFS){
@@ -4569,9 +4712,9 @@ function renderShop(){
       const rank=RUN[d.id], maxed=rank>=d.cap, locked=(!maxed && d.minWave && wave<d.minWave), cost=maxed?0:d.costs[rank];
       const card=document.createElement('div'); card.className='upcard'+(locked?' locked':''); card.dataset.id=d.id;
       const costCls=maxed?'max':(locked?'lock':(score>=cost?'afford':'poor'));
-      const costTxt=maxed?'MAX':(locked?('H'+d.minWave+'-TŐL'):('−'+fmtPts(cost)));
-      card.innerHTML='<div class="uc-top"><span class="uc-glyph">'+d.glyph+'</span><span class="uc-name">'+d.hu+'</span></div>'
-        +'<div class="uc-eff">'+d.eff+'</div>'
+      const costTxt=maxed?'MAX':(locked?tr('shop.locked',{wave:d.minWave}):('−'+fmtPts(cost)));
+      card.innerHTML='<div class="uc-top"><span class="uc-glyph">'+d.glyph+'</span><span class="uc-name">'+shopUpgradeName(d)+'</span></div>'
+        +'<div class="uc-eff">'+shopUpgradeEff(d)+'</div>'
         +'<div class="uc-row"><span class="uc-pips">'+pips(rank,d.cap)+'</span><span class="uc-cost '+costCls+'">'+costTxt+'</span></div>';
       card.addEventListener('click',function(){ buyUpgrade(d.id); });
       host.appendChild(card);
