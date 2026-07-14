@@ -212,6 +212,8 @@
   #mobileSprint{right:8px;bottom:122px;}
   #mobileUlt{right:144px;bottom:112px;width:64px;height:64px;color:#061018;background:radial-gradient(circle at 35% 28%,#fff,#ffd27a 36%,#b48cff 100%);}
   #mobilePause{right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.42);}
+  #mobileFullscreen{right:calc(68px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.42);}
+  #mobileRotate{right:calc(124px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.42);}
   .mobile-btn.on{filter:brightness(1.18);transform:scale(.93);}
   .mobile-elements{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:8px;padding:6px 8px;border-radius:999px;pointer-events:auto;
     background:rgba(8,14,28,.28);border:1px solid rgba(180,200,240,.14);box-shadow:0 8px 28px rgba(0,0,0,.28);backdrop-filter:blur(5px);}
@@ -231,7 +233,7 @@
   .touch .mobile-actions,.touch .mobile-elements,#mobileMove{user-select:none;-webkit-user-select:none;}
   @media (orientation:portrait) and (pointer:coarse){
     .touch #rotateHint{display:flex;}
-    .touch .mobile-actions,.touch .mobile-elements,.touch #mobileMove,.touch #mobileLook,.touch #mobileShootAlt,.touch #mobilePause{opacity:.25;}
+    .touch .mobile-actions,.touch .mobile-elements,.touch #mobileMove,.touch #mobileLook,.touch #mobileShootAlt,.touch #mobilePause,.touch #mobileFullscreen,.touch #mobileRotate{opacity:.25;}
   }
 </style>
 </head>
@@ -265,6 +267,8 @@
     <button id="mobileUlt" class="mobile-btn ult">Vihar</button>
   </div>
   <button id="mobilePause" class="mobile-btn" aria-label="Szünet">II</button>
+  <button id="mobileFullscreen" class="mobile-btn" aria-label="Teljes képernyő">FULL</button>
+  <button id="mobileRotate" class="mobile-btn" aria-label="Fekvő mód">FORD</button>
   <div id="rotateHint">Fordítsd fekvőbe a telefont a kényelmes játékhoz.</div>
 </div>
 <div id="vignette"></div>
@@ -2991,6 +2995,40 @@ function bindMobileHold(btn, down, up){
   btn.addEventListener('pointercancel',e=>{ e.preventDefault(); e.stopPropagation(); clear(e); });
   btn.addEventListener('lostpointercapture',clear);
 }
+function fullscreenEl(){ return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null; }
+async function requestGameFullscreen(){
+  const el=document.documentElement;
+  const fn=el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if(!fn){ toast('A teljes képernyőt ez a böngésző nem támogatja'); return false; }
+  try{ const r=fn.call(el); if(r&&typeof r.then==='function') await r; return true; }
+  catch(_e){ toast('Teljes képernyő: engedélyezd a böngészőben'); return false; }
+}
+async function exitGameFullscreen(){
+  const fn=document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+  if(!fn) return false;
+  try{ const r=fn.call(document); if(r&&typeof r.then==='function') await r; return true; }
+  catch(_e){ return false; }
+}
+function updateFullscreenButton(){
+  const b=document.getElementById('mobileFullscreen');
+  if(b) b.classList.toggle('on', !!fullscreenEl());
+}
+async function toggleGameFullscreen(){
+  if(fullscreenEl()) await exitGameFullscreen();
+  else await requestGameFullscreen();
+  updateFullscreenButton();
+}
+async function requestLandscapeMode(){
+  await requestGameFullscreen();
+  try{
+    if(screen.orientation && screen.orientation.lock){
+      await screen.orientation.lock('landscape');
+      toast('Fekvő mód kérve');
+      return;
+    }
+  } catch(_e) {}
+  toast('Fordítsd fekvőbe a telefont');
+}
 function initMobileControls(){
   if(!MOBILE_INPUT) return;
   mobileStickEl=document.getElementById('mobileStick');
@@ -3020,8 +3058,14 @@ function initMobileControls(){
   bindMobileHold(document.getElementById('mobileSprint'),()=>{ mobileSprint=true; },()=>{ mobileSprint=false; });
   bindMobileHold(document.getElementById('mobileUlt'),()=>{ if(running) fireVihar(); });
   bindMobileHold(document.getElementById('mobilePause'),()=>{ if(running) pauseGame(); });
+  const fullBtn=document.getElementById('mobileFullscreen'), rotateBtn=document.getElementById('mobileRotate');
+  if(fullBtn) fullBtn.addEventListener('pointerdown',e=>{ prevent(e); toggleGameFullscreen(); });
+  if(rotateBtn) rotateBtn.addEventListener('pointerdown',e=>{ prevent(e); requestLandscapeMode(); });
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
   document.querySelectorAll('.mobile-el').forEach(b=>b.addEventListener('pointerdown',e=>{ prevent(e); setElement(b.dataset.el); }));
   updateMobileElementButtons();
+  updateFullscreenButton();
 }
 initMobileControls();
 
