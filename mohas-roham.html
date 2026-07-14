@@ -188,38 +188,40 @@
   #mobileControls button{-webkit-tap-highlight-color:transparent;}
   #mobileLook{position:absolute;top:0;right:0;bottom:0;left:36%;pointer-events:auto;touch-action:none;}
   #mobileMove{position:absolute;left:calc(22px + env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));width:148px;height:148px;border-radius:50%;pointer-events:auto;touch-action:none;
-    background:radial-gradient(circle at 50% 50%, rgba(127,226,255,.12), rgba(8,14,28,.18) 52%, rgba(8,14,28,.04) 70%);
-    border:1px solid rgba(180,220,255,.20);box-shadow:0 10px 32px rgba(0,0,0,.38), inset 0 0 28px rgba(127,226,255,.08);}
+    background:radial-gradient(circle at 50% 50%, rgba(127,226,255,.09), rgba(56,92,54,.15) 48%, rgba(8,14,28,.03) 72%);
+    border:1px solid rgba(190,238,178,.18);box-shadow:0 10px 32px rgba(0,0,0,.30), inset 0 0 28px rgba(127,226,255,.06);}
   #mobileMove::before,#mobileMove::after{content:'';position:absolute;left:50%;top:50%;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;}
-  #mobileMove::before{width:104px;height:104px;border:1px solid rgba(127,226,255,.18);}
-  #mobileMove::after{width:5px;height:5px;background:rgba(233,241,255,.58);box-shadow:0 0 9px rgba(127,226,255,.8);}
+  #mobileMove::before{width:104px;height:104px;border:1px dashed rgba(190,238,178,.20);}
+  #mobileMove::after{width:5px;height:5px;background:rgba(233,241,255,.48);box-shadow:0 0 9px rgba(127,226,255,.55);}
   #mobileStick{position:absolute;left:50%;top:50%;width:64px;height:64px;border-radius:50%;transform:translate(-50%,-50%);
-    background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.9),rgba(127,226,255,.55) 35%,rgba(54,197,255,.20) 68%,rgba(8,14,28,.14));
-    border:1px solid rgba(220,245,255,.38);box-shadow:0 8px 24px rgba(54,197,255,.25), inset 0 0 16px rgba(255,255,255,.15);}
+    background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.52),rgba(147,197,132,.30) 38%,rgba(54,197,255,.12) 70%,rgba(8,14,28,.08));
+    border:1px solid rgba(220,245,255,.24);box-shadow:0 8px 24px rgba(54,197,255,.14), inset 0 0 16px rgba(255,255,255,.08);}
   .mobile-actions{position:absolute;right:calc(15px + env(safe-area-inset-right));bottom:calc(18px + env(safe-area-inset-bottom));width:230px;height:222px;pointer-events:none;}
   .mobile-btn{position:absolute;width:58px;height:58px;border-radius:50%;border:1px solid rgba(210,230,255,.26);color:#e9f1ff;
-    background:radial-gradient(circle at 35% 28%,rgba(255,255,255,.18),rgba(30,44,72,.48) 45%,rgba(8,14,28,.34));
+    background:
+      radial-gradient(circle at 35% 28%,rgba(255,255,255,.16),rgba(147,197,132,.18) 38%,rgba(8,14,28,.20) 70%),
+      conic-gradient(from 20deg,rgba(127,226,255,.16),rgba(255,210,122,.12),rgba(159,220,74,.15),rgba(127,226,255,.16));
     backdrop-filter:blur(5px);font:900 11px/1 -apple-system,'Segoe UI',sans-serif;letter-spacing:.05em;text-transform:uppercase;
-    box-shadow:0 8px 24px rgba(0,0,0,.42), inset 0 0 18px rgba(127,226,255,.06);touch-action:none;pointer-events:auto;}
+    text-shadow:0 2px 8px rgba(0,0,0,.85);box-shadow:0 8px 24px rgba(0,0,0,.30), inset 0 0 18px rgba(127,226,255,.045);touch-action:none;pointer-events:auto;}
   .mobile-btn.primary{right:0;bottom:0;width:104px;height:104px;color:#061018;font-size:14px;border:2px solid rgba(255,255,255,.55);
-    background:radial-gradient(circle at 38% 32%,#fff 0,#9ff0ff 23%,#36c5ff 54%,#1b6fa0 100%);
-    box-shadow:0 0 0 7px rgba(54,197,255,.10),0 12px 34px rgba(54,197,255,.38),inset 0 -10px 20px rgba(6,16,24,.18);}
-  .mobile-btn.primary::after{content:'';position:absolute;inset:12px;border-radius:50%;border:1px solid rgba(6,16,24,.24);}
+    background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.78) 0,rgba(159,240,255,.46) 24%,rgba(54,197,255,.30) 56%,rgba(27,111,160,.20) 100%);
+    box-shadow:0 0 0 7px rgba(54,197,255,.07),0 12px 34px rgba(54,197,255,.22),inset 0 -10px 20px rgba(6,16,24,.10);text-shadow:none;}
+  .mobile-btn.primary::after{content:'';position:absolute;inset:12px;border-radius:50%;border:1px dashed rgba(6,16,24,.22);}
   .mobile-btn.claw{left:calc(18px + env(safe-area-inset-left));top:calc(82px + env(safe-area-inset-top));width:72px;height:72px;color:#061018;
-    background:radial-gradient(circle at 38% 32%,#fff,#9ff0ff 32%,rgba(54,197,255,.8));box-shadow:0 9px 28px rgba(54,197,255,.28);}
+    background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.70),rgba(159,240,255,.38) 34%,rgba(54,197,255,.22));box-shadow:0 9px 28px rgba(54,197,255,.18);text-shadow:none;}
   #mobileMelee{right:112px;bottom:22px;}
   #mobileJump{right:78px;bottom:126px;}
   #mobileSprint{right:8px;bottom:122px;}
-  #mobileUlt{right:144px;bottom:112px;width:64px;height:64px;color:#061018;background:radial-gradient(circle at 35% 28%,#fff,#ffd27a 36%,#b48cff 100%);}
-  #mobilePause{right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.42);}
-  #mobileFullscreen{right:calc(68px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.42);}
-  #mobileRotate{right:calc(124px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.42);}
+  #mobileUlt{right:144px;bottom:112px;width:64px;height:64px;color:#061018;background:radial-gradient(circle at 35% 28%,rgba(255,255,255,.68),rgba(255,210,122,.42) 38%,rgba(180,140,255,.25) 100%);text-shadow:none;}
+  #mobilePause{right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.24);}
+  #mobileFullscreen{right:calc(68px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.24);}
+  #mobileRotate{right:calc(124px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.24);}
   .mobile-btn.on{filter:brightness(1.18);transform:scale(.93);}
   .mobile-elements{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:8px;padding:6px 8px;border-radius:999px;pointer-events:auto;
-    background:rgba(8,14,28,.28);border:1px solid rgba(180,200,240,.14);box-shadow:0 8px 28px rgba(0,0,0,.28);backdrop-filter:blur(5px);}
-  .mobile-el{min-width:44px;height:40px;border-radius:999px;border:1px solid rgba(180,200,240,.20);background:rgba(8,14,28,.34);color:#cfe0ff;
+    background:rgba(8,14,28,.18);border:1px solid rgba(190,238,178,.14);box-shadow:0 8px 28px rgba(0,0,0,.20);backdrop-filter:blur(5px);}
+  .mobile-el{min-width:44px;height:40px;border-radius:999px;border:1px solid rgba(180,200,240,.16);background:rgba(8,14,28,.22);color:#d8f4dc;
     font:900 11px/1 -apple-system,'Segoe UI',sans-serif;box-shadow:inset 0 0 12px rgba(255,255,255,.04);touch-action:none;}
-  .mobile-el.on{color:#061018;background:linear-gradient(135deg,#eaf7ff,#7fe2ff 45%,#ffd27a);box-shadow:0 0 18px rgba(127,226,255,.45);}
+  .mobile-el.on{color:#061018;background:linear-gradient(135deg,rgba(234,247,255,.78),rgba(127,226,255,.58) 45%,rgba(255,210,122,.58));box-shadow:0 0 18px rgba(127,226,255,.28);}
   #rotateHint{display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;padding:24px;pointer-events:none;
     background:rgba(6,10,18,.72);font:800 18px/1.35 -apple-system,'Segoe UI',sans-serif;color:#ffe7b8;text-shadow:0 2px 10px #000;}
   .touch #powwrap{bottom:calc(84px + env(safe-area-inset-bottom));}
@@ -2880,7 +2882,8 @@ function ensureLock(){ if(MOBILE_INPUT){ showLockHint(false); return; } if(!runn
 
 let dragLook=false, dragBtn=-1, lastMX=0, lastMY=0;
 const LOOK_S=0.0022;
-function applyLook(dx,dy){ player.yaw-=dx*LOOK_S; player.pitch=clamp(player.pitch-dy*LOOK_S,-1.45,1.45); }
+const TOUCH_LOOK_X=2.35, TOUCH_LOOK_Y=1.85;
+function applyLook(dx,dy,xMul,yMul){ player.yaw-=dx*LOOK_S*(xMul||1); player.pitch=clamp(player.pitch-dy*LOOK_S*(yMul||xMul||1),-1.45,1.45); }
 
 addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
   if('12345'.includes(k)) setElement(EL_ORDER[+k-1]);   // ELEM: 1–5 switch arrow element
@@ -3047,7 +3050,7 @@ function initMobileControls(){
   if(lookPad){
     let lookId=null, lx=0, ly=0;
     lookPad.addEventListener('pointerdown',e=>{ if(lookId!==null) return; prevent(e); lookId=e.pointerId; lx=e.clientX; ly=e.clientY; lookPad.setPointerCapture(e.pointerId); });
-    lookPad.addEventListener('pointermove',e=>{ if(e.pointerId!==lookId) return; prevent(e); applyLook(e.clientX-lx,e.clientY-ly); lx=e.clientX; ly=e.clientY; });
+    lookPad.addEventListener('pointermove',e=>{ if(e.pointerId!==lookId) return; prevent(e); applyLook(e.clientX-lx,e.clientY-ly,TOUCH_LOOK_X,TOUCH_LOOK_Y); lx=e.clientX; ly=e.clientY; });
     const endLook=e=>{ if(e.pointerId===lookId){ prevent(e); lookId=null; } };
     lookPad.addEventListener('pointerup',endLook); lookPad.addEventListener('pointercancel',endLook);
   }
