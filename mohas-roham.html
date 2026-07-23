@@ -280,7 +280,7 @@
 <div id="hurt"></div>
 <div id="wither"></div>
 <div id="toast"></div>
-<div id="loading"><div style="text-align:center"><div class="ltitle">TROLL HUNTING</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.6</div></div></div>
+<div id="loading"><div style="text-align:center"><div class="ltitle">TROLL HUNTING</div><div class="lsub">BETÖLTÉS…</div><div id="loadbarwrap"><div id="loadbar"></div></div><div style="margin-top:10px;font:600 10px/1 ui-monospace,Consolas,monospace;color:#44608a;letter-spacing:.14em">BUILD 2026-07-03.7</div></div></div>
 
 <div id="start" class="screen">
   <div class="card menucard">
@@ -415,6 +415,15 @@
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Bloom (fény-izzás) utófeldolgozás — r128 examples/js addonok, globális THREE-re (nem-modul). Sorrend számít. -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/MaskPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/GammaCorrectionShader.js"></script>
 <!-- CO-OP: expose connectCoop to the (non-module) game IIFE without changing single-player. net-client.js never runs unless the game opts in via ?room. -->
 <script type="module">
   try {
@@ -519,6 +528,75 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 document.body.appendChild(renderer.domElement);
 
+/* ===================== Bloom (szelektív fény-izzás) =====================
+   Két-composeres, layer-alapú szelektív bloom: csak a BLOOM_LAYER-re jelölt
+   objektumok izzanak (tűz, jég-kristály, varázs, izzó szemek, torkolattűz…).
+   A címkézetlen dolgok (HP-sáv, füst, terep, hold-haló) a bloom-passban
+   feketék -> nem izzanak. `low` grafikán teljesen kimarad (renderFrame sima ág).
+   r128 buktató: a composer NEM alkalmaz sRGB-t a lineáris targetekre, ezért a
+   záró GammaCorrectionShader végzi a lineáris->sRGB kimenetet (az ACES tone-map
+   viszont már a material-shaderben lefut a target-ekbe is, ezért az marad). */
+const BLOOM_LAYER = 1;
+const bloomLayer  = new THREE.Layers(); bloomLayer.set(BLOOM_LAYER);
+const enableBloom = (o)=>{ if(o) o.traverse(c=>c.layers.enable(BLOOM_LAYER)); };  // rekurzív; .enable (NEM .set): a 0-s layer maradjon meg
+let bloomOn = false;                                              // applyGraphics állítja
+
+const _darkMat  = new THREE.MeshBasicMaterial({color:0x000000});  // megosztott, egyszer lefordul
+const _matStash = {};                                             // uuid -> eredeti anyag (frame-ek közt újrahasznált)
+function _darken(o){ if(o.material && !bloomLayer.test(o.layers)){ _matStash[o.uuid]=o.material; o.material=_darkMat; } }
+function _restore(o){ const m=_matStash[o.uuid]; if(m){ o.material=m; delete _matStash[o.uuid]; } }
+
+// GRACEFUL FALLBACK: ha a bloom-addonok (jsdelivr) NEM töltöttek be, a játék sima renderrel fut tovább (nincs összeomlás).
+const bloomAvail = !!(THREE.EffectComposer && THREE.RenderPass && THREE.ShaderPass && THREE.UnrealBloomPass && THREE.GammaCorrectionShader);
+let bloomComposer=null, finalComposer=null, bloomPass=null;
+if(bloomAvail){
+  // bloom-only composer (offscreen): a feketített jelenetet rendereli, kiszedi+elmossa a fényes részeket
+  bloomComposer = new THREE.EffectComposer(renderer);
+  bloomComposer.renderToScreen = false;
+  bloomComposer.addPass(new THREE.RenderPass(scene, camera));
+  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.5, 0.0);
+  bloomComposer.addPass(bloomPass);
+
+  // final composer: teljes jelenet + additív bloom-textúra + sRGB kimenet
+  finalComposer = new THREE.EffectComposer(renderer);
+  finalComposer.addPass(new THREE.RenderPass(scene, camera));
+  const _mixPass = new THREE.ShaderPass(new THREE.ShaderMaterial({
+    uniforms:{ baseTexture:{value:null}, bloomTexture:{value:bloomComposer.renderTarget2.texture} },
+    vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader:'uniform sampler2D baseTexture; uniform sampler2D bloomTexture; varying vec2 vUv;'+
+                   'void main(){ gl_FragColor = texture2D(baseTexture,vUv) + texture2D(bloomTexture,vUv); }'
+  }), 'baseTexture');
+  _mixPass.needsSwap = true;
+  finalComposer.addPass(_mixPass);
+  const _gammaPass = new THREE.ShaderPass(THREE.GammaCorrectionShader);  // lineáris -> sRGB a képernyőre
+  _gammaPass.renderToScreen = true;
+  finalComposer.addPass(_gammaPass);
+} else { console.warn('[bloom] postprocessing addonok nem töltöttek be -> sima render (nincs izzás)'); }
+
+function bloomSize(){
+  if(!bloomAvail) return;
+  const pr = renderer.getPixelRatio();
+  bloomComposer.setPixelRatio(pr); finalComposer.setPixelRatio(pr);
+  bloomComposer.setSize(innerWidth, innerHeight);
+  finalComposer.setSize(innerWidth, innerHeight);
+}
+bloomSize();
+
+// egyetlen belépési pont: a frame() és a warmup is ezt hívja
+const _blackBG = new THREE.Color(0x000000);
+function renderFrame(){
+  if(!bloomOn || !bloomAvail){ renderer.render(scene, camera); return; }
+  // A bloom-passban FEKETE háttér + fog KI kell: különben a navy ég/köd (küszöb 0.0 mellett)
+  // beszűrődne a bloomba és az egész képet feltúlvilágítaná. Csak a címkézett fény-források izzanak.
+  const _bg=scene.background, _fog=scene.fog;
+  scene.background=_blackBG; scene.fog=null;
+  scene.traverse(_darken);
+  bloomComposer.render();
+  scene.traverse(_restore);
+  scene.background=_bg; scene.fog=_fog;
+  finalComposer.render();
+}
+
 /* ===================== Procedurális textúrák (a troll-fájlból) ===================== */
 function glowTexture(){
   const c=document.createElement('canvas'); c.width=c.height=64;
@@ -569,14 +647,16 @@ const moonFill=new THREE.PointLight(0x88aaff,0.4,120,2); moonFill.position.set(-
 const GFX_KEY='mr_gfx';
 let gfxTier=(function(){ try{ return localStorage.getItem(GFX_KEY)||(MOBILE_INPUT?'low':'high'); }catch(_e){ return MOBILE_INPUT?'low':'high'; } })();
 function applyGraphics(tier, save){
-  const T={ low:   {pr:1.0,  soft:false, sm:1024},
-            medium:{pr:1.5,  soft:false, sm:1024},
-            high:  {pr:1.5,  soft:true,  sm:2048} }[tier];
+  const T={ low:   {pr:1.0,  soft:false, sm:1024, bloom:false},
+            medium:{pr:1.5,  soft:false, sm:1024, bloom:true },
+            high:  {pr:1.5,  soft:true,  sm:2048, bloom:true } }[tier];
   if(!T) return;
   const mobilePr={low:1.0, medium:1.15, high:1.25}[tier];
   gfxTier=tier;
   renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE_INPUT ? mobilePr : T.pr));
   renderer.setSize(innerWidth, innerHeight);
+  bloomOn = !!T.bloom && bloomAvail;           // low (v. hiányzó addon): nincs bloom -> sima render (nincs FPS-regresszió)
+  if(bloomAvail){ bloomPass.strength = (tier==='high') ? 0.9 : 0.6; bloomSize(); }   // az új pixelRatio/méret átvitele a composerekre
   const wantType=T.soft?THREE.PCFSoftShadowMap:THREE.PCFShadowMap;
   if(renderer.shadowMap.type!==wantType || key.shadow.mapSize.x!==T.sm){
     renderer.shadowMap.type=wantType;
@@ -592,6 +672,7 @@ applyGraphics(gfxTier,false);
 addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  bloomSize();
 });
 
 /* ===================== Anyagok / segédek ===================== */
@@ -794,9 +875,9 @@ function rock(x,z,r){
 const swayers=[];
 function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(sc);
   g.add(mesh(new THREE.CylinderGeometry(0.09,0.13,0.42,8), glow?std({color:0xbfe8ef}):stemMat,0,0.21,0));
-  g.add(mesh(new THREE.SphereGeometry(0.3,10,7,0,6.28,0,Math.PI/2), glow?glowCapM:capMat,0,0.4,0,1,0.75,1));
+  { const cap=mesh(new THREE.SphereGeometry(0.3,10,7,0,6.28,0,Math.PI/2), glow?glowCapM:capMat,0,0.4,0,1,0.75,1); g.add(cap); if(glow) enableBloom(cap); }
   if(glow){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x7fe2ff,transparent:true,opacity:0.5,depthWrite:false}));
-    sp.scale.setScalar(0.9); sp.position.y=0.5; g.add(sp); }
+    sp.scale.setScalar(0.9); sp.position.y=0.5; g.add(sp); enableBloom(sp); }
   g.userData.phase=Math.random()*6.28; swayers.push(g); scene.add(g); }
 
   /* ---- megalit kőkör (henge) az aréna peremén — most KÖRBEÉRŐ, sűrűbb (perem-fal) ---- */
@@ -1184,7 +1265,7 @@ for(let i=0;i<36;i++){ const a=rand(0,6.283), r=rFall(3, ARENA_R, 1.5);
 const moon=new THREE.Mesh(new THREE.SphereGeometry(5,24,18), new THREE.MeshBasicMaterial({color:0xeaf2ff,fog:false}));
 moon.position.set(-60,46,-110); scene.add(moon);
 const moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9db8e8,transparent:true,opacity:0.45,depthWrite:false,fog:false}));
-moonGlow.scale.setScalar(40); moonGlow.position.copy(moon.position); scene.add(moonGlow);
+moonGlow.scale.setScalar(40); moonGlow.position.copy(moon.position); scene.add(moonGlow); enableBloom(moonGlow);   // a hold-mag lágy glow-ja izzik; a nagy moonHalo (lentebb) NEM, hogy ne legyen állandó képernyő-haló
 const moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x6f8ad0,transparent:true,opacity:0.22,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
 moonHalo.scale.setScalar(95); moonHalo.position.copy(moon.position); scene.add(moonHalo);
 
@@ -1597,7 +1678,7 @@ const nockArrow=new THREE.Group();
   [0,1,2].forEach(i=>{ const f=mesh(new THREE.PlaneGeometry(0.080,0.040), featherMat,0,0,0.70); f.rotation.y=Math.PI/2; f.rotation.z=i*(Math.PI*2/3); nockArrow.add(f); });
   nockArrow.add(mesh(new THREE.CylinderGeometry(0.008,0.0065,0.014,8), hornMat,0,0,0.775));   // szaru-nock a vég
   // ELEM: elem-glow + elem-fej tartó a hegyen — feszítés közben is látszik a kiválasztott elem
-  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})); glow.scale.setScalar(0.18); glow.position.set(0,0,-0.06); nockArrow.add(glow);
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})); glow.scale.setScalar(0.18); glow.position.set(0,0,-0.06); nockArrow.add(glow); enableBloom(glow);
   const elemHolder=new THREE.Group(); elemHolder.position.set(0,0,-0.07); elemHolder.scale.setScalar(0.42); nockArrow.add(elemHolder);
   nockArrow.children.forEach(o=>{ if(o.isMesh) o.castShadow=true; });
   nockArrow._tip=head; nockArrow._glow=glow; nockArrow._elemHolder=elemHolder;
@@ -1627,7 +1708,7 @@ applyBowAdj();
 const slashArc=(function(){
   const geo=new THREE.RingGeometry(0.30, 0.48, 36, 1, Math.PI*0.12, Math.PI*0.78);
   const mat=new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, fog:false, toneMapped:false});
-  const m=new THREE.Mesh(geo, mat); m.position.set(0,-0.04,-0.8); m.renderOrder=1000; m.frustumCulled=false; m.visible=false; camera.add(m); return m;
+  const m=new THREE.Mesh(geo, mat); m.position.set(0,-0.04,-0.8); m.renderOrder=1000; m.frustumCulled=false; m.visible=false; camera.add(m); enableBloom(m); return m;
 })();
 
 /* ===================== Nyíl-lövedékek (pool) ===================== */
@@ -1648,7 +1729,7 @@ function makeArrow(){
   { const nk=mesh(new THREE.CylinderGeometry(0.012,0.009,0.02,7), hornMat,0,0,0.415); nk.rotation.x=Math.PI/2; g.add(nk); }   // szaru-nock a végén
   // ELEM: per-arrow additive glow sprite (color/opacity set by applyArrowVisual)
   const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
-  glow.scale.setScalar(0.55); glow.position.set(0,0,-0.42); g.add(glow);
+  glow.scale.setScalar(0.55); glow.position.set(0,0,-0.42); g.add(glow); enableBloom(glow);
   const elemHolder=new THREE.Group(); elemHolder.position.set(0,0,-0.46); g.add(elemHolder);   // ELEM-PRO: element-head decoration mount (flame/crystal/ooze/spark)
   g.visible=false; g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   scene.add(g);
@@ -1731,20 +1812,21 @@ function makeRichPool(max, blending, fade){
       asz[i]=s1[i]+(s0[i]-s1[i])*k;
       aal[i]=amax[i]*(fade==='puff'?Math.sin(Math.PI*(1-k)):k); }
     if(live){ g.attributes.position.needsUpdate=true; g.attributes.size.needsUpdate=true; g.attributes.alpha.needsUpdate=true; g.attributes.acolor.needsUpdate=true; } }   // FPS: üresjáratban ne tölts fel buffert
-  return { spawn, update };
+  return { spawn, update, pts };
 }
 const RP=makeRichPool(2600, THREE.AdditiveBlending, 'add');   // izzó: parázs, szikra, dér, buborék, mágia
-const SMK=makeRichPool(360, THREE.NormalBlending, 'puff');    // füst: sötét, növekvő, lágy puff
+enableBloom(RP.pts);                                          // az additív izzó-részecskék adják a fő harci glow-t
+const SMK=makeRichPool(360, THREE.NormalBlending, 'puff');    // füst: sötét, növekvő, lágy puff (NEM izzik)
 
 const EFX=(function(){
   // villanás-sprite-ok (kamerára néző additív glow)
-  const FN=44, fl=[]; for(let i=0;i<FN;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})); s.visible=false; scene.add(s); fl.push({s,life:0,max:1,r0:1,r1:2,a0:1}); } let fi=0;
+  const FN=44, fl=[]; for(let i=0;i<FN;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})); s.visible=false; scene.add(s); enableBloom(s); fl.push({s,life:0,max:1,r0:1,r1:2,a0:1}); } let fi=0;
   function flash(x,y,z,color,r0,r1,dur,a0){ const f=fl[fi++%FN]; f.s.visible=true; f.s.position.set(x,y,z); f.s.material.color.set(color); f.r0=r0;f.r1=r1;f.life=dur;f.max=dur;f.a0=(a0==null?1:a0); f.s.scale.setScalar(r0); f.s.material.opacity=f.a0; }
   // táguló talaj-gyűrűk (lökéshullám)
-  const RN=22, rg=[]; for(let i=0;i<RN;i++){ const m=new THREE.Mesh(new THREE.RingGeometry(0.82,1,40), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending})); m.visible=false; m.rotation.x=-Math.PI/2; scene.add(m); rg.push({m,life:0,max:1,r0:1,r1:3,a0:1}); } let rgi=0;
+  const RN=22, rg=[]; for(let i=0;i<RN;i++){ const m=new THREE.Mesh(new THREE.RingGeometry(0.82,1,40), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending})); m.visible=false; m.rotation.x=-Math.PI/2; scene.add(m); enableBloom(m); rg.push({m,life:0,max:1,r0:1,r1:3,a0:1}); } let rgi=0;
   function ring(x,y,z,color,r0,r1,dur,a0){ const r=rg[rgi++%RN]; r.m.visible=true; r.m.position.set(x,y,z); r.m.material.color.set(color); r.r0=r0;r.r1=r1;r.life=dur;r.max=dur;r.a0=(a0==null?0.9:a0); r.m.scale.setScalar(r0); r.m.material.opacity=r.a0; }
   // villám-ívek (szaggatott additív vonal)
-  const BN=18, SEG=12, bz=[]; for(let i=0;i<BN;i++){ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array((SEG+1)*3),3)); const m=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})); m.visible=false; m.frustumCulled=false; scene.add(m); bz.push({m,life:0,max:1}); } let bi=0;
+  const BN=18, SEG=12, bz=[]; for(let i=0;i<BN;i++){ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array((SEG+1)*3),3)); const m=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})); m.visible=false; m.frustumCulled=false; scene.add(m); enableBloom(m); bz.push({m,life:0,max:1}); } let bi=0;
   function bolt(ax,ay,az,bx,by,bz_,color,dur,jit){ const b=bz[bi++%BN], arr=b.m.geometry.attributes.position.array;
     for(let j=0;j<=SEG;j++){ const t=j/SEG, e=(j>0&&j<SEG)?jit:0; arr[j*3]=ax+(bx-ax)*t+rand(-e,e); arr[j*3+1]=ay+(by-ay)*t+rand(-e,e); arr[j*3+2]=az+(bz_-az)*t+rand(-e,e); }
     b.m.geometry.attributes.position.needsUpdate=true; b.m.material.color.set(color); b.m.material.opacity=1; b.life=dur; b.max=dur; b.m.visible=true; }
@@ -2029,6 +2111,7 @@ function buildElemHead(a){
   else if(el==='ice'){ const cr=new THREE.Mesh(new THREE.OctahedronGeometry(0.075,0), new THREE.MeshStandardMaterial({color:0x9fe3ff,emissive:0x6fd8ff,emissiveIntensity:1.2,transparent:true,opacity:0.85,flatShading:true,roughness:0.3})); cr.position.set(0,0,-0.02); cr.scale.set(1,1,1.6); h.add(cr); const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xe2f6ff,transparent:true,opacity:0.55,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.3); h.add(s); }
   else if(el==='poison'){ const blob=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6), new THREE.MeshStandardMaterial({color:0x9fdc4a,emissive:0x7e9a2e,emissiveIntensity:0.9,transparent:true,opacity:0.92,flatShading:true,roughness:0.4})); blob.position.set(0,-0.01,-0.02); blob.scale.set(1,1.4,1); h.add(blob); const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xc8e26a,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending})); s.scale.setScalar(0.26); h.add(s); }
   else if(el==='lightning'){ const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,opacity:0.95,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(0.32); h.add(core); const v=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xb48cff,transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending})); v.scale.setScalar(0.5); h.add(v); }
+  enableBloom(h);   // a frissen épített elemi nyíl-fej (láng/kristály/méreg/villám) izzik
 }
 function arcSpark(from,to,color,n){ const k=n*5; for(let i=0;i<k;i++){ const t=i/k; sparks.burst(from.x+(to.x-from.x)*t+rand(-0.15,0.15), from.y+(to.y-from.y)*t+rand(-0.15,0.15), from.z+(to.z-from.z)*t+rand(-0.15,0.15), 1, color, 0.2, 0); } }
 function nearestTrolls(x,z,exclude,radius,max){ const out=[]; for(const o of monsters){ if(!o.alive||o.dying>0||o===exclude||coopIsRemote(o)) continue; const d=Math.hypot(o.g.position.x-x,o.g.position.z-z); if(d-Math.min(o.bodyR||0.4,0.7)<radius) out.push([d,o]); } out.sort((a,b)=>a[0]-b[0]); return out.slice(0,max).map(e=>e[1]); }   // él-tudatos (a test széle számít), de a bónusz 0.7-re sapkázva, hogy a nagy AoE ne tarolja az arénát
@@ -2074,11 +2157,11 @@ function buildIceShell(m, full){
       cl.push({geo:gradTint(new THREE.OctahedronGeometry(0.10+Math.random()*0.05,0),0x5f88a8,0xffffff,-0.15,0.15),
         x:Math.cos(a)*R*0.9, y:cy+rand(0.2,0.6), z:Math.sin(a)*R*0.9,
         sy:1.6+Math.random()*0.6, rx:rand(-0.5,0.5), rz:rand(-0.5,0.5)}); }   // vállmagasságú kristályok
-    g.add(new THREE.Mesh(mergeGeos(cl), ICE_MATS.cryst));
+    { const cm=new THREE.Mesh(mergeGeos(cl), ICE_MATS.cryst); g.add(cm); enableBloom(cm); }   // csak a kristályok izzanak (a nagy héj-felület NEM -> nincs vakító blob)
   } else {     // TELJES FAGY: tömör jégtömb — héj + additív perem + majdnem átlátszatlan mag + kristálykoszorú
     const shGeo=jitter(new THREE.IcosahedronGeometry(R*1.12,1),0.12,0.10);
     const sh=new THREE.Mesh(shGeo, ICE_MATS.shellFull); sh.position.y=cy; sh.scale.set(1.05,1.42,1.05); sh.castShadow=true; g.add(sh);
-    const rim=new THREE.Mesh(shGeo, ICE_MATS.rim); rim.position.y=cy; rim.scale.set(1.11,1.50,1.11); g.add(rim);   // ugyanaz a geo — inverted hull
+    const rim=new THREE.Mesh(shGeo, ICE_MATS.rim); rim.position.y=cy; rim.scale.set(1.11,1.50,1.11); g.add(rim); enableBloom(rim);   // additív perem izzik (éles jég-kontúr); a héj-felület NEM
     const core=new THREE.Mesh(gradTint(jitter(new THREE.IcosahedronGeometry(R*0.7,1),0.06,0.05),0x527e9c,0xd8f0ff,-0.9,0.9), ICE_MATS.core);
     core.position.y=cy; core.scale.set(1,1.35,1); g.add(core);
     const RH=R*1.19, RV=R*1.69, cl=[], nIci=8+((Math.random()*3)|0);   // a héj fél-tengelyei: 1.12R*1.05 vízszintes, 1.12R*1.42 függőleges
@@ -2091,8 +2174,9 @@ function buildIceShell(m, full){
       cl.push({geo:gradTint(new THREE.OctahedronGeometry(0.13+Math.random()*0.08,0),0x5f88a8,0xffffff,-0.2,0.2),
         x:Math.cos(a)*hh*RH*1.02, y:cy+yy*RV*1.0, z:Math.sin(a)*hh*RH*1.02,
         sy:1.7+Math.random()*0.9, rx:rand(-0.6,0.6), rz:rand(-0.6,0.6)}); }   // kiálló tüskék a héj felszínéből (shard-troll recept, jég-színben)
-    g.add(new THREE.Mesh(mergeGeos(cl), ICE_MATS.cryst));
+    { const cm=new THREE.Mesh(mergeGeos(cl), ICE_MATS.cryst); g.add(cm); enableBloom(cm); }   // csak a kristály-koszorú izzik
   }
+  // FONTOS: csak a kristályok + additív perem címkézve (fentebb), a nagy héj/mag felület NEM -> éles jég-szikra, nem vakító fehér gömb
   return g;
 }
 function removeIceShell(m){   // csak a per-fagy geometriát dobjuk; az ICE_MATS megosztott anyagokhoz NEM nyúlunk
@@ -2502,6 +2586,7 @@ const g=m.g;
       // kristályfürt a fő kristály tövén (2 kisebb oktaéder)
       crystal.add(mesh(new THREE.OctahedronGeometry(0.07,0), staffMat, 0.10,-0.08,0.02, 1,1.5,1));
       crystal.add(mesh(new THREE.OctahedronGeometry(0.055,0), staffMat, -0.09,-0.10,-0.02, 1,1.4,1));
+      enableBloom(crystal);   // a sámán-bot koronázó kristálya izzik (casting közben az AI felpörgeti az emInt-jét)
       // two small orbiting runes near the head of the staff
       staff.add(mesh(new THREE.OctahedronGeometry(0.05,0), staffMat, 0.13,0.56,0.02));
       staff.add(mesh(new THREE.OctahedronGeometry(0.05,0), staffMat, -0.11,0.42,-0.02));
@@ -2574,7 +2659,7 @@ function makeBomb(){
 for(let i=0;i<24;i++) ebombs.push(makeBomb());
 // LIDÉRC távolsági jég-lövedék (a köpködő-bomba mintájára, saját pool)
 const wbolts=[]; const wboltMat=std({color:0x16414f,emissive:0x7fe2ff,emissiveIntensity:1.5,roughness:.4});
-function makeWbolt(){ const g=new THREE.Group(); g.add(mesh(new THREE.IcosahedronGeometry(0.16,0),wboltMat,0,0,0)); const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.8,depthWrite:false,blending:THREE.AdditiveBlending})); gl.scale.setScalar(0.7); g.add(gl); g.visible=false; scene.add(g); return {g,vel:new THREE.Vector3(),prev:new THREE.Vector3(),life:0,active:false,dmg:10,spin:rand(2,4)}; }
+function makeWbolt(){ const g=new THREE.Group(); g.add(mesh(new THREE.IcosahedronGeometry(0.16,0),wboltMat,0,0,0)); const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.8,depthWrite:false,blending:THREE.AdditiveBlending})); gl.scale.setScalar(0.7); g.add(gl); g.visible=false; scene.add(g); enableBloom(g); return {g,vel:new THREE.Vector3(),prev:new THREE.Vector3(),life:0,active:false,dmg:10,spin:rand(2,4)}; }
 for(let i=0;i<12;i++) wbolts.push(makeWbolt());
 function wispFire(m){ const b=wbolts.find(x=>!x.active)||wbolts[0]; const p=m.g.position, sx=p.x, sy=p.y+m.bodyCY*0.9, sz=p.z;
   const dx=player.pos.x-sx, dz=player.pos.z-sz, dist=Math.hypot(dx,dz); const T=clamp(dist/10,0.6,1.8);
@@ -2619,7 +2704,7 @@ const abolts=[];
 const arcMat=new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.6,roughness:.4,flatShading:true});
 function makeAbolt(){ const g=new THREE.Group(); g.add(mesh(new THREE.OctahedronGeometry(0.17,0), arcMat,0,0,0));
   const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x6fe0ff,transparent:true,opacity:0.8,depthWrite:false,blending:THREE.AdditiveBlending})); gl.scale.setScalar(0.75); g.add(gl);
-  g.visible=false; scene.add(g); return { g, vel:new THREE.Vector3(), life:0, active:false, dmg:8 }; }
+  g.visible=false; scene.add(g); enableBloom(g); return { g, vel:new THREE.Vector3(), life:0, active:false, dmg:8 }; }
 for(let i=0;i<8;i++) abolts.push(makeAbolt());
 function shamanCast(m){ const b=abolts.find(x=>!x.active)||abolts[0];
   if(m.staffCrystal) m.staffCrystal.getWorldPosition(_shSp); else _shSp.set(m.g.position.x, m.g.position.y+m.bodyCY, m.g.position.z);
@@ -2636,7 +2721,7 @@ function updateAbolts(dt){ for(const b of abolts){ if(!b.active) continue;
     if(bp.y<=GROUND_Y+0.1 || b.life>4){ b.active=false; b.g.visible=false; } } }
 function resetAbolts(){ for(const b of abolts){ b.active=false; b.g.visible=false; } }
 // HEX gyengítő-nyaláb: egy közös cső (SP-ben egy aktív tether), kamera-tér additív
-const beamTube=(function(){ const g=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1,7), new THREE.MeshBasicMaterial({color:0x36c5ff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false,toneMapped:false})); g.visible=false; g.renderOrder=900; g.frustumCulled=false; scene.add(g); return g; })();
+const beamTube=(function(){ const g=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1,7), new THREE.MeshBasicMaterial({color:0x36c5ff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false,toneMapped:false})); g.visible=false; g.renderOrder=900; g.frustumCulled=false; scene.add(g); enableBloom(g); return g; })();
 const _bA=new THREE.Vector3(), _bDir=new THREE.Vector3(), _bUp=new THREE.Vector3(0,1,0);
 let _beamSeenThisFrame=false;
 function drawBeam(ax,ay,az,bx,by,bz,t){ _bA.set(ax,ay,az); _bDir.set(bx-ax,by-ay,bz-az); const len=_bDir.length()||0.001;
@@ -2791,9 +2876,9 @@ function makeMonster(type, scale, hp, speed, el){
   /* eyes: cloned-eyeMat spheres (keep `myEye` so frame-902 flash works) + additive glow */
   const eyes=[];
   [-1,1].forEach(s=>{
-    const e=mesh(new THREE.SphereGeometry(0.07,8,7), myEye, s*0.15,0.05,0.30); head.add(e); eyes.push(e);
+    const e=mesh(new THREE.SphereGeometry(0.07,8,7), myEye, s*0.15,0.05,0.30); head.add(e); eyes.push(e); enableBloom(e);
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:eyeGlowCol,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending}));
-    sp.scale.setScalar(0.32); sp.position.set(s*0.15,0.05,0.34); head.add(sp);
+    sp.scale.setScalar(0.32); sp.position.set(s*0.15,0.05,0.34); head.add(sp); enableBloom(sp);
   });
 
   /* lower jaw + tooth row (family teeth motif) — lapított icosa, kissé előretolva */
@@ -4072,7 +4157,7 @@ function frame(){
   const t=clock.getElapsedTime(); const dt=Math.min(t-prevT,0.05); prevT=t;
   update(dt,t);
   if(window.__shotPose){ const p=window.__shotPose; camera.position.set(p[0],p[1],p[2]); camera.lookAt(p[3],p[4],p[5]); }
-  renderer.render(scene,camera);
+  renderFrame();
   if(window.__shotPose){ window.__ri=renderer.info.render; window.__shotReady=true; }
 }
 // ELŐMELEGÍTÉS: induláskor egyszer felépítünk + kirenderelünk minden troll-típust és FX-et (a völgyben, a képernyőn kívül),
@@ -4103,7 +4188,10 @@ function warmup(done){
   // FONTOS: a próbabábuk az arénán KÍVÜL vannak -> renderer.render() FRUSTUM-CULLINGOLNÁ őket, így a shaderük NEM fordulna le (ezt mérve igazoltam: render után 24, compile után 28 program).
   // a renderer.compile() a pozíciótól FÜGGETLENÜL lefordít minden, a scene-ben lévő anyagot -> nincs első-feltűnéskori akadás.
   steps.push(()=>{ try{ renderer.compile(scene, camera); }catch(_e){} });
-  for(let k=0;k<8;k++) steps.push(()=>{ try{ renderer.render(scene,camera); }catch(_e){} });
+  // BLOOM előmelegítés: a bloom-pass shaderei (UnrealBloom mip-blur, mix, gamma) csak composer-renderkor fordulnak le
+  // (a renderer.compile csak a scene-anyagokat érinti) -> egyszer lefuttatjuk a teljes bloom-utat, hogy ne legyen első-frame akadás.
+  steps.push(()=>{ try{ const prev=bloomOn; bloomOn=true; renderFrame(); bloomOn=prev; }catch(_e){} });
+  for(let k=0;k<8;k++) steps.push(()=>{ try{ renderFrame(); }catch(_e){} });
   let i=0;
   (function step(){
     steps[i](); i++;
@@ -4782,6 +4870,10 @@ document.getElementById('restartBtn').addEventListener('click',beginPlay);
 
 // --- fejlesztői/teszt-hook: csak #dev hash-sel aktív (Playwright-verifikációhoz; játékos-úton inert) ---
 if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgrades, addScore, startWave, freezeEncase, freezeFull, killMonster, openShop, applyStatus, renderer, player, damagePlayer, camera, scene, THREE, CAVES,
+  bloomComposer, finalComposer, bloomPass,
+  setBloom:(s,r,t)=>{ if(!bloomPass)return; if(s!=null)bloomPass.strength=s; if(r!=null)bloomPass.radius=r; if(t!=null)bloomPass.threshold=t; },
+  setBloomOn:(v)=>{ bloomOn=!!v; },
+  get bloomOn(){return bloomOn},
   get wave(){return wave}, get score(){return score} };
 
 })();
