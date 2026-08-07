@@ -4911,7 +4911,10 @@ function makeMonsterGen(type, scale, hp, speed, el, seed){
     eyeMat:gen.eyeMat, bodySkin:gen.bodySkin, hp, maxHp:hp, speed, walkPhase:Math.random()*6.28,
     alive:true, dying:0, atkCd:0.6, hurtFlash:0, scale,
     atkPhase:0, atkT:0, atkDur:0, atkHit:false, atkKind:null, lungeBase:null,
-    bodyR:(gen.bodyR||0.85)*scale, bodyCY:(gen.bodyCY||1.1)*scale, headCY:(gen.headCY||1.95)*scale, headR:(gen.headR||0.42)*scale,
+    // TALÁLAT-GÖMBÖK: a gen.bodyR/bodyCY MÁR tartalmazza a genom-skálát, a g.scale-t viszont a gameplay-skálára ÍRJUK FELÜL
+    // -> a genom-skálával normalizálni KELL, különben a gömb duplán skálázódik (a szilánké a látható troll harmada volt: a nyíl átment rajta).
+    bodyR:((gen.bodyR||0.85)/(gen.scale||1))*scale, bodyCY:((gen.bodyCY||1.1)/(gen.scale||1))*scale,
+    headCY:((gen.headCY||1.95)/(gen.scale||1))*scale, headR:((gen.headR||0.42)/(gen.scale||1))*scale,
     type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
     dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0,
     statusEl:null, statusT:0, slowMul:1, burnAcc:0, _eyeBase:null,
@@ -5942,6 +5945,8 @@ function update(dt,t){
       if(segDist(a.prev,a.g.position,c)<m.bodyR*0.72){ hit=m; dmgMul=0.6; break; }             // LÁB ×0.6 (alacsonyabb, kisebb gömb, kevesebb sebzés)
     }
     if(hit){ let dmg=a.dmg*dmgMul;
+      // TROLLGEN: a nyíl BELEÁLL a trollba (a legközelebbi csonthoz kötve, vele mozog a halálig). Vizuál-only -> SP és co-op egyaránt.
+      if(hit.gen && window.TrollGen && (hit.gen.stuckArrows||[]).length<8){ try{ TrollGen.stickArrow(hit.gen, a.g.position, a.vel, a.el); }catch(_e){} }
       if(RUNM.crit>0 && Math.random()<RUNM.crit){ dmg*=2; const _q=a.g.position; EFX.flash(_q.x,_q.y,_q.z,0xffe7b8,0.35,1.8,0.16); }   // FEJLESZTÉS: Kritikus Lövés (×2)
       const _absorbed = a.el!=='base' && hit.el && hit.el===a.el;   // ROSSZ-ELEM BÜNTETÉS: a troll SAJÁT (innate) elemével lőve -> ELNYELI (gyógyul), nem sebződik. Motiválja a sima nyilat / ellen-elemet.
       if(coopIsRemote(hit)){ hit.hurtFlash=0.15; coopOnLocalHit(hit, head, dmg, a.el, a.charge); } // CO-OP: a szerver dönt sebzés/heal/kill felől; az absorb-tellt a 'absorb' elFx hozza
