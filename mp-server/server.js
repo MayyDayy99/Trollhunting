@@ -273,7 +273,7 @@ function pickQuickRoom(max) {
 // Transport-free, client-safe view of a monster for the `state` frame. Drops
 // server-internal sim fields (meleeCd) the client never needs.
 function monsterView(m) {
-  return { id: m.id, type: m.type, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed, scale: m.scale, el: m.el||null,
+  return { id: m.id, type: m.type, seed: m.seed, pos: m.pos, hp: m.hp, maxHp: m.maxHp, speed: m.speed, scale: m.scale, el: m.el||null,
     st: m.statusEl ? { e:m.statusEl, s:m.statusStacks, f:(m.frozenSolid>0?1:0), w:(m.wet>0?1:0) } : null };  // ELEM: kliens-vizuál (aura/szem-tint/jégburok)
 }
 
@@ -676,6 +676,7 @@ function spawnMonster(room) {
   const scale = (1 + N * 0.012) * st.scaleMul;
   const m = {
     id: 'm' + (monsterSeq++).toString(36),
+    seed: (Math.random() * 0x100000000) >>> 0,   // TROLLGEN: szerver-hiteles vizuál-seed -> minden kliens UGYANAZT a trollt építi
     type,
     pos: { x: cave.x + inx * 2.4 + (Math.random() * 1.8 - 0.9), y: GROUND_Y, z: cave.z + inz * 2.4 + (Math.random() * 1.8 - 0.9) },
     hp,
@@ -782,7 +783,7 @@ function applyReactionS(id, room, m, dmg, charge){
 function spawnShardAt(room, parent, ang){
   const st=TYPE_STATS.shard, scale=parent.scale*0.6, hp=Math.max(8,Math.round(parent.maxHp*0.22));
   const speed=Math.min((parent.speed/(TYPE_STATS.brute.speedMul||0.55))*st.speedMul, st.speedCap);
-  const m={ id:'m'+(monsterSeq++).toString(36), type:'shard', pos:{x:parent.pos.x+Math.cos(ang)*0.9, y:GROUND_Y, z:parent.pos.z+Math.sin(ang)*0.9}, hp, maxHp:hp, speed, scale, meleeCd:0, noSplit:true,
+  const m={ id:'m'+(monsterSeq++).toString(36), seed:(Math.random()*0x100000000)>>>0, type:'shard', pos:{x:parent.pos.x+Math.cos(ang)*0.9, y:GROUND_Y, z:parent.pos.z+Math.sin(ang)*0.9}, hp, maxHp:hp, speed, scale, meleeCd:0, noSplit:true,
     statusEl:null, statusT:0, statusStacks:1, slowMul:1, burnAcc:0, rooted:0, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999 };
   m.resist=RESIST_S[m.type]||null; m.el=INNATE_EL[m.type]||null; room.monsters.push(m); return m;
 }

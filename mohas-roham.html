@@ -438,6 +438,2084 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/GammaCorrectionShader.js"></script>
+
+<!-- ===== PROCEDURÁLIS TROLL-GENERÁTOR (beágyazva) ===== -->
+<script>
+/* =============================================================================
+   MOHÁS ROHAM — PROCEDURÁLIS TROLL-GENERÁTOR  (troll-gen.js, v1)
+   -----------------------------------------------------------------------------
+   Mit ad:
+     TrollGen.describe(seed, opts) -> GENOM (sima objektum, szerializálható, co-op-barát)
+     TrollGen.build(genom)         -> { g, legs, arms, head, torso, jaw, eyes, ... }
+     TrollGen.make(seed, opts)     -> describe + build egy lépésben
+     TrollGen.stickArrow(m, worldPos, worldDir)  -> a nyíl BENNE marad a trollban
+     TrollGen.anim                 -> járás / támadás / halál pózok (a demóhoz)
+
+   A rig ANCHOR-jai szándékosan azonosak a játék makeMonster()-ével:
+     csípő y0.62 · váll y1.5 · fej y1.95+neckLen · ököl y-0.78 (kar-lokális)
+   -> a meglévő walkAnim / ATK / deathStyle kód VÁLTOZATLANUL működik rajta.
+
+   Drop-in a mohas-roham.html-be:
+     1) ezt a fájlt betölteni (vagy a tartalmát bemásolni a nagy IIFE-be)
+     2) window.TROLLGEN_HOST = { mesh, jitter, mergeGeos, gradTint, radialTint,
+          mottleTint, std, GLOW, SKIN_N, MOSS_T, enableBloom, scene };
+        (opcionális — ha nincs, a modul saját, azonos paraméterű másolatot épít)
+     3) makeMonster(type,...) belsejét kiváltani:
+          const gen = TrollGen.make(seed, { caste:type, el, tier });
+        majd a meglévő m={...} mezőket a gen handle-jeivel feltölteni.
+   ============================================================================= */
+(function (global) {
+'use strict';
+const T3 = global.THREE;
+const H  = global.TROLLGEN_HOST || {};
+
+/* ---------------------------------------------------------------- helpers -- */
+const std = H.std || ((o) => new T3.MeshStandardMaterial(Object.assign({ roughness: .9, metalness: 0, flatShading: true }, o)));
+
+const mesh = H.mesh || function (geo, mat, x, y, z, sx, sy, sz) {
+  const m = new T3.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0);
+  if (sx !== undefined) m.scale.set(sx, sy === undefined ? sx : sy, sz === undefined ? sx : sz);
+  m.castShadow = true; m.receiveShadow = true; return m;
+};
+
+const jitter = H.jitter || function (geo, axz, ay) {
+  const p = geo.attributes.position, seen = Object.create(null);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const key = Math.round(x * 1e3) + '_' + Math.round(y * 1e3) + '_' + Math.round(z * 1e3);
+    let o = seen[key]; if (!o) o = seen[key] = [(Math.random() - .5) * axz, (Math.random() - .5) * ay, (Math.random() - .5) * axz];
+    p.setX(i, x + o[0]); p.setY(i, y + o[1]); p.setZ(i, z + o[2]);
+  }
+  geo.computeVertexNormals(); return geo;
+};
+
+const gradTint = H.gradTint || function (geo, cBot, cTop, yMin, yMax, pow, axis) {
+  const p = geo.attributes.position, n = p.count, col = new Float32Array(n * 3);
+  const A = new T3.Color(cBot), B = new T3.Color(cTop), C = new T3.Color();
+  const get = axis === 'z' ? (i) => p.getZ(i) : (i) => p.getY(i);
+  for (let i = 0; i < n; i++) {
+    let t = (get(i) - yMin) / (yMax - yMin); t = Math.min(1, Math.max(0, t)); if (pow) t = Math.pow(t, pow);
+    C.copy(A).lerp(B, t); col[i * 3] = C.r; col[i * 3 + 1] = C.g; col[i * 3 + 2] = C.b;
+  }
+  geo.setAttribute('color', new T3.BufferAttribute(col, 3)); return geo;
+};
+
+const radialTint = H.radialTint || function (geo, cIn, cOut, rMax, cx, cz) {
+  const p = geo.attributes.position, n = p.count, col = new Float32Array(n * 3);
+  const A = new T3.Color(cIn), B = new T3.Color(cOut), C = new T3.Color();
+  for (let i = 0; i < n; i++) {
+    const t = Math.min(1, Math.hypot(p.getX(i) - (cx || 0), p.getZ(i) - (cz || 0)) / rMax);
+    C.copy(A).lerp(B, t); col[i * 3] = C.r; col[i * 3 + 1] = C.g; col[i * 3 + 2] = C.b;
+  }
+  geo.setAttribute('color', new T3.BufferAttribute(col, 3)); return geo;
+};
+
+const mottleTint = H.mottleTint || function (geo, colors, blend, rnd) {
+  const p = geo.attributes.position, seen = Object.create(null), W = new T3.Color(0xffffff);
+  const has = !!geo.attributes.color;
+  const col = has ? geo.attributes.color.array : new Float32Array(p.count * 3).fill(1);
+  const C = new T3.Color(), R = rnd || Math.random;
+  for (let i = 0; i < p.count; i++) {
+    const key = Math.round(p.getX(i) * 1e3) + '_' + Math.round(p.getY(i) * 1e3) + '_' + Math.round(p.getZ(i) * 1e3);
+    let c = seen[key];
+    if (!c) { C.setHex(colors[(R() * colors.length) | 0]).lerp(W, blend || 0); c = seen[key] = [C.r, C.g, C.b]; }
+    col[i * 3] *= c[0]; col[i * 3 + 1] *= c[1]; col[i * 3 + 2] *= c[2];
+  }
+  geo.setAttribute('color', new T3.BufferAttribute(col, 3)); return geo;
+};
+
+const mergeGeos = H.mergeGeos || function (items) {
+  const pos = [], col = [], m4 = new T3.Matrix4(), e = new T3.Euler(), q = new T3.Quaternion(),
+    v = new T3.Vector3(), sv = new T3.Vector3(), pv = new T3.Vector3();
+  for (const it of items) {
+    const g = it.geo.index ? it.geo.toNonIndexed() : it.geo;
+    e.set(it.rx || 0, it.ry || 0, it.rz || 0); q.setFromEuler(e);
+    pv.set(it.x || 0, it.y || 0, it.z || 0); sv.set(it.sx || it.s || 1, it.sy || it.s || 1, it.sz || it.s || 1);
+    m4.compose(pv, q, sv);
+    const p = g.attributes.position, c = g.attributes.color;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(m4); pos.push(v.x, v.y, v.z);
+      if (c) col.push(c.getX(i), c.getY(i), c.getZ(i)); else col.push(1, 1, 1);
+    }
+  }
+  const out = new T3.BufferGeometry();
+  out.setAttribute('position', new T3.Float32BufferAttribute(pos, 3));
+  out.setAttribute('color', new T3.Float32BufferAttribute(col, 3));
+  out.computeVertexNormals(); return out;
+};
+
+const enableBloom = H.enableBloom || function () {};
+
+/* --------------------------------------------------- procedurális textúrák -- */
+function glowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.35, 'rgba(255,255,255,.55)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new T3.CanvasTexture(c);
+}
+function noiseTexture(size, blobs) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d'); x.fillStyle = '#808080'; x.fillRect(0, 0, size, size);
+  for (let i = 0; i < blobs; i++) {
+    x.fillStyle = i % 2 ? '#aaaaaa' : '#555555'; x.globalAlpha = .5;
+    x.beginPath(); x.arc(Math.random() * size, Math.random() * size, 1 + Math.random() * 4, 0, 6.3); x.fill();
+  }
+  const t = new T3.CanvasTexture(c); t.wrapS = t.wrapT = T3.RepeatWrapping; t.repeat.set(3, 3); return t;
+}
+function mossTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); x.fillStyle = '#41704e'; x.fillRect(0, 0, 256, 256);
+  const cols = ['#4e8159', '#36603f', '#5d8f5f', '#3a6a48'];
+  for (let i = 0; i < 900; i++) {
+    x.fillStyle = cols[i % 4]; x.globalAlpha = .4;
+    x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 4, 0, 6.3); x.fill();
+  }
+  const t = new T3.CanvasTexture(c); t.wrapS = t.wrapT = T3.RepeatWrapping; t.repeat.set(10, 10); return t;
+}
+const GLOW   = H.GLOW   || glowTexture();
+const SKIN_N = H.SKIN_N || noiseTexture(128, 500);
+const MOSS_T = H.MOSS_T || (function () { const t = mossTexture(); t.encoding = T3.sRGBEncoding; return t; })();
+
+/* -------------------------------------------------------------- anyagok ---- */
+/* megosztott (a játékkal azonos hexek) */
+const M = {
+  skinDark: std({ color: 0x3f6250, bumpMap: SKIN_N, bumpScale: .015 }),
+  belly:    std({ color: 0xe4d8b8 }),
+  hair:     std({ color: 0x24402e, roughness: .97 }),
+  tusk:     std({ color: 0xeee2cf, roughness: .5 }),
+  tuskV:    std({ color: 0xeee2cf, roughness: .5, vertexColors: true }),
+  cloth:    std({ color: 0x604028, roughness: 1 }),
+  leather:  std({ color: 0x5a4030, roughness: .95 }),
+  rope:     std({ color: 0x9a7b4f, roughness: 1 }),
+  wood:     std({ color: 0x7b5433, roughness: .85, bumpMap: SKIN_N, bumpScale: .02 }),
+  woodDark: std({ color: 0x3b2a1e, roughness: .95 }),
+  woodDarkV:std({ color: 0x5c4430, roughness: .95, vertexColors: true }),
+  rock:     std({ color: 0x59637a, roughness: .95, bumpMap: SKIN_N, bumpScale: .05 }),
+  rockV:    std({ color: 0x59637a, roughness: .95, vertexColors: true }),
+  moss:     std({ color: 0x93c584, roughness: .92, map: MOSS_T, bumpMap: MOSS_T, bumpScale: .06 }),
+  mossV:    std({ color: 0x466b42, roughness: .92, vertexColors: true }),
+  lichen:   std({ color: 0xbcd0c2, roughness: 1, map: MOSS_T, bumpMap: MOSS_T, bumpScale: .04 }),
+  stem:     std({ color: 0xe8dcc2, roughness: .8 }),
+  cap:      std({ color: 0xc44a43, roughness: .7 }),
+  glowCap:  new T3.MeshStandardMaterial({ color: 0x16414f, emissive: 0x36c5ff, emissiveIntensity: 1.2, roughness: .6, flatShading: true }),
+  metal:    new T3.MeshStandardMaterial({ color: 0xbfc6d2, metalness: .7, roughness: .3 }),
+  gold:     new T3.MeshStandardMaterial({ color: 0xc9a14e, metalness: .65, roughness: .3 }),
+  mouth:    std({ color: 0x3a1414, roughness: 1 }),
+  tongue:   std({ color: 0xa8564f, roughness: .7 }),
+  scar:     std({ color: 0xc8b596, roughness: .75 }),
+  arrowWood:std({ color: 0x8a6a40, roughness: .7 }),
+  feather:  std({ color: 0xd64b3a, roughness: .8, side: T3.DoubleSide }),
+};
+
+/* ============================================================================
+   ELEM-PALETTA — a design system tokens/elements.css-éből
+   Ha a token-lap be van linkelve, futásidőben ONNAN olvassuk (--el-<e>-*,
+   --status-<e>); a literálok a token-lap SAJÁT értékei, hogy a modul a
+   játékban (CSS nélkül) is pontosan ugyanazt adja.
+   Slot-jelentés a token-lap fejlécéből:
+     core=nyílhegy-emissive · mid=test/láng/folyadék · glow=külső halo
+     spark=szikra · deep=korom/árnyék · light=PointLight · status=troll-tint
+   ========================================================================== */
+function dsHex(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (v && v.charAt(0) === '#') return parseInt(v.slice(1), 16);
+  } catch (_e) {}
+  return fallback;
+}
+function elToken(e, core, mid, glow, spark, deep, light, status, label) {
+  return {
+    core:   dsHex('--el-' + e + '-core',  core),
+    mid:    dsHex('--el-' + e + '-mid',   mid),
+    glow:   dsHex('--el-' + e + '-glow',  glow),
+    spark:  dsHex('--el-' + e + '-spark', spark),
+    deep:   dsHex('--el-' + e + '-deep',  deep),
+    light:  dsHex('--el-' + e + '-light', light),
+    status: dsHex('--status-' + e,        status),
+    emInt: .30, label,
+  };
+}
+const EL = {
+  fire:      elToken('fire',      0xff5a2a, 0xff9a3d, 0xffc24d, 0xfff1c4, 0x2a1c14, 0xff7a3d, 0xff6a2a, 'TŰZ'),
+  ice:       elToken('ice',       0x6fd8ff, 0xa9e8ff, 0xe2f6ff, 0xffffff, 0x2a6fd0, 0x7fd0ff, 0xbfe6ff, 'JÉG'),
+  poison:    elToken('poison',    0x7e9a2e, 0x9fdc4a, 0xc8e26a, 0xd8ee8a, 0x4d6b1e, 0x9fdc4a, 0x9fd24a, 'MÉREG'),
+  lightning: elToken('lightning', 0xb48cff, 0xa8c8ff, 0xffffff, 0xd8e6ff, 0x5a3fb0, 0xb48cff, 0xc8b4ff, 'VILLÁM'),
+};
+/* visszafelé kompatibilis aliasok (a régi mezőnevek a build-ben) */
+Object.keys(EL).forEach(k => { const E = EL[k];
+  E.emissive = E.core; E.eye = E.glow; E.aura = E.light; E.crust = E.deep; E.skin = E.status; });
+
+/* ============================================================================
+   MOHA-AKKUMULÁCIÓ  (ref: threejs-procedural-materials / model-moss-accumulation)
+   Ugyanaz a szabály, csak CPU-oldalon, lapos-árnyalt vertex-színes geometrián:
+     felfelé néző lap  ×  foltos lefedettség-zaj  ->  moha
+   A réteg VALÓDI vastagságot kap (a vertexet a normálja mentén kitolja), és a
+   vertex-színt a moha felé húzza. A koincidens vertexek KÖZÖS maszkot kapnak,
+   így a nem-indexelt (flat) geometria lapjai nem szakadnak szét.
+   ========================================================================== */
+function hash2(x, y) {                                  // determinisztikus 2D hash
+  let h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return h - Math.floor(h);
+}
+function vnoise(x, y) {                                 // érték-zaj simított interpolációval
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  return (hash2(xi, yi) * (1 - u) + hash2(xi + 1, yi) * u) * (1 - v)
+       + (hash2(xi, yi + 1) * (1 - u) + hash2(xi + 1, yi + 1) * u) * v;
+}
+function fbm2(x, y) {
+  let a = .5, f = 1, sum = 0;
+  for (let i = 0; i < 4; i++) { sum += a * vnoise(x * f, y * f); f *= 2; a *= .5; }
+  return sum;
+}
+const smoothstep = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+
+/**
+ * @param geo      nem-indexelt BufferGeometry (mergeGeos vagy primitív)
+ * @param o.rel    [r,g,b] szorzó, ami a bőr-színt a moha felé viszi
+ * @param o.cov    0..1 lefedettség · o.thick vastagság · o.flat felfelé-küszöb
+ * @param o.sx/sz  seed-eltolás · o.scale zaj-frekvencia
+ */
+function mossify(geo, o) {
+  const p = geo.attributes.position;
+  geo.computeVertexNormals();
+  const n = geo.attributes.normal;
+  if (!geo.attributes.color) geo.setAttribute('color', new T3.BufferAttribute(new Float32Array(p.count * 3).fill(1), 3));
+  const c = geo.attributes.color;
+  const cov = o.cov, thick = o.thick, flat = (o.flat !== undefined) ? o.flat : .30, sc = o.scale || 2.2;
+  const rel = o.rel, sx = o.sx || 0, sz = o.sz || 0;
+  const key = (i) => Math.round(p.getX(i) * 1e3) + '_' + Math.round(p.getY(i) * 1e3) + '_' + Math.round(p.getZ(i) * 1e3);
+  /* 1) koincidens vertexek: átlagolt normál (a lapos normál kilépcsőzné a réteget) */
+  const acc = Object.create(null);
+  for (let i = 0; i < p.count; i++) {
+    const k = key(i); let a = acc[k];
+    if (!a) a = acc[k] = { nx: 0, ny: 0, nz: 0, x: p.getX(i), z: p.getZ(i) };
+    a.nx += n.getX(i); a.ny += n.getY(i); a.nz += n.getZ(i);
+  }
+  /* 2) per-pont moha-mennyiség */
+  for (const k in acc) {
+    const a = acc[k], len = Math.hypot(a.nx, a.ny, a.nz) || 1;
+    a.nx /= len; a.ny /= len; a.nz /= len;
+    const top = smoothstep(flat, 1, Math.max(0, a.ny));
+    const patch = fbm2(a.x * sc + sx, a.z * sc + sz);
+    const thr = 1 - cov;
+    a.m = top * smoothstep(thr - .20, thr + .20, patch);
+  }
+  /* 3) kitolás + színezés */
+  for (let i = 0; i < p.count; i++) {
+    const a = acc[key(i)], m = a.m;
+    if (m <= .002) continue;
+    p.setXYZ(i, p.getX(i) + a.nx * thick * m, p.getY(i) + a.ny * thick * m, p.getZ(i) + a.nz * thick * m);
+    c.setXYZ(i, c.getX(i) * (1 + (rel[0] - 1) * m), c.getY(i) * (1 + (rel[1] - 1) * m), c.getZ(i) * (1 + (rel[2] - 1) * m));
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+/** a bőr -> moha szorzó (a vertex-szín a material.color-ral SZORZÓDIK) */
+function mossRel(skinHex, mossHex) {
+  const a = new T3.Color(skinHex), b = new T3.Color(mossHex);
+  return [Math.min(2.6, b.r / Math.max(.03, a.r)), Math.min(2.6, b.g / Math.max(.03, a.g)), Math.min(2.6, b.b / Math.max(.03, a.b))];
+}
+
+/* ------------------------------------------------------------ RUGÓ (spring) ---
+   ref: threejs-procedural-animation — másodlagos mozgás rugóval, dt-alapon.
+   Kritikusan csillapított követés; a dt-t a hívó vágja le. */
+function springStep(st, target, k, dampRatio, dt) {
+  const d = 2 * dampRatio * Math.sqrt(k);
+  st.v += (-k * (st.x - target) - d * st.v) * dt;
+  st.x += st.v * dt;
+  return st.x;
+}
+
+/* ------------------------------------------------------------ seed / RNG --- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+function RNG(seed) {
+  const r = mulberry32(typeof seed === 'string' ? hashStr(seed) : (seed >>> 0));
+  const f = {
+    next: r,
+    range: (a, b) => a + (b - a) * r(),
+    int: (a, b) => a + ((b - a + 1) * r() | 0),
+    chance: (p) => r() < p,
+    pick: (arr) => arr[(r() * arr.length) | 0],
+    /* súlyozott: [[érték,súly],...] */
+    weighted(list) {
+      let tot = 0; for (const it of list) tot += it[1];
+      let x = r() * tot;
+      for (const it of list) { x -= it[1]; if (x <= 0) return it[0]; }
+      return list[list.length - 1][0];
+    },
+    /* n db különböző elem a listából */
+    some(arr, n) { const c = arr.slice(), out = []; while (out.length < n && c.length) out.push(c.splice((r() * c.length) | 0, 1)[0]); return out; },
+  };
+  return f;
+}
+const hsl = (h, s, l) => new T3.Color().setHSL(((h % 360) + 360) % 360 / 360, s, l).getHex();
+
+/* ============================================================================
+   1) PARAMÉTERTÉR — a "végtelen troll" alkatrész-készlete
+   ========================================================================== */
+const PARTS = {
+  skull:  ['round', 'block', 'wedge', 'flat', 'long', 'crested'],
+  brow:   ['heavy', 'plate', 'spiked', 'ridged'],
+  jaw:    ['underbite', 'wide', 'lantern', 'hanging'],
+  ear:    ['bat', 'stub', 'fin', 'torn', 'droop', 'none'],
+  horn:   ['none', 'spike', 'ram', 'antler', 'crown', 'single', 'backswept', 'stub'],
+  tusk:   ['none', 'up', 'down', 'cluster', 'broken', 'sabre'],
+  crest:  ['none', 'spines', 'fin', 'plates', 'bristle', 'shroomRow'],
+  growth: ['glowShroom', 'pustule', 'crystal', 'bark', 'vine', 'shelf', 'lichen'],
+  gear:   ['loincloth', 'belt', 'pauldron', 'bracers', 'necklace', 'noseRing', 'armband', 'bandage', 'warpaint', 'trophy', 'backSpikes'],
+  weapon: ['none', 'club', 'maul', 'daggers', 'spear', 'axe', 'staff', 'flail', 'trunk', 'boulder', 'shield'],
+  wound:  ['scars', 'missingEye', 'brokenHorn', 'tornEar', 'stumpArm', 'patches', 'oldArrows'],
+  skinKind: ['moha', 'mocsár', 'hamu', 'epe', 'mélyzöld', 'zúzódás', 'agyag', 'kéreg'],
+};
+
+/* bőr-fajta -> HSL tartomány (h, s, l) — ez öli meg az "egysíkú zöld"-et */
+const SKIN_KIND = {
+  'moha':    { h: [95, 135], s: [.26, .40], l: [.17, .25] },
+  'mocsár':  { h: [40, 70],  s: [.22, .34], l: [.14, .21] },
+  'hamu':    { h: [195, 230],s: [.09, .18], l: [.18, .27] },
+  'epe':     { h: [62, 88],  s: [.34, .50], l: [.20, .28] },
+  'mélyzöld':{ h: [150, 180],s: [.24, .38], l: [.13, .20] },
+  'zúzódás': { h: [265, 305],s: [.16, .28], l: [.15, .23] },
+  'agyag':   { h: [12, 30],  s: [.28, .44] , l: [.15, .23] },
+  'kéreg':   { h: [25, 45],  s: [.14, .26], l: [.13, .19] },
+};
+
+/* név-generátor (magyar) — minden troll saját nevet kap, ez adja a "mind más" érzetet */
+const NAME_ADJ = ['Mohás', 'Rőt', 'Vén', 'Csorba', 'Görbe', 'Kőbőrű', 'Hamvas', 'Zuzmós', 'Félszemű', 'Tüskés',
+  'Bűzös', 'Nyirkos', 'Agyaras', 'Ködjáró', 'Sáros', 'Zörgő', 'Fagyos', 'Parázs', 'Villámverte', 'Mérges',
+  'Púpos', 'Vasfogú', 'Sánta', 'Repedt', 'Sötét', 'Bozontos', 'Rozsdás', 'Vicsorgó', 'Suta', 'Tarajos'];
+const NAME_NOUN = ['Gubó', 'Vadar', 'Bunkó', 'Csülök', 'Marok', 'Rönk', 'Görgeteg', 'Karom', 'Pofa', 'Csont',
+  'Tuskó', 'Zsombék', 'Görcs', 'Rög', 'Dorong', 'Agyar', 'Kolonc', 'Szuszék', 'Bögöly', 'Kobak',
+  'Mancs', 'Bendő', 'Toportyán', 'Kőmál', 'Süveg', 'Zsúp', 'Bocskor', 'Vinkó', 'Hanga', 'Torzsa'];
+const BOSS_TITLE = ['a Vénhedt', 'a Mohakirály', 'a Sziklatörő', 'a Ködúr', 'az Elsőszülött', 'a Csontgyűjtő',
+  'a Lápfejedelem', 'a Százsebű', 'a Gyökérrágó', 'az Éjszülte'];
+
+/* ============================================================================
+   2) KASZTOK — a gameplay-szerep marad, a generátor EZEKEN BELÜL variál
+   ========================================================================== */
+const CASTES = {
+  grunt: {
+    name: 'Mohás Troll', threat: 0x5f9168, eyeColor: 0xff7a3d,
+    scale: [.92, 1.14], torsoW: [.95, 1.25], shoulderW: [1.0, 1.3], neckLen: [-.10, .02],
+    lean: [.06, .20], headScale: [1.02, 1.18], legThick: [.95, 1.2], armThick: [.95, 1.25], armLen: [.95, 1.12],
+    skin: [['moha', 6], ['mocsár', 3], ['mélyzöld', 2], ['agyag', 2], ['kéreg', 1]],
+    moss: [.5, .95],
+    horn: [['spike', 3], ['ram', 2], ['backswept', 2], ['stub', 2], ['none', 1], ['single', 1]],
+    tusk: [['up', 4], ['cluster', 2], ['broken', 2], ['down', 1]],
+    ear: [['stub', 3], ['droop', 2], ['torn', 2], ['fin', 1]],
+    crest: [['spines', 3], ['plates', 2], ['bristle', 2], ['none', 2], ['shroomRow', 1]],
+    weapon: [['club', 5], ['axe', 2], ['flail', 2], ['spear', 1], ['none', 1]],
+    gearN: [2, 4], growthN: [1, 3], woundP: .45,
+  },
+  brute: {
+    name: 'Kőbunkó', threat: 0xc98a3a, eyeColor: 0xffce5a,
+    scale: [1.55, 1.9], torsoW: [1.3, 1.6], shoulderW: [1.45, 1.8], neckLen: [-.22, -.10],
+    lean: [.16, .30], headScale: [.78, .94], legThick: [1.15, 1.4], armThick: [1.25, 1.55], armLen: [1.0, 1.15],
+    skin: [['hamu', 5], ['kéreg', 3], ['agyag', 2], ['mocsár', 2]],
+    moss: [.3, .8],
+    horn: [['ram', 3], ['crown', 2], ['stub', 3], ['single', 2], ['backswept', 2]],
+    tusk: [['sabre', 4], ['broken', 3], ['up', 2], ['cluster', 1]],
+    ear: [['stub', 4], ['none', 2], ['torn', 2]],
+    crest: [['plates', 4], ['spines', 2], ['none', 2]],
+    weapon: [['maul', 4], ['trunk', 3], ['boulder', 2], ['club', 2]],
+    gearN: [1, 3], growthN: [2, 4], woundP: .6, rocky: true,
+  },
+  scout: {
+    name: 'Fürge Kobold', threat: 0xb6ff5a, eyeColor: 0xc6ff4a,
+    scale: [.55, .72], torsoW: [.58, .74], shoulderW: [.7, .88], neckLen: [.02, .12],
+    lean: [.32, .50], headScale: [1.08, 1.30], legThick: [.72, .9], armThick: [.68, .85], armLen: [1.05, 1.25],
+    skin: [['epe', 5], ['moha', 3], ['mocsár', 2], ['zúzódás', 1]],
+    moss: [.1, .45],
+    horn: [['none', 4], ['spike', 3], ['stub', 2], ['single', 1]],
+    tusk: [['none', 3], ['down', 3], ['up', 1]],
+    ear: [['bat', 6], ['fin', 2], ['torn', 2]],
+    crest: [['bristle', 3], ['spines', 2], ['none', 3]],
+    weapon: [['daggers', 5], ['spear', 2], ['none', 2], ['club', 1]],
+    gearN: [1, 3], growthN: [0, 2], woundP: .35,
+  },
+  brute_shard: null, /* placeholder, lásd shard */
+  shard: {
+    name: 'Kőszilánk', threat: 0xc98a3a, eyeColor: 0xffce5a,
+    scale: [.56, .72], torsoW: [1.0, 1.2], shoulderW: [1.05, 1.28], neckLen: [-.10, 0],
+    lean: [.10, .22], headScale: [1.12, 1.30], legThick: [1.0, 1.2], armThick: [1.0, 1.2], armLen: [.92, 1.05],
+    skin: [['hamu', 6], ['kéreg', 2], ['agyag', 2]],
+    moss: [.15, .5],
+    horn: [['stub', 3], ['spike', 3], ['crown', 1], ['none', 2]],
+    tusk: [['broken', 3], ['up', 2], ['cluster', 1]],
+    ear: [['stub', 3], ['none', 3]],
+    crest: [['plates', 4], ['spines', 2]],
+    weapon: [['none', 4], ['club', 2], ['shield', 2]],
+    gearN: [0, 2], growthN: [2, 3], woundP: .3, rocky: true, alwaysGrowth: 'crystal',
+  },
+  shaman: {
+    name: 'Sámán', threat: 0x36c5ff, eyeColor: 0x6fe0ff,
+    scale: [1.0, 1.16], torsoW: [.74, .9], shoulderW: [.85, 1.0], neckLen: [.14, .26],
+    lean: [-.04, .06], headScale: [1.0, 1.14], legThick: [.82, .95], armThick: [.78, .92], armLen: [1.05, 1.2],
+    skin: [['mélyzöld', 5], ['zúzódás', 3], ['moha', 2], ['hamu', 2]],
+    moss: [.4, .9],
+    horn: [['antler', 6], ['crown', 3], ['ram', 1]],
+    tusk: [['up', 3], ['down', 2], ['none', 2]],
+    ear: [['fin', 3], ['droop', 3], ['bat', 1]],
+    crest: [['none', 3], ['bristle', 2], ['shroomRow', 3]],
+    weapon: [['staff', 8], ['none', 1]],
+    gearN: [3, 5], growthN: [1, 3], woundP: .3, mystic: true,
+  },
+  spitter: {
+    name: 'Köpködő', threat: 0x9fb84a, eyeColor: 0xc6ff4a,
+    scale: [.98, 1.16], torsoW: [1.22, 1.44], shoulderW: [.88, 1.05], neckLen: [-.04, .08],
+    lean: [.12, .24], headScale: [1.0, 1.15], legThick: [1.2, 1.45], armThick: [.72, .88], armLen: [.85, 1.0],
+    skin: [['epe', 6], ['mocsár', 3], ['mélyzöld', 2]],
+    moss: [.3, .7],
+    horn: [['none', 4], ['stub', 3], ['spike', 1]],
+    tusk: [['down', 4], ['cluster', 3], ['up', 1]],
+    ear: [['none', 3], ['stub', 2], ['fin', 2]],
+    crest: [['none', 3], ['bristle', 2], ['shroomRow', 2]],
+    weapon: [['none', 6], ['club', 1]],
+    gearN: [0, 2], growthN: [2, 4], woundP: .4, toad: true, alwaysGrowth: 'pustule',
+  },
+  wisp: {
+    name: 'Lidérc', threat: 0x7fe2ff, eyeColor: 0x7fe2ff,
+    scale: [.88, 1.05], torsoW: [.7, .9], shoulderW: [.8, .98], neckLen: [.0, .12],
+    lean: [.0, .06], headScale: [.98, 1.12], legThick: [1, 1], armThick: [.7, .85], armLen: [1.1, 1.3],
+    skin: [['hamu', 4], ['mélyzöld', 3], ['zúzódás', 3]],
+    moss: [0, .2],
+    horn: [['backswept', 4], ['antler', 3], ['crown', 2], ['spike', 1]],
+    tusk: [['none', 6], ['down', 1]],
+    ear: [['none', 4], ['fin', 2]],
+    crest: [['none', 5], ['fin', 2]],
+    weapon: [['none', 7], ['staff', 2]],
+    gearN: [0, 1], growthN: [0, 1], woundP: .15, wraith: true,
+  },
+};
+delete CASTES.brute_shard;
+
+const TIERS = {
+  normal: { label: 'Normál', sizeMul: 1.0, extra: 0 },
+  elite:  { label: 'Elit',   sizeMul: 1.14, extra: 1 },
+  boss:   { label: 'Ritka',  sizeMul: 1.42, extra: 2 },
+};
+
+/* ============================================================================
+   3) DESCRIBE — a GENOM kisorsolása (determinisztikus, szerializálható)
+   ========================================================================== */
+function describe(seed, opts) {
+  opts = opts || {};
+  const R = RNG(seed);
+  const casteId = opts.caste || R.weighted([['grunt', 10], ['scout', 6], ['spitter', 4], ['brute', 3], ['shard', 3], ['shaman', 2], ['wisp', 2]]);
+  const C = CASTES[casteId] || CASTES.grunt;
+  const tier = opts.tier || R.weighted([['normal', 88], ['elite', 10], ['boss', 2]]);
+  const TI = TIERS[tier];
+  const el = (opts.el !== undefined) ? opts.el : R.weighted([[null, 6], ['fire', 1], ['ice', 1], ['poison', 1], ['lightning', 1]]);
+
+  const skinKind = R.weighted(C.skin);
+  const SK = SKIN_KIND[skinKind];
+  const h = R.range(SK.h[0], SK.h[1]), s = R.range(SK.s[0], SK.s[1]), l = R.range(SK.l[0], SK.l[1]);
+
+  const gearPool = PARTS.gear.filter(g => !(C.wraith && (g === 'loincloth' || g === 'pauldron')));
+  const growthPool = PARTS.growth.slice();
+
+  const g = {
+    seed, caste: casteId, casteName: C.name, tier, el,
+    name: R.pick(NAME_ADJ) + ' ' + R.pick(NAME_NOUN) + (tier === 'boss' ? ', ' + R.pick(BOSS_TITLE) : ''),
+
+    /* --- arányok --- */
+    scale:     R.range(C.scale[0], C.scale[1]) * TI.sizeMul,
+    torsoW:    R.range(C.torsoW[0], C.torsoW[1]),
+    shoulderW: R.range(C.shoulderW[0], C.shoulderW[1]),
+    neckLen:   R.range(C.neckLen[0], C.neckLen[1]),
+    lean:      R.range(C.lean[0], C.lean[1]),
+    headScale: R.range(C.headScale[0], C.headScale[1]),
+    legThick:  R.range(C.legThick[0], C.legThick[1]),
+    armThick:  R.range(C.armThick[0], C.armThick[1]),
+    armLen:    R.range(C.armLen[0], C.armLen[1]),
+    bellySag:  R.range(-.06, .12),
+    asym:      R.range(-.09, .09),          // bal/jobb aszimmetria — semmi sem tükörkép
+    hunch:     R.range(0, .16),
+
+    /* --- bőr --- */
+    skinKind,
+    skin:      hsl(h, s, l),
+    skinDeep:  hsl(h + R.range(-14, 6), s * 1.15, l * .55),
+    skinPale:  hsl(h + R.range(-24, 10), s * .5, Math.min(.82, l * 2.05)),
+    mottle:    [hsl(h + 12, s * .8, l * 1.25), hsl(h - 18, s * .9, l * .8), hsl(h + 30, s * .5, l * 1.1), 0xffffff],
+    eyeColor:  C.eyeColor,
+    eyeCount:  R.weighted([[2, 74], [3, 12], [4, 8], [1, 6]]),
+    eyeSize:   R.range(.055, .095),
+    pupil:     R.weighted([['slit', 5], ['round', 3], ['none', 2]]),
+
+    /* --- fej --- */
+    skull: R.pick(PARTS.skull),
+    brow:  R.pick(PARTS.brow),
+    jawKind: R.pick(PARTS.jaw),
+    ear:   R.weighted(C.ear), earLen: R.range(.22, .95),
+    horn:  R.weighted(C.horn), hornLen: R.range(.75, 1.5),
+    tusk:  R.weighted(C.tusk), tuskLen: R.range(.7, 1.9),
+    crest: R.weighted(C.crest),
+    snout: R.range(.85, 1.35),
+
+    /* --- növedékek / moha --- */
+    moss: R.range(C.moss[0], C.moss[1]),
+    growths: (function () {
+      const n = R.int(C.growthN[0], C.growthN[1]);
+      const list = R.some(growthPool, n);
+      if (C.alwaysGrowth && list.indexOf(C.alwaysGrowth) < 0) list.push(C.alwaysGrowth);
+      return list;
+    })(),
+
+    /* --- felszerelés / fegyver --- */
+    gear: R.some(gearPool, R.int(C.gearN[0], C.gearN[1]) + TI.extra),
+    weapon: R.weighted(C.weapon),
+    weaponWear: R.range(0, 1),
+
+    /* --- sérülés / kor --- */
+    wounds: R.chance(C.woundP + (tier === 'boss' ? .4 : tier === 'elite' ? .2 : 0))
+      ? R.some(PARTS.wound, R.int(1, tier === 'normal' ? 2 : 3)) : [],
+    age: R.range(0, 1),
+  };
+
+  /* kaszt-kényszerek, hogy a gameplay-olvashatóság megmaradjon */
+  if (C.rocky)  g.rocky = true;
+  if (C.toad)   g.toad = true;
+  if (C.mystic) g.mystic = true;
+  if (C.wraith) { g.wraith = true; g.moss = 0; g.weapon = g.weapon === 'staff' ? 'staff' : 'none'; }
+  if (casteId === 'shaman') g.weapon = 'staff';
+  if (casteId === 'spitter') g.weapon = 'none';
+  g.atk = R.weighted(ATK_POOL(g));   // T\u00c1MAD\u00c1S-ST\u00cdLUS: a fegyverb\u0151l \u00e9s a kasztb\u00f3l, seed-stabilan
+  return g;
+}
+
+/* ============================================================================
+   4) BUILD — a genomból THREE.Group
+   ========================================================================== */
+function build(G) {
+  const R = RNG(hashStr(String(G.seed)) ^ 0x9e3779b9);
+  const g = new T3.Group();
+  const P = EL[G.el] || null;
+
+  /* ---- per-troll anyagok (disposeMonster ezeket dobja el) ---- */
+  const bodySkin = std({ color: G.skin, bumpMap: SKIN_N, bumpScale: .018, vertexColors: true });
+  /* tokens/elements.css: "Status tint: multiply troll material color by --status-<e>;
+     emissive parts keep their own glow." — ezért SZORZUNK, nem cserélünk színt. */
+  if (P) { bodySkin.color.multiply(new T3.Color(P.status)).multiplyScalar(1.35);
+           bodySkin.emissive = new T3.Color(P.core); bodySkin.emissiveIntensity = P.emInt * .28; }
+  const eyeM = new T3.MeshStandardMaterial({ color: new T3.Color(P ? P.glow : G.eyeColor).multiplyScalar(.35), emissive: new T3.Color(P ? P.glow : G.eyeColor), emissiveIntensity: .95, roughness: .4 });
+  const mossTone = std({ color: hsl(R.range(85, 130), R.range(.22, .40), R.range(.30, .45)), roughness: .92, map: MOSS_T, bumpMap: MOSS_T, bumpScale: .06, vertexColors: true });
+  const perMat = [bodySkin, eyeM, mossTone];
+  const own = (m) => { perMat.push(m); return m; };
+
+  const tint = (geo, yMin, yMax) => { gradTint(geo, G.skinDeep, 0xffffff, yMin, yMax); mottleTint(geo, G.mottle, .55, R.next); return geo; };
+  const sc = G.scale;
+  /* MOHA-AKKUMULÁCIÓ paraméterek — a genom moss-arányából, seedelt folt-eltolással */
+  const MREL = mossRel(G.skin, mossTone.color.getHex());
+  const MSX = R.range(0, 40), MSZ = R.range(0, 40);
+  const mossPass = (geo, covMul, thickMul) => G.moss < .05 ? geo : mossify(geo, {
+    rel: MREL, cov: Math.min(.95, G.moss * (covMul === undefined ? 1 : covMul)),
+    thick: .05 * (thickMul === undefined ? 1 : thickMul) * (.6 + G.moss * .8),
+    flat: .34 - G.moss * .12, scale: 2.4, sx: MSX, sz: MSZ });
+
+  /* ---------------------------------------------------------------- LÁBAK -- */
+  const legs = {}, knees = {}, ankles = {};
+  if (!G.wraith) {
+    [-1, 1].forEach(sd => {
+      const K = sd < 0 ? 'L' : 'R';
+      const th = G.legThick * (1 + (sd > 0 ? G.asym : -G.asym) * .3);
+      /* CSÍPŐ */
+      const hip = new T3.Group();
+      hip.position.set(sd * .26 * G.torsoW, .95, 0);
+      hip.scale.set(th, 1 + (G.toad ? -.16 : 0), th);
+      /* csípő-gömb: a törzs és a comb közti hézagot kitölti, a pivotra ül -> forgatásnál sem nyílik szét */
+      hip.add(mesh(mossPass(jitter(new T3.IcosahedronGeometry(.255, 0), .022, .018), .6, .7), bodySkin, 0, 0, 0, 1, .95, 1));
+      hip.add(mesh(tint(new T3.CylinderGeometry(.245, .195, .50, 8), -.55, .05), bodySkin, 0, -.24, 0));   // comb (a gömbbe lóg)
+
+      /* TÉRD */
+      const knee = new T3.Group(); knee.position.set(0, -.46, 0); hip.add(knee);
+      knee.add(mesh(jitter(new T3.IcosahedronGeometry(.195, 0), .026, .02), bodySkin, 0, 0, .01));          // térdkalács
+      knee.add(mesh(tint(new T3.CylinderGeometry(.185, .135, .46, 8), -.52, .04), bodySkin, 0, -.22, .02)); // lábszár
+      if (G.moss > .35) knee.add(mesh(jitter(new T3.IcosahedronGeometry(.15, 0), .03, .03), mossTone, sd * .05, .02, .10));
+
+      /* BOKA + LÁBFEJ */
+      const ank = new T3.Group(); ank.position.set(0, -.44, .02); knee.add(ank);
+      ank.add(mesh(jitter(new T3.IcosahedronGeometry(.155, 0), .02, .018), bodySkin, 0, 0, 0));
+      ank.add(mesh(tint(jitter(new T3.IcosahedronGeometry(.18, 0), .024, .02), -.14, .10), bodySkin, 0, -.04, .15, 1.45, .52, 1.85));
+      const toes = []; [-1, 0, 1].forEach(i => toes.push({ geo: new T3.ConeGeometry(G.toad ? .085 : .058, G.toad ? .22 : .17, 5), x: i * (G.toad ? .115 : .095), y: -.05, z: .32, rx: 1.25, sy: G.toad ? .5 : 1 }));
+      ank.add(mesh(mergeGeos(toes), M.tusk, 0, 0, 0));
+
+      g.add(hip); legs[K] = hip; knees[K] = knee; ankles[K] = ank;
+    });
+  } else {
+    /* LIDÉRC: nincs láb — rongyos, lefelé futó szellem-uszály */
+    const cloak = own(std({ color: 0x14283a, emissive: new T3.Color(P ? P.core : dsHex('--rune-deep', 0x16414f)), emissiveIntensity: .35, roughness: 1 }));
+    const rags = [];
+    for (let i = 0; i < 11; i++) {
+      const a = (i / 11) * 6.283 + R.range(-.25, .25), r = R.range(.10, .34);
+      rags.push({ geo: jitter(new T3.ConeGeometry(R.range(.055, .115), R.range(.7, 1.5), 4), .08, .06), x: Math.cos(a) * r, y: R.range(.55, 1.0), z: Math.sin(a) * r * .8, rx: Math.PI + R.range(-.22, .22), rz: R.range(-.28, .28) });
+    }
+    rags.push({ geo: jitter(new T3.CylinderGeometry(.30, .56, 1.25, 9), .06, .05), y: 1.42 });      // fő köpeny (fent keskeny, lent bő)
+    g.add(mesh(gradTint(mergeGeos(rags), 0x08141e, 0xffffff, .1, 1.9), cloak, 0, 0, 0));
+    legs.L = new T3.Group(); legs.R = new T3.Group(); g.add(legs.L); g.add(legs.R);
+    knees.L = new T3.Group(); knees.R = new T3.Group(); legs.L.add(knees.L); legs.R.add(knees.R);
+    ankles.L = new T3.Group(); ankles.R = new T3.Group();
+  }
+
+  /* ---------------------------------------------------------------- TÖRZS --
+     ÍZÜLET-LÁNC VALÓDI PIVOTOKKAL. Minden ízület két csoport: a `*J` pivot a
+     forgásközéppont magasságában ül, a hozzá tartozó offset-csoport visszatolja
+     az origót — így az alább írt Y-értékek továbbra is VILÁG-magasságok, de a
+     forgás az anatómiai ízületnél történik, nem a talajnál.
+         pelvisJ (y .95  — csípő)  : medence-billenés / -fordulás
+         spineJ  (y 1.30 — derék)  : dőlés + gerinc-ellenrotáció
+     A karok és a fej a `torso`-ban lógnak, tehát a gerinccel EGYÜTT mozognak.
+     (Korábban a gyökér alatt ültek: a törzs fordult, a kar/fej nem — ettől
+     vált szét oldalnézetben a sziluett.) A lábak a gyökér alatt maradnak,
+     hogy a medence billenése ne emelje meg a talpakat. */
+  const pelvisJ = new T3.Group(); pelvisJ.position.y = .95; g.add(pelvisJ);
+  const pelvisIn = new T3.Group(); pelvisIn.position.y = -.95; pelvisJ.add(pelvisIn);
+  const spineJ = new T3.Group(); spineJ.position.y = 1.30; spineJ.rotation.x = G.lean; pelvisIn.add(spineJ);
+  const torso = new T3.Group(); torso.position.y = -1.30; spineJ.add(torso);
+
+  /* medence — a derék bekötése, hogy a has ne közvetlenül a combon üljön.
+     A medence-csoportban marad: nem örökli a gerinc dőlését, így a csípő
+     a combfejeken ül akkor is, amikor a troll erősen előredől. */
+  const pelvGeo = jitter(new T3.IcosahedronGeometry(.36, 1), .03, .022);
+  gradTint(pelvGeo, G.skinDeep, 0xffffff, -.4, .4);
+  pelvisIn.add(mesh(mossPass(pelvGeo, .5, .7), bodySkin, 0, 1.02, 0, 1.12 * G.torsoW, .88, .96));
+  /* derék-áthidalás: a medence és a has közti hézagot tölti ki, a gerinc-pivotra
+     ül, így hajláskor sem nyílik rés (a has a spineJ-vel fordul, ez nem) */
+  pelvisIn.add(mesh(mossPass(jitter(new T3.IcosahedronGeometry(.30, 1), .026, .02), .5, .7), bodySkin, 0, 1.26, .01, 1.02 * G.torsoW, .78, .92));
+
+  /* has — lejjebb és keskenyebben, hogy a váll domináljon */
+  const bellyGeo = jitter(new T3.IcosahedronGeometry(.48, 1), .03, .024);
+  gradTint(bellyGeo, G.skinDeep, 0xffffff, -.5, .5, 1.0, 'z');
+  mottleTint(bellyGeo, G.mottle, .38, R.next);
+  torso.add(mesh(mossPass(bellyGeo, .7, .9), bodySkin, 0, 1.38 + G.bellySag * .25, G.toad ? .12 : .02, 1.02 * G.torsoW, 1.0 + G.bellySag, .88 + (G.toad ? .3 : 0)));
+
+  /* világos has-lap: value-kontraszt, ami BÁRMELY elem-tint alatt megtartja a formát */
+  const paleMat = own(std({ color: G.skinPale, roughness: .88, vertexColors: true }));
+  torso.add(mesh(radialTint(new T3.SphereGeometry(.38, 11, 8), 0xffffff, 0xcfc6ae, .46), paleMat, 0, 1.32, .28, 1.0 * G.torsoW, .95, .55));
+
+  /* MELLKAS — szélesebb, mint a has: ez a fenyegető sziluett kulcsa */
+  const chestGeo = jitter(new T3.IcosahedronGeometry(.46, 1), .034, .024);
+  gradTint(chestGeo, G.skinDeep, 0xffffff, -.5, .5, 1.0, 'z');
+  mottleTint(chestGeo, G.mottle, .42, R.next);
+  torso.add(mesh(mossPass(chestGeo, 1.15, 1.15), bodySkin, 0, 1.84, -.05 - G.hunch * .3, 1.20 * G.shoulderW, .88 + G.hunch, .90));
+  /* trapéz-púp a nyak mögött (nem nyeli el a fejet) */
+  torso.add(mesh(mossPass(jitter(new T3.IcosahedronGeometry(.28, 1), .04, .03), 1.3, 1.3), bodySkin, 0, 1.98 + G.hunch * .3, -.26, 1.55 * G.shoulderW, .52 + G.hunch, .8));
+  /* vállgumók: a kar tövét kitöltik, nincs rés */
+  [-1, 1].forEach(s2 => torso.add(mesh(mossPass(jitter(new T3.IcosahedronGeometry(.235, 1), .03, .025), 1.35, 1.35), bodySkin, s2 * .55 * G.shoulderW, 1.92, -.02, 1.05, .95, 1.0)));
+  /* NYAK — látszik, hogy a fej ne a mellkasból nőjön ki */
+  torso.add(mesh(new T3.CylinderGeometry(.155, .225, .34, 8), bodySkin, 0, 2.14 + G.neckLen * .5, .0));
+
+  /* moha-kéreg a háton/vállon, a moss-arány szerint */
+  if (G.moss > .35) {
+    const crust = [];
+    const n = 2 + Math.round(G.moss * 3);
+    for (let i = 0; i < n; i++) {
+      const a = R.range(0, 6.28), rr = R.range(.16, .30);
+      crust.push({ geo: jitter(new T3.IcosahedronGeometry(rr, 0), rr * .3, rr * .22), x: Math.cos(a) * .38 * G.shoulderW, y: R.range(1.15, 2.05), z: -.26 - R.range(0, .28), sy: .68 });
+    }
+    torso.add(mesh(gradTint(mergeGeos(crust), 0x6a8064, 0xffffff, 1.1, 2.1), mossTone, 0, 0, 0));
+  }
+
+  /* ---------------------------------------------------------------- KAROK -- */
+  const arms = {}, elbows = {}, fists = {};
+  [-1, 1].forEach(sd => {
+    const K = sd < 0 ? 'L' : 'R', mir = sd < 0 ? -1 : 1;
+    const th = G.armThick * (1 + (sd > 0 ? G.asym : -G.asym) * .35);
+    /* VÁLL */
+    const arm = new T3.Group();
+    arm.position.set(sd * (.52 * G.shoulderW + .09), 1.90, -.01);
+    arm.scale.set(th, G.armLen, th);
+    arm.add(mesh(mossPass(jitter(new T3.IcosahedronGeometry(.225, 0), .026, .02), 1.25, 1.15), bodySkin, 0, 0, 0));   // deltoid (moha ül a vállon) — kitölti a váll-hézagot
+    arm.add(mesh(gradTint(new T3.CylinderGeometry(.175, .14, .48, 8), G.skinDeep, 0xffffff, -.5, .05), bodySkin, 0, -.24, 0));
+
+    /* KÖNYÖK */
+    const elb = new T3.Group(); elb.position.set(0, -.46, 0); arm.add(elb);
+    elb.add(mesh(jitter(new T3.IcosahedronGeometry(.16, 0), .022, .018), bodySkin, 0, 0, 0));
+    elb.add(mesh(gradTint(new T3.CylinderGeometry(.155, .12, .46, 8), G.skinDeep, 0xffffff, -.5, .05), bodySkin, 0, -.22, .02));
+    if (G.moss > .3) elb.add(mesh(jitter(new T3.IcosahedronGeometry(.13, 0), .03, .03), mossTone, 0, -.02, -.09));
+
+    /* ÖKÖL — a könyök gyereke, így a hajlítással együtt mozog */
+    const fist = new T3.Group(); fist.position.set(0, -.46, .03); elb.add(fist);
+    fist.add(mesh(jitter(new T3.IcosahedronGeometry(.155, 0), .03, .028), bodySkin, 0, 0, 0, 1.05, .95, 1.15));
+    const hasHand = !(G.wounds.indexOf('stumpArm') >= 0 && sd > 0);
+    if (hasHand) {
+      /* MAROK EGY FÜGGŐLEGES NYÉL KÖRÉ.
+         Korábban a három ujj oldalra legyeződve, x mentén sorakozott és az yz-síkban
+         hajlott — a fegyver nyélie viszont y irányú, tehát MERŐLEGES volt az ujjak
+         hajlására: a bunkó nem a marokban ült, hanem oda volt ragasztva a bütyökhöz.
+         Most az ujjak a NYÉL MENTÉN (y) sorakoznak egymás alatt, és az xz-síkban
+         zárnak rá — a hüvelyk felülről fogózik. */
+      const HX = 0, HZ = .12;                                  // a nyél tengelye a marokban
+      const palm = mesh(jitter(new T3.IcosahedronGeometry(.115, 0), .02, .018), bodySkin, HX - mir * .085, -.06, HZ - .02, .9, 1.5, 1.15);
+      fist.add(palm);
+      const fing = [];
+      for (let i = 0; i < 3; i++) {
+        const fy = .03 - i * .085;
+        fing.push({ geo: new T3.CylinderGeometry(.036, .030, .155, 5), x: HX - mir * .095, y: fy, z: HZ - .050, rz: mir * 1.20 });   // alsó perc: a tenyértől előre
+        fing.push({ geo: new T3.SphereGeometry(.033, 5, 4),            x: HX + mir * .010, y: fy, z: HZ + .040 });                     // bütyök a nyél elülső oldalán
+        fing.push({ geo: new T3.CylinderGeometry(.030, .024, .125, 5), x: HX + mir * .080, y: fy, z: HZ + .015, rz: mir * 2.05 });   // felső perc: átfordul, zárja a marokot
+      }
+      fing.push({ geo: new T3.CylinderGeometry(.038, .030, .17, 5), x: HX - mir * .050, y: .10, z: HZ + .015, rx: -.55, rz: mir * .80 });   // hüvelyk felülről
+      fist.add(mesh(gradTint(mergeGeos(fing), G.skinDeep, 0xffffff, -.26, .08), bodySkin, 0, 0, 0));
+      const claws = [];
+      for (let i = 0; i < 3; i++) claws.push({ geo: new T3.ConeGeometry(.022, .09, 4), x: HX + mir * .132, y: .03 - i * .085, z: HZ + .010, rz: mir * 2.35 });
+      fist.add(mesh(mergeGeos(claws), M.tusk, 0, 0, 0));
+    } else {
+      fist.add(mesh(new T3.CylinderGeometry(.14, .12, .13, 8), M.cloth, 0, -.05, 0));
+      const wr = mesh(new T3.TorusGeometry(.13, .024, 5, 10), M.cloth, 0, -.11, 0); wr.rotation.x = Math.PI / 2; fist.add(wr);
+    }
+    /* nyugalmi póz: kar kissé előre, könyök behajlítva — nem lóg élettelenül */
+    arm.rotation.x = .34; elb.rotation.x = -.42;
+    /* A KAR A TÖRZS GYEREKE — a vállgumó (torso, y1.92) és a kar-pivot (y1.90)
+       ugyanazt a transzformációt örökli, tehát a váll soha nem nyílik szét. */
+    torso.add(arm); arms[K] = arm; elbows[K] = elb; fists[K] = fist;
+  });
+
+  /* ------------------------------------------------------------------ FEJ -- */
+  const head = new T3.Group();
+  head.position.set(0, 2.50 + G.neckLen, .05);
+  head.scale.setScalar(G.headScale);
+  /* A FEJ A TÖRZS GYEREKE (ref: Claude-of-Duty rig.js — a Neck a Spine2 alatt lóg).
+     Korábban a `g` alatt ült, ezért a fej nem örökölte a törzs dőlését/csavarodását:
+     járás közben a test fordult, a fej nem — ettől érződött szétesőnek a mozgás. */
+  torso.add(head);
+
+  if (G.wraith) buildWraithHead(head, G, R, bodySkin, eyeM, own, P);
+  else buildHead(head, G, R, bodySkin, paleMat, mossTone, eyeM, own, mossPass);
+
+  /* állkapocs külön Group -> nyitható (üvöltés / támadás) */
+  const jaw = head.userData.jaw || new T3.Group();
+  const eyes = head.userData.eyes || [];
+
+  /* ------------------------------------------------- SZARVAK / TARAJ / stb -- */
+  if (!G.wraith) addCrest(g, torso, G, R, mossTone);
+  addHorns(head, G, R, own);
+  addGrowths(g, torso, head, G, R, mossTone, own);
+  if (!G.wraith) addGear(g, torso, head, arms, elbows, G, R, own);
+  const weapon = addWeapon(fists, G, R, own);
+  addWounds(g, torso, head, arms, elbows, G, R, own);
+  if (P) addElementLayer(g, torso, head, elbows, G, P, R, own);
+  const tierFx = addTier(g, torso, head, G, R, own);
+
+  /* vertexColors-biztonsági pass (a színattribútum nélküli mesh-ek fehéret kapnak) */
+  g.traverse(o => {
+    if (o.isMesh && (o.material === bodySkin || o.material === mossTone || o.material === paleMat) && !o.geometry.attributes.color) {
+      const n = o.geometry.attributes.position.count;
+      o.geometry.setAttribute('color', new T3.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
+    }
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+  });
+
+  g.scale.setScalar(sc);
+
+  return {
+    g, legs, knees, ankles, arms, elbows, fists, head, jaw, eyes, weapon, tierFx,
+    torso: spineJ, pelvis: pelvisJ, torsoIn: torso,
+    bodySkin, eyeMat: eyeM, mossMat: mossTone, _mats: perMat,
+    genome: G, scale: sc,
+    bodyR: .80 * sc, bodyCY: 1.45 * sc, headCY: (2.50 + G.neckLen) * sc, headR: .46 * sc,
+    stuckArrows: [],
+    /* rugó-állapotok a másodlagos mozgáshoz (anim.secondary hajtja) */
+    _spr: { hy: { x: 0, v: 0 }, hx: { x: 0, v: 0 }, jaw: { x: 0, v: 0 }, wz: { x: 0, v: 0 }, gut: { x: 0, v: 0 } },
+  };
+}
+
+/* ------------------------------------------------------------------ FEJ ---- */
+function buildHead(head, G, R, bodySkin, paleMat, mossTone, eyeM, own, mossPass) {
+  const S = G.snout;
+  const shade  = own(std({ color: G.skinDeep, bumpMap: SKIN_N, bumpScale: .02 }));       // sötét árnyék-anyag: párkány, orrnyereg, orrlyuk
+  const socketMat = own(new T3.MeshBasicMaterial({ color: 0x07090c }));                  // fénytelen gödör -> a szem messziről is kiugrik
+  const gumMat = own(std({ color: 0x30140f, roughness: 1 }));
+
+  /* --- koponya --- */
+  let cran;
+  switch (G.skull) {
+    case 'block':   cran = mesh(jitter(new T3.DodecahedronGeometry(.44, 0), .07, .055), bodySkin, 0, 0, -.06, 1.12, .94, .98); break;   // tömbszerű, de nem kocka: szögletes szikla-koponya
+    case 'wedge':   cran = mesh(jitter(new T3.IcosahedronGeometry(.40, 1), .026, .02), bodySkin, 0, .01, -.02, .86, .82, 1.25); break;   // előre keskenyedő ék-koponya
+    case 'flat':    cran = mesh(jitter(new T3.IcosahedronGeometry(.42, 1), .026, .02), bodySkin, 0, -.02, -.06, 1.3, .68, 1.0); break;
+    case 'long':    cran = mesh(jitter(new T3.IcosahedronGeometry(.38, 1), .026, .02), bodySkin, 0, .02, -.04, .90, .95, 1.35); break;
+    case 'crested': cran = mesh(jitter(new T3.IcosahedronGeometry(.40, 1), .03, .025), bodySkin, 0, .02, -.06, .94, 1.18, 1.0); break;
+    default:        cran = mesh(jitter(new T3.IcosahedronGeometry(.40, 1), .024, .02), bodySkin, 0, 0, -.06, 1, .95, 1);
+  }
+  gradTint(cran.geometry, G.skinDeep, 0xffffff, -.42, .30); mottleTint(cran.geometry, G.mottle, .42, R.next);
+  if (mossPass) mossPass(cran.geometry, 1.4, 1.25);   // MOHA: a koponya teteje a legexponáltabb felület
+  head.add(cran);
+
+  /* --- POFA: előrenyúló, hogy legyen arca, ne csak egy gömb --- */
+  const mz = .30 * S;
+  const muzzle = mesh(jitter(new T3.IcosahedronGeometry(.215, 1), .018, .014), bodySkin, 0, -.10, mz, 1.06, .88, 1.55 * S);
+  gradTint(muzzle.geometry, G.skinDeep, 0xffffff, -.25, .18); head.add(muzzle);
+  /* orrnyereg: sötét sáv a párkánytól az orrig — ez köti össze az arcot */
+  { const b = mesh(jitter(new T3.BoxGeometry(.19, .15, .42 * S, 1, 1, 2), .022, .018), shade, 0, .01, .30 * S); b.rotation.x = -.10; head.add(b); }
+  [-1, 1].forEach(k => head.add(mesh(new T3.SphereGeometry(.045, 6, 5), shade, k * .075, -.055, .60 * S, 1, .8, .8)));   // orrlyuk
+
+  /* --- SZEMÖLDÖK-PÁRKÁNY: sötét, kiugró, árnyékot vet a szemre --- */
+  if (G.brow === 'plate') {
+    const b = mesh(jitter(new T3.BoxGeometry(.60, .16, .30, 3, 1, 2), .035, .022), shade, 0, .155, .18); b.rotation.x = .22; head.add(b);
+  } else if (G.brow === 'spiked') {
+    const b = mesh(jitter(new T3.BoxGeometry(.54, .13, .26, 2, 1, 2), .032, .02), shade, 0, .15, .19); b.rotation.x = .2; head.add(b);
+    const sp = []; for (let i = -2; i <= 2; i++) sp.push({ geo: new T3.ConeGeometry(.032, .14, 4), x: i * .12, y: .24, z: .16, rx: -.55 });
+    head.add(mesh(mergeGeos(sp), M.tusk, 0, 0, 0));
+  } else if (G.brow === 'ridged') {
+    [-1, 1].forEach(k => { const b = mesh(jitter(new T3.BoxGeometry(.27, .13, .27, 1, 1, 2), .03, .02), shade, k * .16, .16, .18); b.rotation.z = -k * .24; b.rotation.x = .22; head.add(b); });
+  } else {
+    const b = mesh(jitter(new T3.BoxGeometry(.56, .17, .28, 2, 1, 2), .04, .026), shade, 0, .15, .18); b.rotation.x = .18; head.add(b);
+  }
+
+  /* --- SZEMEK: fénytelen gödör + izzó gömb + pupilla + halo --- */
+  const eyes = [];
+  eyeLayout(G.eyeCount).forEach(pt => {
+    const es = G.eyeSize * pt.s;
+    /* gödör: nagy, fénytelen üreg — a szem BENNE ül, nem rajta */
+    head.add(mesh(new T3.SphereGeometry(es * 1.45, 9, 8), socketMat, pt.x, pt.y, pt.z - .01, 1.1, 1.0, .55));
+    const e = mesh(new T3.SphereGeometry(es * .95, 9, 8), eyeM, pt.x, pt.y, pt.z + es * .25); head.add(e); eyes.push(e); enableBloom(e);
+    if (G.pupil !== 'none') {
+      const pm = own(new T3.MeshBasicMaterial({ color: 0x06040a }));
+      head.add(G.pupil === 'slit'
+        ? mesh(new T3.BoxGeometry(es * .22, es * 1.3, es * .3), pm, pt.x, pt.y, pt.z + es * .95)
+        : mesh(new T3.SphereGeometry(es * .38, 7, 6), pm, pt.x, pt.y, pt.z + es * .9));
+    }
+    const sp = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: eyeM.emissive.getHex(), transparent: true, opacity: .5, depthWrite: false, blending: T3.AdditiveBlending }));
+    sp.scale.setScalar(es * 4.2); sp.position.set(pt.x, pt.y, pt.z + .05); head.add(sp); enableBloom(sp);
+  });
+  head.userData.eyes = eyes;
+
+  /* --- ÁLLKAPOCS (nyitható Group) --- */
+  const jaw = new T3.Group(); jaw.position.set(0, -.26, .14); head.add(jaw); head.userData.jaw = jaw;
+  const jw = G.jawKind === 'wide' ? 1.45 : G.jawKind === 'lantern' ? 1.22 : 1.12;
+  const jd = G.jawKind === 'hanging' ? .92 : .62;
+  const jz = .22 * S;
+  jaw.add(mesh(jitter(new T3.IcosahedronGeometry(.195, 1), .016, .013), bodySkin, 0, -.02, jz, jw, jd, 1.45 * S));
+  jaw.add(mesh(new T3.SphereGeometry(.17, 9, 7), gumMat, 0, .05, jz - .02, jw * .82, .55, 1.15 * S));     // sötét szájüreg
+  const low = []; for (let i = -2; i <= 2; i++) low.push({ geo: new T3.ConeGeometry(.036, .13, 4), x: i * .075 * jw, y: .07, z: (.40 - Math.abs(i) * .035) * S });
+  jaw.add(mesh(mergeGeos(low), M.tusk, 0, 0, 0));
+  const up = []; for (let i = -2; i <= 2; i++) up.push({ geo: new T3.ConeGeometry(.034, .12, 4), x: i * .073 * jw, y: -.185, z: (.50 - Math.abs(i) * .035) * S, rx: Math.PI });
+  head.add(mesh(mergeGeos(up), M.tusk, 0, 0, 0));
+
+  addTusks(head, jaw, G, S);
+
+  /* --- FÜLEK --- */
+  if (G.ear !== 'none') {
+    const L = G.earLen;
+    [-1, 1].forEach(k => {
+      if (G.ear === 'torn' && k > 0 && G.wounds.indexOf('tornEar') >= 0) return;
+      let e;
+      if (G.ear === 'bat') {
+        e = mesh(new T3.ConeGeometry(.12, .60 * Math.max(.8, L), 6), bodySkin, k * .40, .06, -.06);
+        const inner = mesh(new T3.ConeGeometry(.06, .50 * Math.max(.8, L), 5), paleMat, k * .40, .06, -.03);
+        inner.rotation.z = -k * 1.3; inner.rotation.x = -.18; head.add(inner);
+      } else if (G.ear === 'fin') {
+        e = mesh(jitter(new T3.CircleGeometry(.26 * Math.max(.7, L), 5), .045, .03), own(std({ color: G.skinPale, roughness: .9, side: T3.DoubleSide })), k * .40, .09, -.08);
+        e.rotation.y = k * 1.2;
+      } else if (G.ear === 'droop') {
+        e = mesh(new T3.ConeGeometry(.11, .46 * L, 6), bodySkin, k * .38, -.04, -.06); e.rotation.z = -k * 2.2;
+      } else if (G.ear === 'stub') {
+        e = mesh(jitter(new T3.IcosahedronGeometry(.12, 0), .022, .02), bodySkin, k * .37, .06, -.06, 1, 1.3, .7);
+      } else {
+        e = mesh(jitter(new T3.ConeGeometry(.11, .38 * L, 5), .035, .025), bodySkin, k * .40, .06, -.06);
+      }
+      if (G.ear !== 'fin' && G.ear !== 'stub') { e.rotation.z = e.rotation.z || -k * 1.3; e.rotation.x = -.2; }
+      head.add(e);
+    });
+  }
+
+  /* --- moha-sapka + szemölcsök --- */
+  if (G.moss > .45) head.add(mesh(jitter(new T3.IcosahedronGeometry(.15, 0), .04, .035), mossTone, R.range(-.2, .2), .25, -.22, 1.2, .7, 1.1));
+  for (let i = 0; i < 3; i++) head.add(mesh(new T3.SphereGeometry(.026 + R.range(0, .02), 6, 5), shade, R.range(-.16, .16), R.range(-.14, .0), (.42 + R.range(0, .16)) * S));
+}
+
+function eyeLayout(n) {
+  if (n === 1) return [{ x: 0, y: .04, z: .33, s: 1.8 }];
+  if (n === 3) return [{ x: -.175, y: .03, z: .30, s: 1 }, { x: .175, y: .03, z: .30, s: 1 }, { x: 0, y: .20, z: .28, s: .7 }];
+  if (n === 4) return [{ x: -.19, y: .04, z: .29, s: .95 }, { x: .19, y: .04, z: .29, s: .95 }, { x: -.10, y: .21, z: .27, s: .58 }, { x: .10, y: .21, z: .27, s: .58 }];
+  return [{ x: -.175, y: .03, z: .30, s: 1 }, { x: .175, y: .03, z: .30, s: 1 }];
+}
+
+function addTusks(head, jaw, G, S) {
+  const L = G.tuskLen; S = S || 1;
+  if (G.tusk === 'none') return;
+  if (G.tusk === 'up' || G.tusk === 'sabre') {
+    const big = G.tusk === 'sabre' ? 1.85 : 1;
+    [-1, 1].forEach(s => {
+      const t = mesh(new T3.ConeGeometry(.055 * big, .28 * L * big, 5), M.tusk, s * .155, .08, .30 * S);
+      t.rotation.x = -.42; t.rotation.z = s * .16; jaw.add(t);
+    });
+  } else if (G.tusk === 'down') {
+    [-1, 1].forEach(s => { const t = mesh(new T3.ConeGeometry(.042, .21 * L, 5), M.tusk, s * .155, -.16, .42 * S); t.rotation.x = .22; head.add(t); });
+  } else if (G.tusk === 'cluster') {
+    const c = [];
+    [-1, 1].forEach(s => {
+      c.push({ geo: new T3.ConeGeometry(.05, .25 * L, 5), x: s * .17, y: .07, z: .28 * S, rx: -.45, rz: s * .22 });
+      c.push({ geo: new T3.ConeGeometry(.034, .17 * L, 5), x: s * .09, y: .06, z: .36 * S, rx: -.28, rz: s * .48 });
+    });
+    jaw.add(mesh(mergeGeos(c), M.tusk, 0, 0, 0));
+  } else if (G.tusk === 'broken') {
+    const t = mesh(new T3.ConeGeometry(.062, .30 * L, 5), M.tusk, -.155, .08, .30 * S); t.rotation.x = -.45; t.rotation.z = -.18; jaw.add(t);
+    jaw.add(mesh(new T3.CylinderGeometry(.055, .062, .08, 5), M.tusk, .155, .05, .30 * S));   // letört csonk
+  }
+}
+
+/* ---------------------------------------------------------------- SZARVAK -- */
+function addHorns(head, G, R, own) {
+  const L = G.hornLen;
+  const broken = G.wounds.indexOf('brokenHorn') >= 0;
+  const items = [];
+  const add = (o) => items.push(o);
+  switch (G.horn) {
+    case 'spike':
+      [-1, 1].forEach(s => { add({ geo: new T3.ConeGeometry(.07, .44 * L, 6), x: s * .16, y: .27, z: -.04, rx: -.3, rz: s * .3 }); add({ geo: new T3.ConeGeometry(.04, .21 * L, 6), x: s * .22, y: .46, z: -.11, rx: -.45, rz: s * .52 }); });
+      break;
+    case 'ram':
+      [-1, 1].forEach(s => { for (let i = 0; i < 4; i++) { const a = i / 3; add({ geo: new T3.ConeGeometry(.085 - i * .017, .22 * L, 6), x: s * (.18 + a * .14), y: .26 - a * .16, z: -.06 - a * .12, rx: -.2 + a * 1.5, rz: s * (.5 + a * .7) }); } });
+      break;
+    case 'antler':
+      [-1, 1].forEach(s => {
+        add({ geo: new T3.ConeGeometry(.055, .58 * L, 5), x: s * .20, y: .28, z: -.06, rx: -.42, rz: s * .6 });
+        add({ geo: new T3.ConeGeometry(.033, .26 * L, 5), x: s * .30, y: .48, z: .06, rx: .45, rz: s * .7 });
+        add({ geo: new T3.ConeGeometry(.028, .21 * L, 5), x: s * .28, y: .46, z: -.18, rx: -.6, rz: s * .55 });
+        add({ geo: new T3.ConeGeometry(.032, .27 * L, 5), x: s * .36, y: .62, z: -.08, rx: -.25, rz: s * .5 });
+      });
+      break;
+    case 'crown':
+      for (let i = 0; i < 6; i++) { const a = -1.2 + i * .48; add({ geo: new T3.ConeGeometry(.045, (.30 + Math.sin(i) * .12) * L, 5), x: Math.sin(a) * .28, y: .30, z: Math.cos(a) * .18 - .08, rx: -.35 + Math.cos(a) * .2, rz: Math.sin(a) * .8 }); }
+      break;
+    case 'single':
+      add({ geo: new T3.ConeGeometry(.085, .52 * L, 6), x: R.range(-.05, .05), y: .30, z: .10, rx: -.18 });
+      break;
+    case 'backswept':
+      [-1, 1].forEach(s => { for (let i = 0; i < 3; i++) add({ geo: new T3.ConeGeometry(.065 - i * .015, .26 * L, 6), x: s * (.15 + i * .04), y: .28 - i * .05, z: -.06 - i * .18, rx: -1.0 - i * .25, rz: s * .18 }); });
+      break;
+    case 'stub':
+      [-1, 1].forEach(s => add({ geo: jitter(new T3.ConeGeometry(.085, .17 * L, 6), .02, .01), x: s * .17, y: .26, z: -.02, rx: -.2, rz: s * .22 }));
+      break;
+    default: return;
+  }
+  if (!items.length) return;
+  if (broken) items.splice(0, Math.max(1, (items.length / 2) | 0));   // fél szarv letörve
+  const mat = own(std({ color: 0xd8ccb4, roughness: .55, vertexColors: true }));
+  head.add(mesh(gradTint(mergeGeos(items), 0x6b5a44, 0xffffff, .15, .75), mat, 0, 0, 0));
+}
+
+/* ------------------------------------------------------------------ TARAJ -- */
+function addCrest(g, torso, G, R, mossTone) {
+  if (G.crest === 'none') return;
+  const items = [];
+  if (G.crest === 'spines') {
+    const n = 4 + R.int(0, 4);
+    for (let i = 0; i < n; i++) items.push({ geo: new T3.ConeGeometry(.075, .30 + R.range(0, .20), 5), x: R.range(-.05, .05), y: 1.12 + i * (1.05 / n), z: -.38 - R.range(0, .07), rx: -.35 });
+    torso.add(mesh(gradTint(mergeGeos(items), 0x5c4c38, 0xffffff, 1.1, 2.2), M.tuskV, 0, 0, 0));
+  } else if (G.crest === 'fin') {
+    const pts = [];
+    for (let i = 0; i <= 5; i++) { const t = i / 5; pts.push({ geo: new T3.CircleGeometry(.11 + Math.sin(t * Math.PI) * .21, 5), y: 1.12 + t * 1.0, z: -.40, ry: Math.PI / 2 }); }
+    const finMat = std({ color: 0x7a8f6e, roughness: .95, side: T3.DoubleSide, vertexColors: true });
+    torso.add(mesh(gradTint(mergeGeos(pts), 0x3d4c36, 0xffffff, 1.1, 2.2), finMat, 0, 0, 0));
+  } else if (G.crest === 'plates') {
+    for (let i = 0; i < 5; i++) items.push({ geo: jitter(new T3.IcosahedronGeometry(.32 - i * .04, 1), .06, .05), x: R.range(-.06, .06), y: 2.02 - i * .30, z: -.46 - R.range(0, .09), sx: 1.3, sy: .5, sz: 1.0, rx: -.35 });
+    torso.add(mesh(gradTint(mergeGeos(items), 0x6d7787, 0xffffff, .8, 2.2), M.rockV, 0, 0, 0));
+  } else if (G.crest === 'bristle') {
+    const n = 10 + R.int(0, 8);
+    for (let i = 0; i < n; i++) items.push({ geo: new T3.ConeGeometry(.024, .17 + R.range(0, .13), 4), x: R.range(-.15, .15), y: 1.20 + R.range(0, .95), z: -.38 - R.range(0, .1), rx: -.5 + R.range(-.3, .3), rz: R.range(-.4, .4) });
+    torso.add(mesh(mergeGeos(items), M.hair, 0, 0, 0));
+  } else if (G.crest === 'shroomRow') {
+    const n = 3 + R.int(0, 3);
+    for (let i = 0; i < n; i++) {
+      const y = 1.22 + i * (.9 / n), x = R.range(-.13, .13);
+      torso.add(mesh(new T3.CylinderGeometry(.028, .04, .16, 6), M.stem, x, y, -.40));
+      torso.add(mesh(new T3.SphereGeometry(.10 + R.range(0, .05), 9, 6, 0, 6.28, 0, Math.PI / 2), M.cap, x, y + .10, -.40, 1, .7, 1));
+    }
+  }
+}
+
+/* ------------------------------------------------------------- NÖVEDÉKEK -- */
+function addGrowths(g, torso, head, G, R, mossTone, own) {
+  for (const kind of G.growths) {
+    if (kind === 'glowShroom') {
+      const n = 1 + R.int(0, 2);
+      for (let i = 0; i < n; i++) {
+        const mg = new T3.Group();
+        const onHead = R.chance(.3);
+        mg.position.set(R.range(-.38, .38), onHead ? .30 : R.range(1.25, 2.0), onHead ? -.06 : -.34);
+        mg.scale.setScalar(R.range(.6, 1.15)); mg.rotation.set(R.range(-.5, .5), R.range(0, 6.28), R.range(-.5, .5));
+        mg.add(mesh(new T3.CylinderGeometry(.035, .05, .22, 6), M.stem, 0, .11, 0));
+        mg.add(mesh(new T3.SphereGeometry(.15, 10, 7, 0, 6.28, 0, Math.PI / 2), M.glowCap, 0, .24, 0, 1, .72, 1));
+        const sp = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: 0x7fe2ff, transparent: true, opacity: .7, depthWrite: false, blending: T3.AdditiveBlending }));
+        sp.scale.setScalar(.6); sp.position.y = .24; mg.add(sp); enableBloom(sp);
+        (onHead ? head : torso).add(mg);
+      }
+    } else if (kind === 'pustule') {
+      const pm = own(std({ color: 0xb6c95a, emissive: 0x7e9a2e, emissiveIntensity: .35, roughness: .45 }));
+      const pus = [], n = 4 + R.int(0, 4);
+      for (let i = 0; i < n; i++) {
+        const a = R.range(0, 6.28), r = R.range(.05, .24);
+        const py = R.range(1.20, 2.0), pz = -.22 - R.range(0, .26);
+        pus.push({ geo: new T3.IcosahedronGeometry(r, 1), x: Math.cos(a) * .46, y: py, z: pz, sy: .84 });
+        pus.push({ geo: new T3.ConeGeometry(r * .3, r * .6, 5), x: Math.cos(a) * .46, y: py - r * .8, z: pz, rx: Math.PI });
+      }
+      torso.add(mesh(mergeGeos(pus), pm, 0, 0, 0));
+    } else if (kind === 'crystal') {
+      const cl = [], n = 5 + R.int(0, 4);
+      for (let i = 0; i < n; i++) {
+        const a = R.range(0, 6.28), rr = R.range(.16, .34);
+        cl.push({ geo: gradTint(new T3.OctahedronGeometry(.11 + R.range(0, .09), 0), 0x5a626e, 0xffffff, -.15, .15), x: Math.cos(a) * rr, y: R.range(1.18, 2.05), z: -.12 - R.range(0, .30), sy: 1.6 + R.range(0, .9), rx: R.range(-.55, .15), rz: R.range(-.5, .5) });
+      }
+      torso.add(mesh(mergeGeos(cl), M.rockV, 0, 0, 0));
+    } else if (kind === 'bark') {
+      const pl = [], n = 4 + R.int(0, 3);
+      for (let i = 0; i < n; i++) {
+        const a = R.range(-1.2, 1.2);
+        pl.push({ geo: jitter(new T3.BoxGeometry(.30, .42, .10, 2, 2, 1), .05, .04), x: Math.sin(a) * .52, y: R.range(1.15, 2.0), z: Math.cos(a) * .32 - .06, ry: -a, rz: R.range(-.3, .3) });
+      }
+      torso.add(mesh(gradTint(mergeGeos(pl), 0x3c2a1c, 0xffffff, 1.0, 2.2), M.woodDarkV, 0, 0, 0));
+    } else if (kind === 'vine') {
+      const vm = own(std({ color: 0x55692f, roughness: .95 }));
+      for (let k = 0; k < 2 + R.int(0, 2); k++) {
+        const pts = []; const bx = R.range(-.4, .4), bz = R.range(-.4, .1);
+        for (let i = 0; i <= 6; i++) pts.push(new T3.Vector3(bx + Math.sin(i * .9) * .12, 2.05 - i * .24, bz + Math.cos(i * .7) * .10));
+        const tube = new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3(pts), 14, .022, 5, false), vm);
+        tube.castShadow = true; torso.add(tube);
+      }
+    } else if (kind === 'shelf') {
+      const sh = [], n = 2 + R.int(0, 3);
+      for (let i = 0; i < n; i++) {
+        const a = R.range(-1.4, 1.4);
+        sh.push({ geo: new T3.CylinderGeometry(R.range(.13, .24), R.range(.10, .19), .05, 9, 1, false, 0, Math.PI), x: Math.sin(a) * .50, y: R.range(1.2, 2.05), z: Math.cos(a) * .36 - .05, ry: -a + Math.PI, rz: R.range(-.25, .25) });
+      }
+      torso.add(mesh(gradTint(mergeGeos(sh), 0x6b5a3c, 0xffffff, 1.1, 2.2), M.woodDarkV, 0, 0, 0));
+    } else if (kind === 'lichen') {
+      const lc = [], n = 4 + R.int(0, 4);
+      for (let i = 0; i < n; i++) { const a = R.range(0, 6.28), r = R.range(.12, .2); lc.push({ geo: jitter(new T3.IcosahedronGeometry(r, 0), r * .3, r * .2), x: Math.cos(a) * .38, y: R.range(1.2, 2.05), z: Math.sin(a) * .30 - .06, sx: 1.2, sy: .55, sz: 1.2 }); }
+      torso.add(mesh(mergeGeos(lc), M.lichen, 0, 0, 0));
+    }
+  }
+}
+
+/* ------------------------------------------------------------- FELSZERELÉS -- */
+function addGear(g, torso, head, arms, elbows, G, R, own) {
+  const dye = own(std({ color: hsl(R.range(10, 45), R.range(.15, .4), R.range(.18, .30)), roughness: 1 }));
+  for (const item of G.gear) {
+    if (item === 'loincloth') {
+      torso.add(mesh(new T3.CylinderGeometry(.42, .52, .36, 9), dye, 0, .98, 0));
+      const f = mesh(jitter(new T3.BoxGeometry(.34, .44, .05, 2, 2, 1), .04, .03), dye, 0, .82, .40); f.rotation.x = .12; torso.add(f);
+    } else if (item === 'belt') {
+      const b = mesh(new T3.TorusGeometry(.46, .045, 5, 14), M.leather, 0, 1.14, 0, 1, 1, .92); b.rotation.x = Math.PI / 2; torso.add(b);
+      torso.add(mesh(new T3.BoxGeometry(.13, .13, .05), M.gold, 0, 1.14, .44));
+      torso.add(mesh(new T3.SphereGeometry(.13, 8, 7), M.leather, .38, 1.02, .30, 1, 1.2, .7));
+    } else if (item === 'pauldron') {
+      const s = R.chance(.5) ? 1 : -1;
+      const p = mesh(jitter(new T3.SphereGeometry(.36, 9, 6, 0, 6.28, 0, Math.PI / 2), .04, .03), R.chance(.5) ? M.wood : M.rock, s * .60, 2.02, -.02);
+      p.rotation.z = -s * .25; torso.add(p);
+      const st = []; for (let i = 0; i < 3; i++) st.push({ geo: new T3.ConeGeometry(.042, .16, 5), x: s * (.48 + i * .09), y: 2.18, z: -.10 + i * .09, rz: -s * .3 });
+      torso.add(mesh(mergeGeos(st), M.tusk, 0, 0, 0));
+      const strap = mesh(new T3.BoxGeometry(.09, .78, .04), M.leather, s * .20, 1.68, .40); strap.rotation.z = s * .5; torso.add(strap);
+    } else if (item === 'bracers') {
+      ['L', 'R'].forEach(k => {
+        elbows[k].add(mesh(new T3.CylinderGeometry(.145, .16, .20, 8), M.leather, 0, -.30, .02));
+        const t2 = mesh(new T3.TorusGeometry(.15, .018, 5, 10), M.rope, 0, -.20, .02); t2.rotation.x = Math.PI / 2; elbows[k].add(t2);
+      });
+    } else if (item === 'necklace') {
+      const bead = [];
+      for (let i = -3; i <= 3; i++) {
+        const x = i * .10, y = 2.06 - Math.abs(i) * .035, z = .30 - Math.abs(i) * .045;
+        if (Math.abs(i) === 1 || Math.abs(i) === 3) bead.push({ geo: new T3.ConeGeometry(.032, .12, 4), x, y: y - .09, z, rx: Math.PI });
+        else bead.push({ geo: new T3.SphereGeometry(.035, 6, 5), x, y, z });
+      }
+      torso.add(mesh(mergeGeos(bead), M.tuskV, 0, 0, 0));
+    } else if (item === 'noseRing') {
+      const r = mesh(new T3.TorusGeometry(.075, .016, 6, 14), M.gold, 0, -.14, .46); r.rotation.y = Math.PI / 2; head.add(r);
+    } else if (item === 'armband') {
+      const s = R.chance(.5) ? 'L' : 'R';
+      const ab = mesh(new T3.TorusGeometry(.175, .028, 5, 11), M.gold, 0, -.26, 0); ab.rotation.x = Math.PI / 2; arms[s].add(ab);
+    } else if (item === 'bandage') {
+      const wrapMat = own(std({ color: 0xb6ac92, roughness: 1 }));
+      const k = R.chance(.5) ? 'L' : 'R';
+      for (let i = 0; i < 4; i++) { const t = mesh(new T3.TorusGeometry(.145, .026, 5, 11), wrapMat, 0, -.14 - i * .08, .02); t.rotation.x = Math.PI / 2 + R.range(-.2, .2); elbows[k].add(t); }
+    } else if (item === 'warpaint') {
+      const pm = own(std({ color: R.pick([0xd8dee8, 0xc23a2a, 0x2a2f3a, 0xe0b23a]), roughness: 1 }));
+      for (let i = 0; i < 4; i++) { const b = mesh(new T3.BoxGeometry(.032, .24, .02), pm, -.27 + i * .18, .02, .27); b.rotation.z = R.range(-.15, .15); b.rotation.x = .12; head.add(b); }
+      const ch = mesh(new T3.BoxGeometry(.44, .05, .02), pm, 0, 1.62, .44); ch.rotation.z = R.range(-.3, .3); torso.add(ch);
+    } else if (item === 'trophy') {
+      const sk = new T3.Group(); sk.position.set(R.range(-.28, .28), 1.06, .44); sk.rotation.set(.3, R.range(-.5, .5), R.range(-.4, .4)); sk.scale.setScalar(.55);
+      sk.add(mesh(jitter(new T3.IcosahedronGeometry(.22, 1), .02, .02), M.tusk, 0, 0, 0, 1, .9, 1.05));
+      sk.add(mesh(new T3.SphereGeometry(.07, 6, 5), M.mouth, -.09, .02, .19));
+      sk.add(mesh(new T3.SphereGeometry(.07, 6, 5), M.mouth, .09, .02, .19));
+      sk.add(mesh(new T3.BoxGeometry(.20, .05, .02), M.tusk, 0, -.16, .18));
+      torso.add(sk);
+    } else if (item === 'backSpikes') {
+      const sp = [];
+      for (let i = 0; i < 5; i++) sp.push({ geo: new T3.ConeGeometry(.052, .28, 5), x: R.range(-.32, .32), y: R.range(1.3, 2.05), z: -.48, rx: -1.2 });
+      torso.add(mesh(mergeGeos(sp), M.rockV, 0, 0, 0));
+    }
+  }
+}
+
+/* ---------------------------------------------------------------- FEGYVER -- */
+function addWeapon(fists, G, R, own) {
+  const kind = G.weapon; if (kind === 'none') return null;
+  const wear = G.weaponWear;
+  const W = new T3.Group();
+  const R_ = fists.R, L_ = fists.L;
+  if (!R_) return null;
+
+  const lash = (parent, y, r) => { const t = mesh(new T3.TorusGeometry(r, .022, 5, 10), M.cloth, 0, y, 0); t.rotation.x = Math.PI / 2; parent.add(t); };
+
+  if (kind === 'club') {
+    W.position.set(.19, -.04, .14); W.rotation.set(1.11, 0, -.48);
+    const haft = mesh(new T3.CylinderGeometry(.055, .085, .95, 7), M.wood, 0, .30, 0); W.add(haft);
+    haft.add(mesh(new T3.SphereGeometry(.075, 7, 6), M.woodDark, 0, -.50, 0));
+    const hd = new T3.Group(); hd.position.set(0, .62, 0); haft.add(hd);
+    hd.add(mesh(jitter(new T3.IcosahedronGeometry(.21, 1), .055, .05), M.woodDark, 0, 0, 0, 1, 1.15, 1));
+    hd.add(mesh(mergeGeos([
+      { geo: new T3.ConeGeometry(.055, .19, 5), x: .18, y: .06, z: .02, rz: -1.2 },
+      { geo: new T3.ConeGeometry(.055, .19, 5), x: -.15, y: 0, z: .09, rz: 1.1, rx: .5 },
+      { geo: new T3.ConeGeometry(.055, .19, 5), x: .02, y: .09, z: -.16, rx: -1.2 },
+      { geo: new T3.ConeGeometry(.05, .16, 5), x: -.02, y: -.10, z: .14, rx: 1.3 },
+    ]), M.tusk, 0, 0, 0));
+    if (wear > .4) hd.add(mesh(new T3.SphereGeometry(.11, 7, 6), M.moss, -.07, .10, .07, 1, .7, 1));
+    lash(haft, -.26, .080); lash(haft, -.34, .084);
+  } else if (kind === 'maul') {
+    W.position.set(.22, -.04, .14); W.rotation.set(.60, 0, -.44);   // a buzogányfej ELŐRE dől, kinyúlva a törzs mellé
+    const haft = mesh(new T3.CylinderGeometry(.085, .11, 1.35, 7), M.woodDark, 0, .45, 0); W.add(haft);
+    const hd = mesh(jitter(new T3.IcosahedronGeometry(.36, 1), .09, .08), M.rockV, 0, .78, 0);
+    gradTint(hd.geometry, 0x646d7c, 0xffffff, -.4, .4); haft.add(hd);
+    hd.add(mesh(mergeGeos([{ geo: new T3.ConeGeometry(.07, .22, 5), x: .30, y: .04, rz: -1.4 }, { geo: new T3.ConeGeometry(.07, .22, 5), x: -.30, y: -.04, rz: 1.4 }]), M.tusk, 0, 0, 0));
+    lash(haft, .52, .11); lash(haft, -.30, .10);
+  } else if (kind === 'daggers') {
+    [L_, R_].forEach((f, i) => {
+      const d = new T3.Group(); d.position.set(i ? -.10 : .10, -.04, .16); d.rotation.set(.53, 0, i ? .22 : -.22);
+      d.add(mesh(new T3.CylinderGeometry(.028, .034, .18, 6), M.leather, 0, -.07, 0));
+      const bl = mesh(new T3.ConeGeometry(.055, .44, 4), M.tusk, 0, .24, 0, 1, 1, .22); d.add(bl);
+      d.add(mesh(new T3.BoxGeometry(.13, .022, .04), M.woodDark, 0, .02, 0));
+      f.add(d);
+    });
+    return W;
+  } else if (kind === 'spear') {
+    W.position.set(.16, -.04, .14); W.rotation.set(.90, 0, -.24);   // a lándzsa ELŐRESZEGEZVE
+    const haft = mesh(new T3.CylinderGeometry(.036, .046, 1.9, 7), M.wood, 0, .55, 0); W.add(haft);
+    const tip = mesh(new T3.ConeGeometry(.075, .34, 4), M.tusk, 0, 1.10, 0, 1, 1, .38); haft.add(tip);
+    for (let i = 0; i < 3; i++) { const fe = mesh(new T3.ConeGeometry(.03, .14, 4), M.feather, R.range(-.05, .05), .82 - i * .06, R.range(-.05, .05)); fe.rotation.x = R.range(.5, 1.2); haft.add(fe); }
+    lash(haft, .92, .05);
+  } else if (kind === 'axe') {
+    W.position.set(.19, -.04, .14); W.rotation.set(1.11, 0, -.48);
+    const haft = mesh(new T3.CylinderGeometry(.05, .07, 1.0, 7), M.wood, 0, .32, 0); W.add(haft);
+    const bladeMat = own(std({ color: 0x8b93a2, roughness: .6, metalness: .2, flatShading: true }));
+    const blade = mesh(jitter(new T3.BoxGeometry(.10, .40, .34, 1, 2, 2), .04, .03), bladeMat, .17, .66, 0);
+    blade.rotation.z = -.16; haft.add(blade);
+    haft.add(mesh(new T3.BoxGeometry(.07, .16, .10), M.rock, -.09, .60, 0));
+    lash(haft, .50, .075);
+  } else if (kind === 'staff') {
+    W.position.set(.26, -.04, .14); W.rotation.set(.20, 0, -.16);   // a bot majdnem FÜGGŐLEGESEN áll a marokban
+    const staffMat = own(new T3.MeshStandardMaterial({ color: 0x16414f, emissive: 0x36c5ff, emissiveIntensity: 1.5, roughness: .5, flatShading: true }));
+    const haft = mesh(new T3.CylinderGeometry(.042, .055, 1.5, 7), M.wood, 0, .48, 0); W.add(haft);
+    const upper = mesh(new T3.CylinderGeometry(.034, .042, .55, 7), M.wood, .05, 1.0, .03); upper.rotation.z = .16; haft.add(upper);
+    const crystal = mesh(new T3.OctahedronGeometry(.19, 0), staffMat, .05, .38, 0); upper.add(crystal); enableBloom(crystal);
+    crystal.add(mesh(new T3.OctahedronGeometry(.09, 0), staffMat, 0, 0, 0, 1, 2.1, 1));
+    crystal.add(mesh(new T3.OctahedronGeometry(.075, 0), staffMat, .11, -.09, .02, 1, 1.5, 1));
+    const sp = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: 0x9fe3ff, transparent: true, opacity: .8, depthWrite: false, blending: T3.AdditiveBlending }));
+    sp.scale.setScalar(.9); crystal.add(sp); enableBloom(sp);
+    haft.add(mesh(new T3.SphereGeometry(.07, 7, 6), M.moss, 0, .10, 0, 1, .6, 1));
+    haft.add(mesh(new T3.ConeGeometry(.05, .13, 6), M.tusk, 0, -.78, 0));
+    W.userData.crystal = crystal;
+  } else if (kind === 'flail') {
+    W.position.set(.19, -.04, .14); W.rotation.set(1.01, 0, -.46);
+    const haft = mesh(new T3.CylinderGeometry(.045, .06, .62, 7), M.wood, 0, .2, 0); W.add(haft);
+    /* a lánc a nyél végétől a golyóig ÉR — korábban rövidebb volt, ezért a
+       tüskés golyó szabadon lógó, levált tárgynak látszott */
+    const ch = []; for (let i = 0; i < 9; i++) ch.push({ geo: new T3.TorusGeometry(.040, .014, 4, 8), y: .34 + i * .066, rx: i % 2 ? 0 : Math.PI / 2 });
+    haft.add(mesh(mergeGeos(ch), M.metal, 0, 0, 0));
+    const ball = mesh(jitter(new T3.IcosahedronGeometry(.19, 0), .04, .04), M.rock, 0, 1.02, 0); haft.add(ball);
+    const sp = []; for (let i = 0; i < 6; i++) { const a = R.range(0, 6.28), b = R.range(-1, 1); sp.push({ geo: new T3.ConeGeometry(.035, .16, 4), x: Math.cos(a) * .17, y: b * .16, z: Math.sin(a) * .17, rx: -b * 1.2, rz: -Math.cos(a) * 1.3 }); }
+    ball.add(mesh(mergeGeos(sp), M.tusk, 0, 0, 0));
+  } else if (kind === 'trunk') {
+    W.position.set(.24, -.04, .14); W.rotation.set(.73, .10, -.50);
+    /* A nagy kétkezes törzs a VÁLLON pihen (pozitív x-dőlés), nem a has előtt
+       keresztben — így a sziluett tiszta marad, és a csapás a válltól indul. */
+    const tr = mesh(jitter(new T3.CylinderGeometry(.13, .20, 1.30, 8), .04, .035), M.woodDark, 0, .48, 0); W.add(tr);
+    for (let i = 0; i < 4; i++) { const br = mesh(new T3.CylinderGeometry(.033, .05, .28, 5), M.woodDark, R.range(-.18, .18), R.range(.2, 1.0), R.range(-.18, .18)); br.rotation.set(R.range(-1, 1), 0, R.range(-1, 1)); tr.add(br); }
+    tr.add(mesh(new T3.SphereGeometry(.17, 8, 6), M.moss, .08, .60, .07, 1, .6, 1));
+  } else if (kind === 'boulder') {
+    W.position.set(.06, .02, .30); W.rotation.set(0, 0, 0);
+    const b = mesh(jitter(new T3.DodecahedronGeometry(.30, 0), .09, .08), M.rockV, 0, 0, 0);
+    gradTint(b.geometry, 0x5b6474, 0xffffff, -.4, .4); W.add(b);
+    b.add(mesh(new T3.SphereGeometry(.14, 8, 6), M.moss, .07, .21, .04, 1.2, .5, 1.2));
+  } else if (kind === 'shield') {
+    const sh = new T3.Group(); sh.position.set(0, -.06, .16); sh.rotation.set(-.2, 0, .2);
+    sh.add(mesh(jitter(new T3.CylinderGeometry(.36, .36, .08, 8), .04, .02), M.woodDark, 0, 0, 0));
+    sh.add(mesh(new T3.SphereGeometry(.11, 8, 6), M.metal, 0, 0, .08));
+    for (let i = 0; i < 5; i++) { const n = mesh(new T3.SphereGeometry(.03, 5, 4), M.metal, Math.cos(i * 1.26) * .27, Math.sin(i * 1.26) * .27, .06); sh.add(n); }
+    L_.add(sh);
+    return W;
+  }
+  R_.add(W);
+  return W;
+}
+
+/* ------------------------------------------------------------- SÉRÜLÉSEK -- */
+function addWounds(g, torso, head, arms, elbows, G, R, own) {
+  for (const w of G.wounds) {
+    if (w === 'scars') {
+      const n = 1 + R.int(0, 2);
+      for (let i = 0; i < n; i++) {
+        const y = R.range(1.25, 2.0), x = R.range(-.32, .32);
+        const s = mesh(new T3.CylinderGeometry(.016, .016, R.range(.22, .45), 5), M.scar, x, y, .42);
+        s.rotation.z = R.range(-1, 1); s.rotation.x = .2; s.castShadow = false; torso.add(s);
+        for (let k = 0; k < 4; k++) { const st = mesh(new T3.BoxGeometry(.07, .012, .012), M.scar, x + R.range(-.08, .08), y - .12 + k * .06, .43); st.rotation.z = -.85; st.castShadow = false; torso.add(st); }
+      }
+    } else if (w === 'missingEye') {
+      const s = R.chance(.5) ? -1 : 1;
+      const patch = mesh(jitter(new T3.IcosahedronGeometry(.11, 0), .02, .02), M.cloth, s * .15, .05, .31, 1, 1, .5);
+      head.add(patch);
+      const strap = mesh(new T3.TorusGeometry(.30, .015, 5, 14), M.cloth, 0, .06, .02); strap.rotation.y = Math.PI / 2; strap.rotation.z = .3; head.add(strap);
+    } else if (w === 'patches') {
+      const bald = own(std({ color: G.skinDeep, roughness: 1 }));
+      for (let i = 0; i < 3; i++) torso.add(mesh(jitter(new T3.IcosahedronGeometry(R.range(.10, .18), 0), .03, .02), bald, R.range(-.38, .38), R.range(1.2, 1.95), R.range(.28, .42), 1, 1, .35));
+    } else if (w === 'oldArrows') {
+      const n = 1 + R.int(0, 2);
+      for (let i = 0; i < n; i++) {
+        const a = R.range(-1.1, 1.1), tgt = R.chance(.25) ? head : torso;
+        const arr = makeStubArrow();
+        arr.position.set(Math.sin(a) * .44, tgt === head ? R.range(-.1, .2) : R.range(1.25, 1.98), Math.cos(a) * .38);
+        arr.rotation.set(R.range(-.4, .4), -a, R.range(-.3, .3));
+        tgt.add(arr);
+      }
+    } else if (w === 'stumpArm') {
+      /* a kéz már nem épült meg (lásd fist) — ide csak vér/kötés-gyűrű kell */
+      const b = mesh(new T3.TorusGeometry(.145, .03, 5, 11), own(std({ color: 0x8a2f22, roughness: 1 })), 0, -.40, .02);
+      b.rotation.x = Math.PI / 2; elbows.R.add(b);
+    }
+  }
+  /* kor: fakó zuzmó-lepedék az öregeken */
+  if (G.age > .7) {
+    const lc = [];
+    for (let i = 0; i < 5; i++) { const a = R.range(0, 6.28); lc.push({ geo: jitter(new T3.IcosahedronGeometry(R.range(.08, .15), 0), .03, .02), x: Math.cos(a) * .42, y: R.range(1.15, 2.05), z: Math.sin(a) * .34, sy: .5 }); }
+    torso.add(mesh(mergeGeos(lc), M.lichen, 0, 0, 0));
+  }
+}
+
+function makeStubArrow(el) {
+  const A = ARROW_EL[el] || ARROW_EL.base;
+  const a = new T3.Group();
+  const shaft = mesh(new T3.CylinderGeometry(.012, .014, .46, 6), M.arrowWood, 0, .23, 0); a.add(shaft);
+  a.add(mesh(new T3.TorusGeometry(.017, .005, 4, 9), std({ color: A.band, roughness: .6 }), 0, .30, 0)).rotation.x = Math.PI / 2;
+  const fm = std({ color: A.feather, roughness: .85, side: T3.DoubleSide });
+  [0, 1, 2].forEach(i => { const f = mesh(new T3.PlaneGeometry(.115, .05), fm, 0, .41, 0); f.rotation.y = i * (Math.PI * 2 / 3); f.rotation.x = .1; a.add(f); });
+  a.add(mesh(new T3.CylinderGeometry(.013, .010, .02, 6), M.tusk, 0, .455, 0));
+  a.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return a;
+}
+
+/* ------------------------------------------------------- ELEM — MÉLY RÉTEG -- */
+function addElementLayer(g, torso, head, arms, G, P, R, own) {   // arms = könyök-Group-ok
+  if (G.el === 'ice') {
+    const iceMat = own(new T3.MeshStandardMaterial({ color: P.status, emissive: P.core, emissiveIntensity: .45, roughness: .25, metalness: .1, flatShading: true, transparent: true, opacity: .88 }));   // --status-ice / --el-ice-core
+    const shards = [], n = 9 + R.int(0, 6);
+    for (let i = 0; i < n; i++) {
+      const a = R.range(0, 6.28), r = R.range(.26, .40);
+      shards.push({ geo: new T3.OctahedronGeometry(R.range(.07, .17), 0), x: Math.cos(a) * r, y: R.range(1.10, 2.10), z: Math.sin(a) * r * .8, sy: R.range(1.3, 2.4), rx: R.range(-.6, .6), rz: R.range(-.6, .6) });
+    }
+    torso.add(mesh(mergeGeos(shards), iceMat, 0, 0, 0));
+    const ic = []; for (let i = 0; i < 4; i++) ic.push({ geo: new T3.ConeGeometry(.028, R.range(.12, .24), 4), x: R.range(-.18, .18), y: -.24, z: R.range(.22, .38), rx: Math.PI });
+    head.add(mesh(mergeGeos(ic), iceMat, 0, 0, 0));
+    ['L', 'R'].forEach(k => arms[k].add(mesh(new T3.OctahedronGeometry(.115, 0), iceMat, 0, -.20, .06, 1, 1.5, 1)));
+  } else if (G.el === 'fire') {
+    const crackMat = own(new T3.MeshBasicMaterial({ color: P.mid, transparent: true, opacity: .95, depthWrite: false, blending: T3.AdditiveBlending }));   // --el-fire-mid
+    const cr = [], n = 12 + R.int(0, 8);
+    for (let i = 0; i < n; i++) {
+      const a = R.range(-1.5, 1.5);                       // főleg elöl/oldalt, a látható felületen
+      cr.push({ geo: new T3.BoxGeometry(.024, R.range(.12, .30), .024), x: Math.sin(a) * .44, y: R.range(1.10, 2.05), z: Math.cos(a) * .38, ry: -a, rz: R.range(-.5, .5) });
+    }
+    const cm = mesh(mergeGeos(cr), crackMat, 0, 0, 0); cm.castShadow = false; torso.add(cm); enableBloom(cm);
+    for (let i = 0; i < 4; i++) {
+      const sp = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: P.glow, transparent: true, opacity: .55, depthWrite: false, blending: T3.AdditiveBlending }));   // --el-fire-glow
+      sp.scale.setScalar(R.range(.4, .8)); sp.position.set(R.range(-.42, .42), R.range(1.3, 2.1), R.range(-.3, .3)); torso.add(sp); enableBloom(sp);
+    }
+    const emb = own(std({ color: P.deep, emissive: P.core, emissiveIntensity: .8, roughness: .9 }));   // --el-fire-deep (korom) + --el-fire-core
+    head.add(mesh(jitter(new T3.IcosahedronGeometry(.16, 0), .04, .03), emb, R.range(-.2, .2), .22, -.14, 1.2, .5, 1));
+  } else if (G.el === 'poison') {
+    const gm = own(std({ color: P.mid, emissive: P.core, emissiveIntensity: .5, roughness: .35 }));   // --el-poison-mid / -core
+    const bl = [], n = 7 + R.int(0, 5);
+    for (let i = 0; i < n; i++) {
+      const a = R.range(0, 6.28), r = R.range(.05, .17);
+      const by = R.range(1.15, 2.05);
+      bl.push({ geo: new T3.IcosahedronGeometry(r, 1), x: Math.cos(a) * .46, y: by, z: Math.sin(a) * .40, sy: .9 });
+      bl.push({ geo: new T3.ConeGeometry(r * .35, r * .9, 5), x: Math.cos(a) * .46, y: by - r, z: Math.sin(a) * .40, rx: Math.PI });
+    }
+    torso.add(mesh(mergeGeos(bl), gm, 0, 0, 0));
+    head.add(mesh(new T3.SphereGeometry(.06, 6, 5), gm, R.range(-.1, .1), -.30, .34, 1, 1.6, 1));
+  } else if (G.el === 'lightning') {
+    const arcMat = own(new T3.MeshBasicMaterial({ color: P.mid, transparent: true, opacity: .9, depthWrite: false, blending: T3.AdditiveBlending }));   // --el-lightning-mid: a kék-fehér ív-test
+    const rods = [], n = 5 + R.int(0, 4);
+    for (let i = 0; i < n; i++) {
+      const a = R.range(0, 6.28);
+      rods.push({ geo: new T3.CylinderGeometry(.014, .008, R.range(.22, .5), 4), x: Math.cos(a) * .46, y: R.range(1.15, 2.10), z: Math.sin(a) * .38, rz: R.range(-1.2, 1.2), rx: R.range(-.8, .8) });
+    }
+    const rm = mesh(mergeGeos(rods), arcMat, 0, 0, 0); rm.castShadow = false; torso.add(rm); enableBloom(rm);
+    const orb = new T3.Group(); orb.position.y = 1.75; torso.add(orb);
+    const shardMat = own(std({ color: P.deep, emissive: P.core, emissiveIntensity: 1.4, roughness: .5 }));   // --el-lightning-deep / -core (ibolya)
+    for (let i = 0; i < 3; i++) { const s = mesh(new T3.OctahedronGeometry(.075, 0), shardMat, Math.cos(i * 2.1) * .62, R.range(-.2, .35), Math.sin(i * 2.1) * .5, 1, 1.6, 1); orb.add(s); enableBloom(s); }
+    g.userData.orbit = orb;
+  }
+  /* közös: elem-aura */
+  const aura = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: P.light, transparent: true, opacity: .5, depthWrite: false, blending: T3.AdditiveBlending }));   // --el-<e>-light
+  aura.scale.setScalar(2.6); aura.position.y = 1.5; g.add(aura); g.userData.elAura = aura;
+}
+
+/* ------------------------------------------------------- ELIT / RITKA-BOSS -- */
+function addTier(g, torso, head, G, R, own) {
+  if (G.tier === 'normal') return null;
+  const gold = G.tier === 'boss';
+  const fx = {};
+  /* izzó rúna-billog a mellkason */
+  const runeMat = own(new T3.MeshBasicMaterial({ color: gold ? 0xffd27a : 0x7fe2ff, transparent: true, opacity: .95, depthWrite: false, blending: T3.AdditiveBlending }));
+  const rune = [];
+  for (let i = 0; i < (gold ? 7 : 4); i++) {
+    const a = (i / (gold ? 7 : 4)) * 6.28;
+    rune.push({ geo: new T3.BoxGeometry(.032, .10, .015), x: Math.cos(a) * .17, y: 1.70 + Math.sin(a) * .15, z: .43, rz: a });
+  }
+  const rm = mesh(mergeGeos(rune), runeMat, 0, 0, 0); rm.castShadow = false; torso.add(rm); enableBloom(rm);
+
+  /* csont-korona */
+  const crown = [];
+  const cn = gold ? 9 : 5;
+  for (let i = 0; i < cn; i++) {
+    const a = -1.5 + i * (3.0 / (cn - 1));
+    crown.push({ geo: new T3.ConeGeometry(.038, .20 + Math.sin(i) * .10, 5), x: Math.sin(a) * .32, y: .34, z: Math.cos(a) * .22 - .06, rx: -.25 + Math.cos(a) * .2, rz: Math.sin(a) * .7 });
+  }
+  head.add(mesh(mergeGeos(crown), gold ? M.tuskV : M.tuskV, 0, 0, 0));
+
+  /* aura */
+  const aura = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: gold ? 0xffd27a : 0x9fd8ff, transparent: true, opacity: gold ? .5 : .3, depthWrite: false, blending: T3.AdditiveBlending }));
+  aura.material.opacity = gold ? .28 : .18;
+  aura.scale.setScalar(gold ? 3.6 : 2.8); aura.position.y = 1.55; g.add(aura);
+  fx.aura = aura;
+
+  if (gold) {
+    /* háti totem: koponyákkal teleaggatott póznázsák */
+    const tot = new T3.Group(); tot.position.set(-.1, 1.45, -.54); tot.rotation.z = .18; torso.add(tot);
+    tot.add(mesh(new T3.CylinderGeometry(.045, .055, 1.5, 6), M.woodDark, 0, .5, 0));
+    for (let i = 0; i < 3; i++) {
+      const s = new T3.Group(); s.position.set(R.range(-.16, .16), .95 - i * .30, R.range(-.08, .08)); s.scale.setScalar(.4);
+      s.add(mesh(jitter(new T3.IcosahedronGeometry(.24, 1), .02, .02), M.tusk, 0, 0, 0));
+      s.add(mesh(new T3.SphereGeometry(.08, 6, 5), M.mouth, -.10, .02, .20));
+      s.add(mesh(new T3.SphereGeometry(.08, 6, 5), M.mouth, .10, .02, .20));
+      tot.add(s);
+    }
+    const pl = [];
+    for (let i = 0; i < 6; i++) { const a = R.range(-1.3, 1.3); pl.push({ geo: jitter(new T3.IcosahedronGeometry(.30, 1), .06, .05), x: Math.sin(a) * .56, y: R.range(1.2, 2.05), z: Math.cos(a) * .36, sy: .5, ry: -a }); }
+    torso.add(mesh(gradTint(mergeGeos(pl), 0x6d7787, 0xffffff, 1.1, 2.2), M.rockV, 0, 0, 0));
+  }
+  return fx;
+}
+
+/* --------------------------------------------------------- LIDÉRC-FEJ ----- */
+function buildWraithHead(head, G, R, bodySkin, eyeM, own, P) {
+  const boneMat = own(std({ color: 0xdfd3bb, roughness: .55 }));
+  const hoodMat = own(std({ color: 0x14283a, emissive: new T3.Color(P ? P.core : dsHex('--rune-deep', 0x16414f)), emissiveIntensity: .4, roughness: 1 }));
+  /* csuklya: rongyos kúp + torus-keret */
+  head.add(mesh(jitter(new T3.ConeGeometry(.34, .58, 7), .055, .035), hoodMat, 0, .14, -.14, 1.1, 1, 1.15));
+  const hood = mesh(new T3.TorusGeometry(.26, .062, 6, 12), hoodMat, 0, .02, .10); hood.rotation.x = -.16; head.add(hood);
+  /* csont-maszk */
+  const skull = mesh(jitter(new T3.IcosahedronGeometry(.24, 1), .015, .012), boneMat, 0, -.01, .13, 1, 1.15, .8); head.add(skull);
+  head.add(mesh(new T3.SphereGeometry(.10, 7, 6), own(new T3.MeshBasicMaterial({ color: 0x05080d })), 0, -.15, .26, 1.35, .85, .6)); // üres szájüreg
+  const teeth = [];
+  for (let i = -2; i <= 2; i++) teeth.push({ geo: new T3.BoxGeometry(.028, .07, .02), x: i * .052, y: -.13, z: .31 });
+  head.add(mesh(mergeGeos(teeth), boneMat, 0, 0, 0));
+  /* szemek: mély üregek + izzó pont */
+  const eyes = [];
+  const lay = eyeLayout(G.eyeCount === 1 ? 1 : (G.eyeCount >= 3 ? 3 : 2));
+  lay.forEach(pt => {
+    head.add(mesh(new T3.SphereGeometry(G.eyeSize * 2.0 * pt.s, 8, 7), own(new T3.MeshBasicMaterial({ color: 0x03060a })), pt.x * .86, pt.y + .02, pt.z * .78 + .06, 1, 1.25, .5));
+    const e = mesh(new T3.SphereGeometry(G.eyeSize * .9 * pt.s, 8, 7), eyeM, pt.x * .86, pt.y + .02, pt.z * .78 + .09); head.add(e); eyes.push(e); enableBloom(e);
+    const sp = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: eyeM.emissive.getHex(), transparent: true, opacity: .8, depthWrite: false, blending: T3.AdditiveBlending }));
+    sp.scale.setScalar(G.eyeSize * 6.5); sp.position.set(pt.x * .86, pt.y + .02, pt.z * .78 + .13); head.add(sp); enableBloom(sp);
+  });
+  head.userData.eyes = eyes;
+  head.userData.jaw = new T3.Group(); head.add(head.userData.jaw);
+  /* belső mag-ragyogás */
+  const core = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: P ? P.light : dsHex('--cyan', 0x7fe2ff), transparent: true, opacity: .55, depthWrite: false, blending: T3.AdditiveBlending }));
+  core.scale.setScalar(1.15); core.material.opacity = .38; core.position.set(0, -.9, 0); head.add(core);
+}
+
+/* ============================================================================
+   4b) FEGYVERTÁR — íjak és elemi nyilak (a játék makeArrow-jának cseréje)
+   ========================================================================== */
+const BOWS = {
+  bone:  { name: 'Csontív',  sub: 'agancs + ín',        limb: 0xe6dac2, wrap: 0x5a4030, glow: null },
+  rune:  { name: 'Rúnaíj',   sub: 'sötét tölgy + rúna', limb: 0x2f2318, wrap: 0x1c2a3a, glow: 0x36c5ff },
+  moss:  { name: 'Élő ág',   sub: 'moha + inda',        limb: 0x4a3826, wrap: 0x55692f, glow: 0x9fe3ff },
+};
+/* Az íj a -Z (előre) tengelyre merőlegesen, XY síkban feszül; a markolat az origó. */
+function makeBow(kind) {
+  const B = BOWS[kind] || BOWS.bone;
+  const g = new T3.Group();
+  const limbMat = std({ color: B.limb, roughness: kind === 'bone' ? .48 : .82, bumpMap: SKIN_N, bumpScale: .015 });
+  const wrapMat = std({ color: B.wrap, roughness: 1 });
+  const stringMat = new T3.MeshBasicMaterial({ color: 0xd8e2ea, transparent: true, opacity: .9 });
+
+  /* két kar: valódi recurve-ív, GÖRBE mentén fűzött, vékonyodó szegmensekkel */
+  const chain = (pts, r0, r1, mat) => {
+    const grp = new T3.Group(), curve = new T3.CatmullRomCurve3(pts), N = 16;
+    const up = new T3.Vector3(0, 1, 0), a = new T3.Vector3(), b = new T3.Vector3(), mid = new T3.Vector3(), dir = new T3.Vector3();
+    for (let i = 0; i < N; i++) {
+      const t0 = i / N, t1 = (i + 1) / N;
+      curve.getPointAt(t0, a); curve.getPointAt(t1, b);
+      mid.copy(a).add(b).multiplyScalar(.5); dir.copy(b).sub(a);
+      const len = dir.length();
+      const rr = r0 + (r1 - r0) * t0;
+      const c = new T3.Mesh(new T3.CylinderGeometry(r0 + (r1 - r0) * t1, rr, len * 1.06, 6), mat);
+      c.position.copy(mid); c.quaternion.setFromUnitVectors(up, dir.normalize());
+      c.castShadow = true; c.receiveShadow = true; grp.add(c);
+      if (i % 4 === 0) { const j = new T3.Mesh(new T3.SphereGeometry(rr * 1.15, 6, 5), mat); j.position.copy(a); j.castShadow = true; grp.add(j); }
+    }
+    return grp;
+  };
+  [-1, 1].forEach(sg => {
+    const pts = [
+      new T3.Vector3(0, sg * .04, -.24),
+      new T3.Vector3(0, sg * .26, -.36),
+      new T3.Vector3(0, sg * .50, -.30),
+      new T3.Vector3(0, sg * .68, -.10),
+      new T3.Vector3(0, sg * .76, .10),
+    ];
+    g.add(chain(pts, .055, .022, limbMat));
+    g.add(mesh(new T3.SphereGeometry(.030, 6, 5), limbMat, 0, sg * .77, .11));    // nock-gomb
+  });
+  /* markolat + bőrtekercs */
+  g.add(mesh(new T3.CylinderGeometry(.062, .068, .36, 7), wrapMat, 0, 0, -.28));
+  [-.13, 0, .13].forEach(y => { const t = mesh(new T3.TorusGeometry(.070, .014, 5, 10), M.leather, 0, y, -.28); t.rotation.x = Math.PI / 2; g.add(t); });
+  { const sh = mesh(new T3.BoxGeometry(.045, .11, .09), M.leather, .045, .15, -.30); sh.rotation.z = -.2; g.add(sh); }   // nyílpolc
+
+  /* ideg */
+  { const p = [new T3.Vector3(0, .77, .11), new T3.Vector3(0, 0, .06), new T3.Vector3(0, -.77, .11)];
+    const str = new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3(p), 12, .009, 4, false), stringMat);
+    g.add(str); g.userData.string = str; }
+
+  if (kind === 'rune') {
+    const rm = new T3.MeshStandardMaterial({ color: 0x0d2a38, emissive: B.glow, emissiveIntensity: 1.6, roughness: .5, flatShading: true });
+    const rn = [];
+    [-1, 1].forEach(sg => { for (let i = 0; i < 4; i++) { const t = .18 + i * .16; rn.push({ geo: new T3.BoxGeometry(.014, .055, .014), x: .052, y: sg * t, z: -.36 + Math.max(0, (t - .5)) * 1.1, rz: .25 }); } });
+    const m2 = mesh(mergeGeos(rn), rm, 0, 0, 0); g.add(m2); enableBloom(m2);
+    [-1, 1].forEach(sg => { const t = mesh(new T3.OctahedronGeometry(.045, 0), rm, 0, sg * .78, .07); g.add(t); enableBloom(t); });
+  } else if (kind === 'moss') {
+    [-1, 1].forEach(sg => {
+      g.add(mesh(jitter(new T3.IcosahedronGeometry(.085, 0), .025, .02), M.moss, .03, sg * .36, -.34, 1.2, .8, 1));
+      const mg = new T3.Group(); mg.position.set(.06, sg * .56, -.24); mg.scale.setScalar(.44); mg.rotation.z = sg * .5; mg.rotation.x = -.5;
+      mg.add(mesh(new T3.CylinderGeometry(.035, .05, .2, 6), M.stem, 0, .1, 0));
+      mg.add(mesh(new T3.SphereGeometry(.15, 9, 6, 0, 6.28, 0, Math.PI / 2), M.glowCap, 0, .22, 0, 1, .72, 1));
+      const sp = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: 0x7fe2ff, transparent: true, opacity: .7, depthWrite: false, blending: T3.AdditiveBlending }));
+      sp.scale.setScalar(.6); sp.position.y = .22; mg.add(sp); enableBloom(sp);
+      g.add(mg);
+    });
+  } else {
+    [-1, 1].forEach(sg => { const t = mesh(new T3.ConeGeometry(.036, .15, 5), M.tusk, 0, sg * .84, .13); t.rotation.x = sg * .9; g.add(t); });
+  }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
+/* --- NYÍL: a vessző -Z-ben repül (a játék makeArrow konvenciója) --- */
+/* jelölő-sáv = --el-<e>-core, tollazat = --el-<e>-mid; az ALAP a fa/acél tokeneket kapja */
+const ARROW_EL = {
+  base:      { band: dsHex('--el-base-core', 0xbfc6d2), feather: dsHex('--arrow-feather', 0xd64b3a), name: 'ALAP' },
+  fire:      { band: EL.fire.core,      feather: EL.fire.mid,      name: EL.fire.label },
+  ice:       { band: EL.ice.core,       feather: EL.ice.mid,       name: EL.ice.label },
+  poison:    { band: EL.poison.core,    feather: EL.poison.mid,    name: EL.poison.label },
+  lightning: { band: EL.lightning.core, feather: EL.lightning.mid, name: EL.lightning.label },
+};
+function makeArrowMesh(el) {
+  el = el || 'base';
+  const A = ARROW_EL[el] || ARROW_EL.base;
+  const P = EL[el];
+  const g = new T3.Group();
+  const shaft = mesh(new T3.CylinderGeometry(.011, .014, .86, 7), M.arrowWood, 0, 0, 0); shaft.rotation.x = Math.PI / 2; g.add(shaft);   // --el-base-mid / --arrow-wood
+  /* spirál-kötés a vesszőn */
+  { const w = []; for (let i = 0; i < 3; i++) w.push({ geo: new T3.TorusGeometry(.0155, .005, 4, 9), z: .10 + i * .07, rx: 0 });
+    g.add(mesh(mergeGeos(w), std({ color: A.band, roughness: .6 }), 0, 0, 0)); }
+  /* fém nyakgyűrű + penge */
+  { const col = mesh(new T3.CylinderGeometry(.013, .017, .04, 7), M.metal, 0, 0, -.39); col.rotation.x = Math.PI / 2; g.add(col); }
+  const headMat = new T3.MeshStandardMaterial({ color: dsHex('--el-base-core', 0xbfc6d2), metalness: .7, roughness: .28, flatShading: true });   // --el-base-core: kovácsolt acél
+  const tip = mesh(new T3.ConeGeometry(.058, .19, 4), headMat, 0, 0, -.50, 1, 1, .28); tip.rotation.x = -Math.PI / 2; g.add(tip);
+  /* szakállas visszahúzó tüskék */
+  { const b = [];
+    [-1, 1].forEach(sg => b.push({ geo: new T3.ConeGeometry(.022, .09, 4), x: sg * .045, z: -.40, rx: Math.PI / 2, rz: sg * .5 }));
+    g.add(mesh(mergeGeos(b), headMat, 0, 0, 0)); }
+  /* 3 tollazat, enyhe csavarral */
+  [0, 1, 2].forEach(i => { const f = mesh(jitter(new T3.PlaneGeometry(.13, .058, 3, 1), .008, .006), std({ color: A.feather, roughness: .85, side: T3.DoubleSide }), 0, 0, .33);
+    f.rotation.y = Math.PI / 2; f.rotation.z = i * (Math.PI * 2 / 3); f.rotation.x = .12; g.add(f); });
+  { const nk = mesh(new T3.CylinderGeometry(.013, .010, .022, 7), M.tusk, 0, 0, .435); nk.rotation.x = Math.PI / 2; g.add(nk); }
+
+  /* --- elemi fej-dísz --- */
+  const holder = new T3.Group(); holder.position.set(0, 0, -.50); g.add(holder); g.userData.elemHolder = holder;
+  if (P) {
+    const em = new T3.MeshStandardMaterial({ color: P.deep, emissive: P.core, emissiveIntensity: 1.6, roughness: .4, flatShading: true });   // deep test + core emissive
+    if (el === 'fire') {
+      for (let i = 0; i < 3; i++) { const f = mesh(new T3.ConeGeometry(.05 - i * .012, .16 + i * .07, 5), em, 0, 0, .06 + i * .05, 1, 1, 1); f.rotation.x = Math.PI / 2; holder.add(f); }
+    } else if (el === 'ice') {
+      holder.add(mesh(new T3.OctahedronGeometry(.075, 0), em, 0, 0, -.02, 1, 1, 2.1));
+      [-1, 1].forEach(sg => holder.add(mesh(new T3.OctahedronGeometry(.04, 0), em, sg * .05, 0, .06, 1, 1, 1.6)));
+    } else if (el === 'poison') {
+      holder.add(mesh(new T3.IcosahedronGeometry(.062, 1), em, 0, 0, .05));
+      holder.add(mesh(new T3.ConeGeometry(.03, .09, 5), em, 0, -.05, .07, 1, 1, 1)).rotation.x = -Math.PI / 2 + 1.1;
+    } else if (el === 'lightning') {
+      [-1, 0, 1].forEach(i => { const p = mesh(new T3.ConeGeometry(.016, .18, 4), em, i * .045, 0, -.04); p.rotation.x = -Math.PI / 2; p.rotation.z = i * .18; holder.add(p); });
+    }
+    holder.traverse(o => enableBloom(o));
+    const sp = new T3.Sprite(new T3.SpriteMaterial({ map: GLOW, color: P.glow, transparent: true, opacity: .5, depthWrite: false, blending: T3.AdditiveBlending }));   // --el-<e>-glow halo
+    sp.scale.setScalar(.34); sp.position.z = -.02; holder.add(sp); enableBloom(sp);
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  g.userData.el = el;
+  return g;
+}
+
+/* ============================================================================
+   5) NYÍL A TESTBEN — beleáll és ott is marad, amíg a test el nem tűnik
+   ========================================================================== */
+const _v = new T3.Vector3(), _q = new T3.Quaternion(), _m = new T3.Matrix4();
+function stickArrow(troll, worldPos, worldDir, el) {
+  const cands = [
+    { o: troll.head, y: (2.50 + troll.genome.neckLen) * troll.scale },
+    { o: troll.torsoIn || troll.torso, y: 1.5 * troll.scale },
+    { o: troll.arms.L, y: 1.9 * troll.scale }, { o: troll.arms.R, y: 1.9 * troll.scale },
+    { o: troll.elbows && troll.elbows.L }, { o: troll.elbows && troll.elbows.R },
+    { o: troll.legs.L, y: .8 * troll.scale }, { o: troll.legs.R, y: .8 * troll.scale },
+    { o: troll.knees && troll.knees.L }, { o: troll.knees && troll.knees.R },
+  ].filter(c => c.o);
+  let best = cands[1], bd = 1e9;
+  for (const c of cands) {
+    c.o.getWorldPosition(_v);
+    const d = _v.distanceToSquared(worldPos);
+    if (d < bd) { bd = d; best = c; }
+  }
+  const arr = makeStubArrow(el);
+  best.o.add(arr);
+  arr.position.copy(best.o.worldToLocal(worldPos.clone()));
+  /* a vessző a becsapódás irányával SZEMBE áll ki a testből */
+  const wq = best.o.getWorldQuaternion(new T3.Quaternion()).invert();
+  const localDir = worldDir.clone().normalize().negate().applyQuaternion(wq).normalize();
+  arr.quaternion.setFromUnitVectors(new T3.Vector3(0, 1, 0), localDir);
+  const ws = new T3.Vector3(); best.o.getWorldScale(ws);
+  arr.scale.setScalar(1 / (ws.x || 1));
+  troll.stuckArrows.push(arr);
+  return arr;
+}
+
+/* ============================================================================
+   6) ANIMÁCIÓ — járás / támadás / halál (a demóhoz; a játék sajátját is bírja)
+   ========================================================================== */
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+/* egyoldalas, sima lebeny — a térd/boka görbékhez (ref: Claude-of-Duty clips.js `lobe`).
+   A régi Math.max(0, sin) éles törést adott a nulla-átmenetnél; a hatványozott
+   változat lágyan indul és lágyan zár, ezért a lépés nem "kattan". */
+const lobe = (x, k) => { const s = Math.sin(x); return s > 0 ? Math.pow(s, k || 1.4) : 0; };
+
+/* A JÁRÁS-KONSTANSOK a genomból (ref: Claude-of-Duty clips.js WALK/RUN/CROUCH táblák).
+   Egy tengely: 0 = fürge/könnyű, 1 = nehéz/tömeges. Minden érték e mentén interpolál,
+   így a kaszt tömege a JÁRÁSBÓL is olvasható, nem csak a sziluettből. */
+function gaitFor(G) {
+  const h = G.caste === 'brute' ? 1
+    : G.caste === 'scout' ? 0
+      : clamp01(((G.torsoW || 1) - .82) / .58) * .55 + (G.rocky ? .3 : 0) + (G.toad ? .2 : 0);
+  const L = (a, b) => a + (b - a) * clamp01(h);
+  return {
+    thigh:      L(.62, .40),   thighBias: L(-.03, .05),
+    kneeBase:   L(.10, .20),   knee:      L(1.05, .78),  kneeStance: L(.10, .26),
+    ankle:      L(.36, .26),
+    armRest:    L(.30, .42),   armSwing:  L(.52, .30),   elbow: L(.58, .40),
+    sway:       L(.030, .085), bob:       L(.034, .050), bobBias: L(-.030, -.046),
+    pelvisRoll: L(.055, .105), pelvisYaw: L(.070, .045),
+    spineYaw:   L(.105, .060), spineRoll: L(.045, .085),
+    lean:       L(.10, .05),
+    limp:       (G.asym || 0) * .55,
+  };
+}
+const easeInOut = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const lerpN = (a, b, t) => a + (b - a) * t;
+/* MAROK-TÁBLA fegyverenként: nyugalmi / felhúzási / becsapódási csúkló-szög.
+   Rövid, egykezes fegyver nagyot csuklik (ostorcsapás); a hosszú kétkezes
+   (buzogány, fatörzs, lándzsa) alig — azt a VÁLL viszi, nem a csúkló, különben
+   a fegyver vége akkora ívet ver le, hogy leváltnak látszik. */
+const WGRIP = {
+  none:    { rest: 0,    wind: -.55,  hit:  .40 },
+  daggers: { rest: 0,    wind: -.60,  hit:  .50 },
+  boulder: { rest: 0,    wind: -.35,  hit:  .30 },
+  shield:  { rest: 0,    wind: -.30,  hit:  .25 },
+  club:    { rest: -.55, wind: -1.30, hit: 1.40 },
+  axe:     { rest: -.55, wind: -1.30, hit: 1.40 },
+  flail:   { rest: -.45, wind: -1.15, hit: 1.20 },
+  staff:   { rest: 0,    wind: -.75,  hit:  .80 },
+  spear:   { rest: 0,    wind: -.40,  hit:  .45 },
+  maul:    { rest: -.12, wind: -.60,  hit:  .55 },
+  trunk:   { rest: -.10, wind: -.45,  hit:  .40 },
+};
+const grip = (G) => WGRIP[G.weapon] || WGRIP.none;const wristRest = (G) => grip(G).rest;
+
+/* ===== TÁMADÁS-STÍLUSOK ===================================================
+   Nem mindenki ugyanazt az előrehajolós mozdulatot csinálja: a stílus a fegyverből
+   és a kasztból sorsolódik (seed-stabilan, a genomba mentve).
+     overhead — függőleges lesújtás      sweep    — vízszintes körbevágás
+     backhand — fonák, a másik irányból    thrust   — döfés, nagy belépéssel
+     slam     — kétkezes földre csapás     claw     — váltott karmú marcangolás
+     bite     — fegyvertelen, fejjel előre harapás
+   Minden mező [felhúzás, becsapódás] pár; a nyugalmi érték a `ra()`-ból jön.
+   p=medence · s=gerinc · a/e=jobb váll,könyök · l/lE=bal · h=fej
+   root=belépés-szorzó · jaw=állkapocs · wri=csúkló-amplitúdó (0 = a fegyver nem csuklik) */
+const ATK = {
+  overhead: { pY: [.34, -.30], pZ: [.07, -.06], sY: [.46, -.40], sX: [-.34, .42], sZ: [-.10, .12],
+              aX: [-1.95, 1.10], aZ: [-.26, .52], eX: [-1.90, -.30],
+              lX: [-.52, 1.05], lZ: [.30, -.14], lE: [-1.15, -.28],
+              hX: [-.26, .30], root: 1, jaw: .60, wri: 1 },
+  sweep:    { pY: [.74, -.68], pZ: [.10, -.10], sY: [.88, -.80], sX: [-.16, .10], sZ: [-.06, .06],
+              aX: [-.34, .26], aZ: [-.95, 1.18], eX: [-1.55, -.55],
+              lX: [-.30, .62], lZ: [.88, -.36], lE: [-1.20, -.40],
+              hX: [-.12, .14], root: .65, jaw: .45, wri: .6 },
+  backhand: { pY: [-.64, .72], pZ: [-.08, .10], sY: [-.76, .86], sX: [-.12, .16], sZ: [.06, -.08],
+              aX: [-.24, .36], aZ: [1.08, -.88], eX: [-1.70, -.45],
+              lX: [.56, -.36], lZ: [-.36, .82], lE: [-.45, -1.20],
+              hX: [-.10, .18], root: .55, jaw: .40, wri: .6 },
+  thrust:   { pY: [.30, -.18], pZ: [.05, -.03], sY: [.34, -.22], sX: [-.28, .30], sZ: [-.05, .04],
+              aX: [-.78, 1.02], aZ: [-.05, .04], eX: [-2.05, -.06],
+              lX: [.12, -.58], lZ: [.20, .30], lE: [-.80, -1.35],
+              hX: [-.18, .22], root: 1.55, jaw: .35, wri: .35 },
+  slam:     { pY: [0, 0], pZ: [0, 0], sY: [0, 0], sX: [-.54, .64], sZ: [0, 0],
+              aX: [-2.35, 1.25], aZ: [-.16, .30], eX: [-1.55, -.20],
+              lX: [-2.35, 1.25], lZ: [.16, -.30], lE: [-1.55, -.20],
+              hX: [-.42, .44], root: .45, jaw: .80, wri: 1 },
+  claw:     { pY: [.44, -.42], pZ: [.06, -.06], sY: [.52, -.50], sX: [-.30, .40], sZ: [-.10, .14],
+              aX: [-1.55, 1.30], aZ: [-.55, .78], eX: [-1.35, -.55],
+              lX: [.82, -.72], lZ: [.55, -.30], lE: [-.55, -1.30],
+              hX: [-.30, .36], root: .90, jaw: .90, wri: .5 },
+  bite:     { pY: [.10, -.08], pZ: [0, 0], sY: [.12, -.10], sX: [-.46, .80], sZ: [0, 0],
+              aX: [-.85, -.30], aZ: [-.42, -.58], eX: [-.55, -.95],
+              lX: [-.85, -.30], lZ: [.42, .58], lE: [-.55, -.95],
+              hX: [-.55, .64], root: 1.70, jaw: 1.5, wri: 0 },
+};
+const ATK_POOL = (g) => {
+  const w = g.weapon;
+  if (w === 'spear')   return [['thrust', 6], ['sweep', 2], ['overhead', 1]];
+  if (w === 'daggers') return [['thrust', 4], ['claw', 4], ['sweep', 2]];
+  if (w === 'staff')   return [['thrust', 3], ['overhead', 3], ['sweep', 2]];
+  if (w === 'maul' || w === 'trunk' || w === 'boulder') return [['overhead', 5], ['slam', 4], ['sweep', 1]];
+  if (w === 'axe')     return [['overhead', 5], ['sweep', 4], ['backhand', 2]];
+  if (w === 'club' || w === 'flail') return [['overhead', 4], ['sweep', 4], ['backhand', 3]];
+  if (w === 'shield')  return [['slam', 4], ['thrust', 3]];
+  if (g.caste === 'brute') return [['slam', 5], ['overhead', 2], ['claw', 2]];
+  return [['claw', 5], ['bite', 4], ['slam', 1]];
+};
+
+const anim = {
+  /* nyugalmi póz-konstansok (a reset és minden anim erre tér vissza) */
+  REST: { arm: .34, elbow: -.42, leg: 0, knee: .06 },
+
+  idle(m, t) {
+    const G = m.genome, b = Math.sin(t * 1.5) * .022;
+    /* a medence és a gyökér nyugalomban — a járás írta eltolást visszaengedjük */
+    m.g.position.x = 0; m.g.rotation.y = 0; m.g.rotation.z = 0; m.g.position.z = 0;
+    m.pelvis.rotation.z = Math.sin(t * .31) * .014;
+    m.pelvis.rotation.y = Math.sin(t * .26) * .020;
+    m.torso.rotation.x = G.lean + Math.sin(t * 1.5) * .02;
+    m.torso.rotation.y = Math.sin(t * .37) * .04 - m.pelvis.rotation.y;
+    m.torso.rotation.z = -m.pelvis.rotation.z * 1.2;
+    m.torso.position.y = 1.30 + b;
+    /* a fej a törzs gyereke -> a tekintet-kitartáshoz a törzs csavarodását ki kell vonni */
+    m.head.rotation.y = Math.sin(t * .43) * .28 - (m.pelvis.rotation.y + m.torso.rotation.y) * .7;
+    m.head.rotation.x = Math.sin(t * .7) * .06 - G.lean * .5;
+    m.head.rotation.z = -m.torso.rotation.z * .8;
+    if (m.fists) { const wr = wristRest(G); m.fists.L.rotation.set(wr, 0, 0); m.fists.R.rotation.set(wr, 0, 0); }
+    ['L', 'R'].forEach((k, i) => {
+      const ph = t * 1.5 + i * .5;
+      m.arms[k].rotation.x = .34 + Math.sin(ph) * .05;
+      m.arms[k].rotation.z = (k === 'L' ? .09 : -.09) + Math.sin(ph * .7) * .02;
+      m.elbows[k].rotation.x = -.42 - Math.sin(ph) * .06;
+      if (m.legs[k].rotation) { m.legs[k].rotation.x = 0; }
+      if (m.knees[k]) m.knees[k].rotation.x = .06;
+      if (m.ankles[k]) m.ankles[k].rotation.x = -.04;
+    });
+    if (m.jaw) m.jaw.rotation.x = Math.max(0, Math.sin(t * .8) - .93) * 3;
+    m.g.position.y = G.wraith ? .35 + Math.sin(t * 1.1) * .12 : 0;
+    m.pelvis.position.y = .95;
+    if (m.g.userData.orbit) m.g.userData.orbit.rotation.y = t * 1.4;
+  },
+
+  walk(m, t, speedK) {
+    const G = m.genome, sp = speedK || 1;
+    if (G.wraith) {
+      m.g.position.y = .35 + Math.sin(t * 2.2) * .14;
+      m.arms.L.rotation.x = .25 + Math.sin(t * 2) * .18; m.arms.R.rotation.x = .25 - Math.sin(t * 2) * .18;
+      m.elbows.L.rotation.x = -.5 - Math.sin(t * 2) * .18; m.elbows.R.rotation.x = -.5 + Math.sin(t * 2) * .18;
+      m.head.rotation.x = Math.sin(t * 2) * .05; m.torso.rotation.z = Math.sin(t * 1.3) * .05;
+      return;
+    }
+    /* ====================================================================
+       JÁRÁS — összehangolt lánc (ref: Claude-of-Duty src/ai/clips.js `gait`).
+       A rétegek fázisviszonya adja az "egy test" érzetet:
+         medence : 2 bólintás/lépés + oldalsó súlyáthelyezés + dőlés a
+                   TÁMASZKODÓ láb felé + előre forduló lendítő-csípő
+         gerinc  : a medencével SZEMBE csavarodik (ellenrotáció)
+         fej     : a mellkas csavarodását kioltja -> a tekintet előre marad
+         karok   : ELLENOLDALI a lábbal (bal kar előre <-> bal láb hátra)
+       ==================================================================== */
+    const K = m._gait || (m._gait = gaitFor(G));
+    const ph = t * (4 + 3 * sp);
+    const s1 = Math.sin(ph), cph = Math.cos(ph), c2 = Math.cos(2 * ph);
+
+    /* --- LÁB: fél ciklus eltolással; a sántítás (G.asym) oldalanként más amplitúdó --- */
+    [['L', 0, 1], ['R', Math.PI, -1]].forEach(([k, o, sd]) => {
+      const a = ph + o, amp = 1 + sd * K.limp;
+      m.legs[k].rotation.x = Math.sin(a) * K.thigh * amp + K.thighBias;
+      /* a térd a LENDÍTŐ fázisban hajlik erősen, támaszkodáskor csak enyhén ruganyozik */
+      m.knees[k].rotation.x = K.kneeBase
+        + lobe(-Math.sin(a - .55), 1.5) * K.knee * amp
+        + lobe(-Math.sin(a + 2.59), 2) * K.kneeStance;
+      /* a boka az elrugaszkodáskor feszül (a comb fázisához képest eltolva) */
+      m.ankles[k].rotation.x = -.06 - lobe(Math.sin(a + .4), 1.2) * K.ankle;
+    });
+
+    /* --- MEDENCE = a gyökér (a lábak és a törzs is ezt öröklik) --- */
+    m.g.position.y = K.bobBias + c2 * K.bob;      // két bólintás lépésenként (nem |sin| -> nincs törés)
+    m.g.position.x = -cph * K.sway;               // a súly a támaszkodó láb fölé csúszik
+    m.g.rotation.z = 0; m.g.rotation.y = 0; m.g.position.z = 0;
+    m.pelvis.position.y = .95;
+    m.pelvis.rotation.z = cph * K.pelvisRoll;     // a csípő a lendítő oldalon leesik
+    m.pelvis.rotation.y = -cph * K.pelvisYaw;     // a lendítő csípő előre fordul
+    m.torso.position.y = 1.30;
+
+    /* --- GERINC: ellenrotáció a medencére; a végzett világ-szögből kivonjuk a gyökérét --- */
+    m.torso.rotation.y = cph * K.spineYaw - m.pelvis.rotation.y;
+    m.torso.rotation.z = -cph * K.spineRoll - m.pelvis.rotation.z;
+    m.torso.rotation.x = G.lean + K.lean * sp + Math.abs(s1) * .03;
+
+    /* --- FEJ: a mellkas mozgásának kioltása; 20% marad -> finoman vezet, nem szögvas --- */
+    const chestY = m.pelvis.rotation.y + m.torso.rotation.y;
+    const chestZ = m.pelvis.rotation.z + m.torso.rotation.z;
+    m.head.rotation.y = -chestY * .78;
+    m.head.rotation.z = -chestZ * .85;
+    m.head.rotation.x = -(G.lean + K.lean * sp) * .55 - c2 * .02;
+
+    /* --- KAR: ELLENOLDALI (bal kar előre, amikor a bal láb hátra) --- */
+    m.arms.L.rotation.x = K.armRest - s1 * K.armSwing;
+    m.arms.R.rotation.x = K.armRest + s1 * K.armSwing;
+    m.arms.L.rotation.z = .10 + cph * .035;
+    m.arms.R.rotation.z = -.10 + cph * .035;
+    /* a könyök akkor pumpál, amikor az adott kar ELŐRE lendül */
+    m.elbows.L.rotation.x = -.50 - lobe(s1, 1.3) * K.elbow;
+    m.elbows.R.rotation.x = -.50 - lobe(-s1, 1.3) * K.elbow;
+    /* CSÚKLÓ: a kéz és a fegyver késve követi a könyököt (a súly lendül a marokban).
+       Fegyveres trollon a nyugalmi csúkló-szög negatívabb: a nyél hátrafelé,
+       az alkar vonalában lóg, nem keresztben a has előtt. */
+    if (m.fists) {
+      const wr = wristRest(G);
+      m.fists.L.rotation.x = wr - s1 * .16; m.fists.L.rotation.z = 0;
+      m.fists.R.rotation.x = wr + s1 * .16; m.fists.R.rotation.z = 0;
+    }
+
+    if (m.jaw) m.jaw.rotation.x = .05 + Math.abs(c2) * .04;
+  },
+
+  /* u: 0..1 — TÁMADÁS mint KINETIKUS LÁNC.
+     Egy ütés attól olvasódik erősnek, hogy a lánc PROXIMÁLISTÓL DISZTÁLIS felé
+     indul: előbb a medence fordul, utána a gerinc, majd a váll, a könyök, végül
+     a csukló csattan. Minden láncszem UGYANAZT a lendület-görbét kapja, csak
+     egyre KÉSŐBB — ez az `swingAt(u, delay)`. A fegyver a csuklón lóg, tehát
+     automatikusan ő érkezik utoljára: hátramarad a felhúzásban, és a becsapódás
+     pillanatában előre pördül. */
+  attack(m, u) {
+    const G = m.genome;
+    const A = ATK[G.atk] || ATK.overhead;
+    const heavy = G.caste === 'brute' || G.weapon === 'maul' || G.weapon === 'trunk' || G.weapon === 'boulder';
+    /* IDŐZÍTÉS — a csapás ereje az IDŐARÁNYOKBÓL jön, nem a szögekből:
+       lassú felhúzás → MEGÁLLÁS a holtponton (anticipáció) → nagyon gyors,
+       GYORSULÓ csapás → tartott becsapódás visszapattanással → lazító visszaállás.
+       Korábban a csapás lassult a találat előtt (easeOut) és nem volt sem holtpont,
+       sem tartás — ezért érződött "legyintve", nem lesújtva. */
+    const K0 = heavy ? .42 : .36,      // a felhúzás vége
+          K1 = heavy ? .52 : .44,      // a holtponti megállás vége
+          K2 = heavy ? .60 : .53,      // BECSAPÓDÁS
+          K3 = heavy ? .74 : .68;      // a tartott becsapódás vége
+    const swingAt = (x) => {
+      const v = u - x;
+      if (v <= 0) return 0;
+      if (v < K0) return -easeInOut(v / K0);                                   // 0 -> -1 (felhúzás)
+      if (v < K1) return -1;                                                    // HOLTPONT
+      if (v < K2) return -1 + 2 * Math.pow((v - K1) / (K2 - K1), 1.55);         // -1 -> +1, gyorsulva
+      if (v < K3) return 1 - .16 * Math.sin(((v - K2) / (K3 - K2)) * Math.PI);  // tartás + visszapattanás
+      return 1 - easeInOut(Math.min(1, (v - K3) / (Math.max(K3 + .06, 1 - x) - K3)));   // +1 -> 0, a k\u00e9sleltet\u00e9ssel R\u00d6VID\u00cdTVE, hogy minden \u00edz\u00fclet a klip v\u00e9g\u00e9re \u00e9rjen nyugalomba
+    };
+    /* a lánc késleltetései — a fegyver (csukló) 4 lépcsővel a medence mögött */
+    const DW = .125;                                    // a csukló (= a fegyver) késése
+    const sPelv = swingAt(0), sSpine = swingAt(.035), sArm = swingAt(.065),
+          sElb = swingAt(.095), sWri = swingAt(DW);
+    /* s in [-1,1] -> NYUGALOM-HORGONYZOTT leképezés.
+       Kritikus: s=0 a NYUGALMI pózt adja, nem a felhúzás és a becsapódás felezőjét —
+       különben a klip első képkockáján az egész kar odaugrik egy fél-lendített pózba,
+       a végén pedig visszaugrik. (a = felhúzási szélsőérték, b = becsapódási.) */
+    const ra = (s, rest, a, b) => s < 0 ? rest + (-s) * (a - rest) : rest + s * (b - rest);
+
+    /* --- GYÖKÉR: a járás ringását kioltjuk, helyette BELÉPÉS és BECSAPÓDÁS-JOLT.
+       A test reakciója a FEGYVER érkezéséhez van kötve (K2 + csukló-késés), nem a
+       medence fázisához — különben a troll megrándul, miközben a bunkó még a feje
+       fölött van. --- */
+    const HIT = K2 + DW, HEND = K3 + DW;
+    m.g.position.x *= .82; m.g.rotation.y = 0; m.g.rotation.z = 0;
+    const step = Math.max(0, 1 - Math.abs(u - HIT) / .17);            // éles lökés a találat körül
+    const jolt = (u > HIT && u < HEND) ? Math.sin(((u - HIT) / (HEND - HIT)) * Math.PI) : 0;
+    m.g.position.z = easeOutCubic(step) * (heavy ? .34 : .22) * A.root;   // előrelép az ütésbe (a döfés nagyot, a körbevágás alig)
+    /* GUGGOLÁS: a MEDENCE süllyed, nem a gyökér. A lábak a gyökér gyerekei, ezért a
+       gyökér süllyesztése a talpakat a föld alá vitte volna; a medence ejtésével a
+       felsőtest megy le, a talp a földön marad (a térdhajlítás alább adja a többit). */
+    const squat = Math.max(0, -sPelv) * .10 + jolt * (heavy ? .11 : .07);
+    m.g.position.y = 0;
+    m.pelvis.position.y = .95 - squat;
+
+    /* --- MEDENCE: a lánc kezdete; elfordul a felhúzáskor, átfordul a csapásban --- */
+    m.pelvis.rotation.y = ra(sPelv, 0, A.pY[0], A.pY[1]);
+    m.pelvis.rotation.z = ra(sPelv, 0, A.pZ[0], A.pZ[1]);
+
+    /* --- GERINC: a medencén TÚL fordul (nagyobb amplitúdó), és előrebukik a becsapódásra --- */
+    m.torso.rotation.y = ra(sSpine, 0, A.sY[0], A.sY[1]) - m.pelvis.rotation.y;
+    m.torso.rotation.x = G.lean + ra(sSpine, 0, A.sX[0], A.sX[1]);
+    m.torso.rotation.z = ra(sSpine, 0, A.sZ[0], A.sZ[1]) - m.pelvis.rotation.z;
+    m.torso.position.y = 1.30;
+
+    /* --- VÁLL / KÖNYÖK / CSUKLÓ: egyre későbbi fázis -> ostorcsapás-érzet.
+       A szögek a STÍLUS-táblából jönnek, így egy döfés tényleg döfés, egy körbevágás
+       tényleg vízszintes — nem mindenki ugyanazt az előrehajolós mozdulatot csinálja. --- */
+    m.arms.R.rotation.x = ra(sArm, .34, A.aX[0] * (heavy ? 1.08 : 1), A.aX[1]);
+    m.arms.R.rotation.z = ra(sArm, -.09, A.aZ[0], A.aZ[1]);
+    m.elbows.R.rotation.x = ra(sElb, -.42, A.eX[0], A.eX[1]);
+    m.arms.L.rotation.x = ra(sArm, .34, A.lX[0], A.lX[1]);
+    m.arms.L.rotation.z = ra(sArm, .09, A.lZ[0], A.lZ[1]);
+    m.elbows.L.rotation.x = ra(sElb, -.42, A.lE[0], A.lE[1]);
+    if (m.fists) {
+      /* A fegyver a marokban HÁTRAMARAD a felhúzásnál, majd ÁTPÖRDÜL a becsapódáskor.
+         Az amplitúdó fegyverenként (WGRIP) ÉS stílusonként (A.wri) más. */
+      const gr = grip(G), wr = wristRest(G), k = A.wri;
+      m.fists.R.rotation.x = ra(sWri, wr, wr + (gr.wind - wr) * k, wr + (gr.hit - wr) * k);
+      m.fists.R.rotation.z = 0;
+      m.fists.L.rotation.x = ra(sWri, 0, -.30 * k, .25 * k); m.fists.L.rotation.z = 0;
+    }
+
+    /* --- FEJ: a célponton marad (a törzs fordulását kioltja), majd rábólint az ütésre --- */
+    const chestY = m.pelvis.rotation.y + m.torso.rotation.y;
+    m.head.rotation.y = -chestY * .62;
+    m.head.rotation.x = ra(sSpine, 0, A.hX[0], A.hX[1]) - G.lean * .45;
+    m.head.rotation.z = -(m.pelvis.rotation.z + m.torso.rotation.z) * .6;
+
+    /* --- LÁB: hátsó láb tolja, elülső fogadja a súlyt --- */
+    if (m.knees.L) {
+      m.legs.L.rotation.x = ra(sPelv, 0, -.22, .30); m.legs.R.rotation.x = ra(sPelv, 0, .26, -.34);
+      m.knees.L.rotation.x = .06 + Math.max(0, -sPelv) * .30 + step * .18;
+      m.knees.R.rotation.x = .06 + Math.max(0, sPelv) * .34 + step * .12;
+      if (m.ankles.L) { m.ankles.L.rotation.x = -.06 - Math.max(0, sPelv) * .16; m.ankles.R.rotation.x = -.06 - Math.max(0, -sPelv) * .16; }
+    }
+    /* --- ÁLLKAPOCS: kinyílik a felhúzásra, becsattan az ütésre --- */
+    if (m.jaw) m.jaw.rotation.x = Math.max(0, -sPelv) * .60 + jolt * .26;
+  },
+
+  DEATHS: ['topple', 'crumple', 'backflip', 'faceplant', 'spin', 'kneel', 'dissolve', 'shatter', 'burst'],
+
+  death(m, k, style) {
+    const G = m.genome, g = m.g, p = g.position, S = m.scale;
+    p.x *= .9;   // a járásból maradt oldalsó súlyáthelyezés kifut, nem ragad be a hullába
+    const L = (a, b, t) => lerpN(a, b, t);
+    const hasLegs = !!m.knees.L && !G.wraith;
+    if (m.eyeMat) m.eyeMat.emissiveIntensity = Math.max(0, .95 * (1 - k / 1.1));
+    /* közös: a végtagok elernyednek — a könyök/térd is */
+    const limp = (t) => {
+      m.elbows.L.rotation.x = L(-.42, -.12, t); m.elbows.R.rotation.x = L(-.42, -.16, t);
+      if (hasLegs) { m.knees.L.rotation.x = L(.06, .55, t); m.knees.R.rotation.x = L(.06, .40, t); }
+    };
+    switch (style) {
+      case 'topple': {
+        const f = easeOutCubic(Math.min(1, k / .9));
+        const settle = k > .9 ? Math.sin((k - .9) * 16) * .07 * Math.exp(-(k - .9) * 6) : 0;
+        g.rotation.x = L(0, 1.55, f) + settle; g.rotation.z = L(0, .3, f); p.y = -.05 * f;
+        m.head.rotation.x = L(0, .9, Math.min(1, k / .6));
+        m.arms.L.rotation.x = L(.34, 1.7, f); m.arms.L.rotation.z = L(.09, .5, f);
+        m.arms.R.rotation.x = L(.34, 1.7, f); m.arms.R.rotation.z = L(-.09, -.5, f);
+        limp(f);
+        if (hasLegs) { m.legs.L.rotation.x = L(0, -.35, f); m.legs.R.rotation.x = L(0, -.45, f); }
+        return k > 2.2;
+      }
+      case 'crumple': {
+        const r = easeOutCubic(Math.min(1, k / 1.0)); p.y = -r * .62 * S;
+        if (hasLegs) { m.legs.L.rotation.x = L(0, .55, r); m.legs.R.rotation.x = L(0, .5, r);
+                       m.knees.L.rotation.x = L(.06, 2.0, r); m.knees.R.rotation.x = L(.06, 1.9, r); }
+        g.rotation.x = L(0, .95, r);
+        m.head.rotation.x = L(0, 1.1, Math.min(1, k / .8));
+        m.arms.L.rotation.x = L(.34, 1.9, r); m.arms.R.rotation.x = L(.34, 2.0, r);
+        m.elbows.L.rotation.x = L(-.42, -.9, r); m.elbows.R.rotation.x = L(-.42, -1.0, r);
+        const flat = Math.min(1, Math.max(0, (k - .9) / .5)); g.scale.set(S, S * (1 - flat * .28), S);
+        return k > 2.2;
+      }
+      case 'backflip': {                                   // fejlövés: hanyatt vágódik
+        const f = easeOutCubic(Math.min(1, k / .85));
+        g.rotation.x = L(0, -1.75, f); p.y = Math.sin(Math.min(1, k / .85) * Math.PI) * .5 * S - .05 * f;
+        p.z = -f * .9 * S;
+        m.arms.L.rotation.x = L(.34, -2.0, f); m.arms.R.rotation.x = L(.34, -2.2, f);
+        m.arms.L.rotation.z = L(.09, .8, f); m.arms.R.rotation.z = L(-.09, -.8, f);
+        m.elbows.L.rotation.x = L(-.42, -.05, f); m.elbows.R.rotation.x = L(-.42, -.08, f);
+        if (hasLegs) { m.legs.L.rotation.x = L(0, .9, f); m.legs.R.rotation.x = L(0, 1.1, f);
+                       m.knees.L.rotation.x = L(.06, .8, f); m.knees.R.rotation.x = L(.06, .6, f); }
+        m.head.rotation.x = L(0, -.8, f);
+        return k > 2.2;
+      }
+      case 'faceplant': {
+        const f = easeOutCubic(Math.min(1, k / .7));
+        g.rotation.x = L(0, -1.62, f); p.y = -.04 * f; p.z = f * .5 * S;
+        m.arms.L.rotation.x = L(.34, -.35, f); m.arms.R.rotation.x = L(.34, -.45, f);
+        m.elbows.L.rotation.x = L(-.42, -.9, f); m.elbows.R.rotation.x = L(-.42, -.8, f);
+        if (hasLegs) { m.legs.L.rotation.x = L(0, .45, f); m.legs.R.rotation.x = L(0, .3, f);
+                       m.knees.L.rotation.x = L(.06, .5, f); m.knees.R.rotation.x = L(.06, .7, f); }
+        m.head.rotation.x = L(0, -.35, f);
+        return k > 2.2;
+      }
+      case 'spin': {
+        const f = easeOutCubic(Math.min(1, k / 1.15));
+        g.rotation.y = f * 7.4;
+        g.rotation.x = L(0, 1.5, easeOutCubic(Math.min(1, Math.max(0, (k - .35) / .8))));
+        p.y = -.05 * f;
+        m.arms.L.rotation.z = L(.09, 1.5, f); m.arms.R.rotation.z = L(-.09, -1.5, f);
+        m.arms.L.rotation.x = L(.34, .05, f); m.arms.R.rotation.x = L(.34, .05, f);
+        limp(f);
+        return k > 2.3;
+      }
+      case 'kneel': {                                      // térdre rogy, majd oldalra dől
+        const a = easeOutCubic(Math.min(1, k / .55));
+        if (hasLegs) { m.legs.L.rotation.x = L(0, .55, a); m.legs.R.rotation.x = L(0, .15, a);
+                       m.knees.L.rotation.x = L(.06, 2.1, a); m.knees.R.rotation.x = L(.06, .8, a); }
+        p.y = -a * .46 * S;
+        m.torso.rotation.x = L(G.lean, G.lean + .5, a);
+        m.head.rotation.x = L(0, .7, a);
+        m.arms.L.rotation.x = L(.34, 1.4, a); m.arms.R.rotation.x = L(.34, 1.3, a);
+        m.elbows.L.rotation.x = L(-.42, -.2, a); m.elbows.R.rotation.x = L(-.42, -.25, a);
+        if (k > .8) { const b = easeOutCubic(Math.min(1, (k - .8) / .7)); g.rotation.z = L(0, 1.35, b); p.y = -a * .46 * S - b * .18 * S; }
+        return k > 2.4;
+      }
+      case 'dissolve': {
+        const r = Math.min(1, k / 1.4); p.y = r * 1.5 * S; g.rotation.y += .022;
+        m.arms.L.rotation.x = L(.34, -.9, r); m.arms.R.rotation.x = L(.34, -1.0, r);
+        m.elbows.L.rotation.x = L(-.42, -.1, r); m.elbows.R.rotation.x = L(-.42, -.15, r);
+        g.scale.set(S * (1 + r * .35), S * (1 - r * .9), S * (1 + r * .35));
+        return k > 1.9;
+      }
+      case 'shatter': {
+        if (k < .35) { g.scale.setScalar(S * (1 + Math.sin(k * 40) * .02)); return false; }
+        const r = Math.min(1, (k - .35) / .55);
+        g.scale.set(S * (1 + r * .2), S * (1 - r), S * (1 + r * .2));
+        g.rotation.z = r * .4;
+        return k > 1.2;
+      }
+      case 'burst': {
+        const r = Math.min(1, k / .9), blow = easeOutCubic(r);
+        m.head.position.y = L(m.head.position.y, 3.6, .16); m.head.rotation.x += .16; m.head.rotation.z += .12;
+        m.arms.L.rotation.z = L(.09, 1.6, blow); m.arms.R.rotation.z = L(-.09, -1.6, blow);
+        m.elbows.L.rotation.x = L(-.42, .3, blow); m.elbows.R.rotation.x = L(-.42, .25, blow);
+        if (hasLegs) { m.legs.L.rotation.z = L(0, .9, blow); m.legs.R.rotation.z = L(0, -.9, blow); }
+        g.rotation.y += .07;
+        g.scale.setScalar(Math.max(.0001, S * (1 - blow * .95)));
+        return k > 1.3;
+      }
+    }
+    return k > 2.2;
+  },
+
+  pickDeath(G, el, headshot, R) {
+    const r = R || Math.random;
+    if (G.wraith) return 'dissolve';
+    if (el === 'ice') return 'shatter';
+    if (el === 'fire') return r() < .5 ? 'burst' : 'crumple';
+    if (el === 'lightning') return r() < .5 ? 'spin' : 'backflip';
+    if (headshot) return r() < .6 ? 'backflip' : 'spin';
+    if (G.rocky) return r() < .5 ? 'shatter' : 'topple';
+    const pool = ['topple', 'crumple', 'faceplant', 'kneel', 'spin'];
+    return pool[(r() * pool.length) | 0];
+  },
+
+  /* MÁSODLAGOS MOZGÁS — a pózra ÜL RÁ: fej-késés, fegyver-lengés, has-rezgés.
+     ref: threejs-procedural-animation (rugó-követés, dt-alapú, vágott delta). */
+  secondary(m, dt) {
+    dt = Math.min(.05, dt);
+    const S = m._spr;
+    /* a fej a MELLKAS fordulását késve követi (a rugó hibája = a késés) */
+    const chestY = m.pelvis.rotation.y + m.torso.rotation.y;
+    m.head.rotation.y += springStep(S.hy, chestY, 90, .55, dt) - chestY;
+    m.head.rotation.x += springStep(S.hx, m.torso.rotation.x * .35, 110, .6, dt) - m.torso.rotation.x * .35;
+    /* az állkapocs a fej gyorsulására csattan */
+    if (m.jaw) m.jaw.rotation.x = Math.max(0, m.jaw.rotation.x + springStep(S.jaw, m.head.rotation.x * .25, 140, .35, dt) * .5);
+    /* a fegyver a csuklóban utánleng */
+    if (m.weapon) m.weapon.rotation.z = (m.weapon.userData.baseZ !== undefined ? m.weapon.userData.baseZ : (m.weapon.userData.baseZ = m.weapon.rotation.z))
+      + springStep(S.wz, -m.arms.R.rotation.x * .16, 70, .5, dt);
+    /* a has a függőleges mozgásra rezeg */
+    const gy = springStep(S.gut, m.g.position.y * -1.6, 130, .42, dt);
+    m.torso.position.y = 1.30 + gy * .18;
+  },
+
+  reset(m) {
+    const G = m.genome, S = m.scale, RE = this.REST;
+    m.g.rotation.set(0, 0, 0); m.g.position.set(0, 0, 0); m.g.scale.setScalar(S);
+    if (m.pelvis) { m.pelvis.rotation.set(0, 0, 0); m.pelvis.position.y = .95; }
+    if (m.fists) { const wr = wristRest(G); m.fists.L.rotation.set(wr, 0, 0); m.fists.R.rotation.set(wr, 0, 0); }
+    m.torso.rotation.set(G.lean, 0, 0); m.torso.position.y = 1.30;
+    m.head.rotation.set(0, 0, 0); m.head.position.y = 2.50 + G.neckLen;
+    ['L', 'R'].forEach(k => {
+      m.arms[k].rotation.set(RE.arm, 0, k === 'L' ? .09 : -.09);
+      m.elbows[k].rotation.set(RE.elbow, 0, 0);
+      if (m.legs[k]) m.legs[k].rotation.set(0, 0, 0);
+      if (m.knees[k]) m.knees[k].rotation.set(RE.knee, 0, 0);
+      if (m.ankles[k]) m.ankles[k].rotation.set(-.04, 0, 0);
+    });
+    if (m.jaw) m.jaw.rotation.x = 0;
+    if (m._spr) Object.keys(m._spr).forEach(k => { m._spr[k].x = 0; m._spr[k].v = 0; });
+    if (m.eyeMat) m.eyeMat.emissiveIntensity = .95;
+  },
+};
+
+/* ---------------------------------------------------------- kombinatorika -- */
+function variantCount() {
+  /* diszkrét tengelyek szorzata (a folytonos arányok/színek NÉLKÜL) */
+  let n = 1;
+  n *= Object.keys(CASTES).length;
+  n *= PARTS.skull.length * PARTS.brow.length * PARTS.jaw.length;
+  n *= PARTS.ear.length * PARTS.horn.length * PARTS.tusk.length * PARTS.crest.length;
+  n *= 4;                                   // szemszám
+  n *= 3;                                   // pupilla
+  n *= PARTS.skinKind.length;
+  n *= PARTS.weapon.length;
+  n *= 3;                                   // tier
+  n *= 5;                                   // elem (+ nincs)
+  n *= Math.pow(2, PARTS.growth.length);    // növedék-részhalmazok
+  n *= Math.pow(2, PARTS.gear.length);      // felszerelés-részhalmazok
+  n *= Math.pow(2, PARTS.wound.length);     // sérülés-részhalmazok
+  return n;
+}
+
+function dispose(m) {
+  m.g.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); if (o.isSprite && o.material) o.material.dispose(); });
+  (m._mats || []).forEach(x => x && x.dispose && x.dispose());
+}
+
+global.TrollGen = {
+  VERSION: '1.0',
+  CASTES, TIERS, PARTS, EL, SKIN_KIND, M,
+  RNG, describe, build, dispose, stickArrow, anim, variantCount, dsHex, mossify, mossRel, springStep,
+  BOWS, ARROW_EL, makeBow, makeArrowMesh,
+  make(seed, opts) { return build(describe(seed, opts)); },
+};
+})(window);
+
+</script>
 <!-- CO-OP: expose connectCoop to the (non-module) game IIFE without changing single-player. net-client.js never runs unless the game opts in via ?room. -->
 <script type="module">
   try {
@@ -2807,7 +4885,64 @@ function limbGeo(o){
   }
   return gradTint(mergeGeos(parts), tint[1], tint[0], y2-0.24, 0.06);
 }
-function makeMonster(type, scale, hp, speed, el){
+/* ===================== PROCEDURÁLIS TROLL-GENERÁTOR bekötés =====================
+   A TrollGen (beágyazva a <head>-ben) a MEGJELENÉST adja; a gameplay (TROLL_TYPES:
+   hp/speed/dmg szorzók, resist, AI-ágak a typeId szerint) VÁLTOZATLAN.
+   Kapcsoló: USE_TROLLGEN=false -> azonnal vissza a régi kézi rigre (makeMonsterLegacy).
+   Seed: SP-ben sorsolt, co-opban a szervertől jön -> minden kliens UGYANAZT a trollt építi. */
+var USE_TROLLGEN = true;
+function makeMonster(type, scale, hp, speed, el, seed){
+  if(!(USE_TROLLGEN && window.TrollGen)) return makeMonsterLegacy(type, scale, hp, speed, el);
+  try { return makeMonsterGen(type, scale, hp, speed, el, seed); }
+  catch(e){ console.warn('[TrollGen] build hiba -> legacy rig:', e && e.message); return makeMonsterLegacy(type, scale, hp, speed, el); }
+}
+function makeMonsterGen(type, scale, hp, speed, el, seed){
+  let T;
+  if(typeof type==='string' && TROLL_TYPES[type]) T=TROLL_TYPES[type];
+  else { speed=hp; hp=scale; scale=type; T=TROLL_TYPES.grunt; }
+  const sd = (seed==null) ? ((Math.random()*0xffffffff)>>>0) : (seed>>>0);
+  const G   = TrollGen.describe(sd, { caste:T.id, el:(el!==undefined?el:(T.el||null)), tier:'normal' });
+  const gen = TrollGen.build(G);
+  const g   = gen.g;
+  g.scale.setScalar(scale);                       // a hullám-skálázás a genom-méret FÖLÉ jön (gameplay-méret)
+  scene.add(g);
+
+  const m={ g, legs:gen.legs, arms:gen.arms, head:gen.head, torso:gen.torso, eyes:gen.eyes||[],
+    eyeMat:gen.eyeMat, bodySkin:gen.bodySkin, hp, maxHp:hp, speed, walkPhase:Math.random()*6.28,
+    alive:true, dying:0, atkCd:0.6, hurtFlash:0, scale,
+    atkPhase:0, atkT:0, atkDur:0, atkHit:false, atkKind:null, lungeBase:null,
+    bodyR:(gen.bodyR||0.85)*scale, bodyCY:(gen.bodyCY||1.1)*scale, headCY:(gen.headCY||1.95)*scale, headR:(gen.headR||0.42)*scale,
+    type:T, typeId:T.id, threat:T.threat, dmgMul:T.dmgMul||1,
+    dashCd:0, dashTimer:0, healTimer:0, rangedTimer:0, rooted:0,
+    statusEl:null, statusT:0, slowMul:1, burnAcc:0, _eyeBase:null,
+    statusStacks:1, wet:0, charged:0, frozenSolid:0, chill:0, lastReactT:-999, lastInnateReactT:-999, _fireSpreadT:0, resist:(T.resist||null),
+    // ÚJ ízület-fogantyúk (a régi animációk nem használják; a TrollGen.anim igen)
+    knees:gen.knees, elbows:gen.elbows, fists:gen.fists, jaw:gen.jaw, pelvis:gen.pelvis, torsoIn:gen.torsoIn,
+    genome:G, gen, seed:sd };
+  // ---- per-típus HOOK-ok: a játék AI-ja ezeket `if(m.X)` őrrel olvassa, így ami hiányzik, az csak kimarad ----
+  if(gen.weapon){
+    m._club = gen.weapon;                                        // grunt/brute csukló-billentés handle (a fegyver a fists-en ül)
+    if(gen.weapon.userData && gen.weapon.userData.crystal) m.staffCrystal = gen.weapon.userData.crystal;   // SÁMÁN: nyaláb/varázslat kiindulópont + pulzus
+  }
+  if(T.id==='shaman'){ m.healTimer=rand(1.5,3.0); m.auraPulse=0; m.castTimer=rand(1.2,2.6); m.casting=0; m.beaming=false; m.beamAcc=0; }   // sámán AI-óra (a régi T.build állította)
+  if(T.id==='spitter'){ m.rangedTimer=rand(0.8,2.0); }
+  m.el = (el!==undefined) ? el : (T.el||null);                   // a TrollGen már beépítette az elem-vizuált (tint+aura) a genomból
+  // FEJLÖVÉS-GÖMB a VALÓDI fejhez: a genom bodyCY/headCY becslése a kis kasztoknál (scout/shard) elcsúszott,
+  // ezért a fej tényleges világ-magasságából számolunk (a legacy rig is így tett).
+  try{ g.updateMatrixWorld(true);
+    const _hp=new THREE.Vector3(); gen.head.getWorldPosition(_hp);
+    const _hb=new THREE.Box3().setFromObject(gen.head);
+    m.headCY = _hp.y - g.position.y;                                  // fej-közép a troll gyökeréhez képest (világ-skálán)
+    m.headR  = Math.max(0.22, Math.min((_hb.max.y-_hb.min.y), (_hb.max.x-_hb.min.x))*0.45);
+  }catch(_e){}
+  // FPS: csak a sziluett vessen árnyékot
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=false; });
+  [gen.torso, gen.head, gen.legs&&gen.legs.L, gen.legs&&gen.legs.R, gen.arms&&gen.arms.L, gen.arms&&gen.arms.R]
+    .forEach(p=>{ if(p) p.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); });
+  attachHpBar(m);
+  return m;
+}
+function makeMonsterLegacy(type, scale, hp, speed, el){
   let T;
   if(typeof type==='string' && TROLL_TYPES[type]) T=TROLL_TYPES[type];
   else { speed=hp; hp=scale; scale=type; T=TROLL_TYPES.grunt; }
@@ -2948,6 +5083,8 @@ function disposeMonster(m){
   if(m.spitMat) m.spitMat.dispose();
   if(m.wispFaceMat) m.wispFaceMat.dispose();   // a wisp csont-arc klónja (a wispGlow sprite-okat a g.traverse takarítja)
   if(m._crackMat) m._crackMat.dispose();   // szilánk repedés-anyag (klónozott Mesh-anyag, a sprite-traverzál nem fogja)
+  // TROLLGEN: a generátor per-troll anyagai (bodySkin/eyeMat/mossMat + minden own()-olt) — a SHARED TrollGen.M-et SOSEM szabad diszponálni
+  if(m.gen && m.gen._mats) m.gen._mats.forEach(x=>{ if(x && x.dispose && x!==m.bodySkin && x!==m.eyeMat) x.dispose(); });
 }
 
 /* ===================== Effektek (szikra / por / vér) ===================== */
@@ -4476,7 +6613,7 @@ function coopEnsureMonster(sm){
     const id = coopTrollTypeId(sm.type);
     const sc = (typeof sm.scale==='number' && sm.scale>0) ? sm.scale : ((TROLL_TYPES[id] && TROLL_TYPES[id].scaleMul) || 1.0); // típus-helyes méret (a szerver most már küld scale-t)
     const hp = (typeof sm.hp==='number') ? sm.hp : (typeof sm.maxHp==='number'?sm.maxHp:40);
-    m = makeMonster(id, sc, hp, (typeof sm.speed==='number'?sm.speed:2), (sm.el!==undefined?sm.el:null));   // RANDOM ELEM: a szerver sorsolta, monsterView.el-ben jön
+    m = makeMonster(id, sc, hp, (typeof sm.speed==='number'?sm.speed:2), (sm.el!==undefined?sm.el:null), sm.seed);   // RANDOM ELEM + TROLLGEN-SEED: a szerver sorsolta (monsterView.el/.seed) -> minden kliens UGYANAZT a trollt építi
     m.coopRemote = true;            // <- collision loop reports this; AI/local-death gated by it
     m.netId = netId;
     if(typeof sm.maxHp==='number') m.maxHp = sm.maxHp;
@@ -4925,6 +7062,7 @@ document.getElementById('restartBtn').addEventListener('click',beginPlay);
 
 // --- fejlesztői/teszt-hook: csak #dev hash-sel aktív (Playwright-verifikációhoz; játékos-úton inert) ---
 if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgrades, addScore, startWave, freezeEncase, freezeFull, killMonster, openShop, applyStatus, renderer, player, damagePlayer, camera, scene, THREE, CAVES,
+  makeMonster, disposeMonster, trollAI, update, get USE_TROLLGEN(){return USE_TROLLGEN}, set USE_TROLLGEN(v){USE_TROLLGEN=v},
   bloomComposer, finalComposer, bloomPass,
   setBloom:(s,r,t)=>{ if(!bloomPass)return; if(s!=null)bloomPass.strength=s; if(r!=null)bloomPass.radius=r; if(t!=null)bloomPass.threshold=t; },
   setBloomOn:(v)=>{ bloomOn=!!v; },
