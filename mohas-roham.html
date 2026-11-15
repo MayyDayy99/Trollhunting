@@ -3118,11 +3118,11 @@ function jitter(geo,axz,ay){
   // FONTOS: a Dodeka/Ikosa geometriák NEM indexeltek (minden lapnak saját, duplikált
   // sarokpontjai vannak). Ha minden vertexet külön tolunk el, a lapok SZÉTSZAKADNak a
   // varratoknál (rések/lyukak a kövön). Ezért az egybeeső pontok KÖZÖS eltolást kapnak.
-  const p=geo.attributes.position, seen=Object.create(null);
+  const p=geo.attributes.position, seen=new Map();
   for(let i=0;i<p.count;i++){
     const x=p.getX(i), y=p.getY(i), z=p.getZ(i);
-    const key=Math.round(x*1e3)+'_'+Math.round(y*1e3)+'_'+Math.round(z*1e3);
-    let o=seen[key]; if(!o) o=seen[key]=[(Math.random()-0.5)*axz,(Math.random()-0.5)*ay,(Math.random()-0.5)*axz];
+    const key=vkey(x,y,z,1e3);
+    let o=seen.get(key); if(!o){ o=[(Math.random()-0.5)*axz,(Math.random()-0.5)*ay,(Math.random()-0.5)*axz]; seen.set(key,o); }
     p.setX(i,x+o[0]); p.setY(i,y+o[1]); p.setZ(i,z+o[2]);
   }
   return smoothNormals(geo,50);
@@ -3150,13 +3150,13 @@ function radialTint(geo,cIn,cOut,rMax,cx,cz){
 function mottleTint(geo,colors,blend){
   // A jitterrel azonos kulcs-kerekítés: az egybeeső vertexek KÖZÖS foltszínt kapnak
   // (nem-indexelt geometrián nem lesz lap-konfetti, hanem koherens folt).
-  const p=geo.attributes.position, seen=Object.create(null), W=new THREE.Color(0xffffff);
+  const p=geo.attributes.position, seen=new Map(), W=new THREE.Color(0xffffff);
   const has=!!geo.attributes.color;
   const col=has?geo.attributes.color.array:new Float32Array(p.count*3).fill(1);
   const C=new THREE.Color();
   for(let i=0;i<p.count;i++){
-    const key=Math.round(p.getX(i)*1e3)+'_'+Math.round(p.getY(i)*1e3)+'_'+Math.round(p.getZ(i)*1e3);
-    let c=seen[key]; if(!c){ C.setHex(colors[(Math.random()*colors.length)|0]).lerp(W,blend||0); c=seen[key]=[C.r,C.g,C.b]; }
+    const key=vkey(p.getX(i),p.getY(i),p.getZ(i),1e3);
+    let c=seen.get(key); if(!c){ C.setHex(colors[(Math.random()*colors.length)|0]).lerp(W,blend||0); c=[C.r,C.g,C.b]; seen.set(key,c); }
     col[i*3]*=c[0]; col[i*3+1]*=c[1]; col[i*3+2]*=c[2];
   }
   geo.setAttribute('color',new THREE.BufferAttribute(col,3)); return geo;
@@ -3196,19 +3196,26 @@ function vnoise3(x,y,z){ const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor
 function fbm3(x,y,z,oct){ let s=0,a=0.5; for(let i=0;i<(oct||3);i++){ s+=a*vnoise3(x,y,z); x=x*2.03+11.7; y=y*2.03+3.1; z=z*2.03+7.9; a*=0.5; } return s; }
 /* Élmegtartó sima normálok: az egybeeső csúcsok lap-normáljait átlagolja, DE csak a `creaseDeg` szögnél laposabban
    találkozó lapok közt -> a gömbölyű részek simák, a szándékos élek (doboz-sarok, vésés) élesek maradnak. Helyben ír. */
+/* gyors csúcs-kulcs: kvantált koordináták EGY számba csomagolva (szöveges kulcs helyett ~4x gyorsabb); tartományon kívül szöveg */
+function vkey(x,y,z,q){ const a=Math.round(x*q)+65536, b=Math.round(y*q)+65536, c=Math.round(z*q)+65536;
+  return (a>=0&&a<131072&&b>=0&&b<131072&&c>=0&&c<131072) ? a*17179869184+b*131072+c : a+','+b+','+c; }
 function smoothNormals(geo, creaseDeg){
   if(geo.index){ const ng=geo.toNonIndexed(); geo.setIndex(null); for(const k in ng.attributes) geo.setAttribute(k, ng.attributes[k]); }
   const p=geo.attributes.position, n=p.count, tri=(n/3)|0, cosT=Math.cos((creaseDeg==null?50:creaseDeg)*Math.PI/180), A=p.array;
   const fr=new Float32Array(tri*3), fu=new Float32Array(tri*3);
   for(let t=0;t<tri;t++){ const i=t*9, ax=A[i+3]-A[i], ay=A[i+4]-A[i+1], az=A[i+5]-A[i+2], bx=A[i+6]-A[i], by=A[i+7]-A[i+1], bz=A[i+8]-A[i+2];
     const x=ay*bz-az*by, y=az*bx-ax*bz, z=ax*by-ay*bx, l=Math.hypot(x,y,z)||1; fr[t*3]=x; fr[t*3+1]=y; fr[t*3+2]=z; fu[t*3]=x/l; fu[t*3+1]=y/l; fu[t*3+2]=z/l; }
-  const groups=new Map();
-  for(let i=0;i<n;i++){ const k=Math.round(A[i*3]*400)+','+Math.round(A[i*3+1]*400)+','+Math.round(A[i*3+2]*400); let g=groups.get(k); if(!g){ g=[]; groups.set(k,g); } g.push(i); }
+  // egybeeső csúcsok csoportosítása CSR-listába (Map + typed array: nincs csoportonkénti tömb-allokáció)
+  const km=new Map(), gid=new Int32Array(n); let ng=0;
+  for(let i=0;i<n;i++){ const k=vkey(A[i*3],A[i*3+1],A[i*3+2],250); let g=km.get(k); if(g===undefined){ g=ng++; km.set(k,g); } gid[i]=g; }
+  const st=new Int32Array(ng+1); for(let i=0;i<n;i++) st[gid[i]+1]++; for(let g=0;g<ng;g++) st[g+1]+=st[g];
+  const cur=st.slice(0,ng), lst=new Int32Array(n); for(let i=0;i<n;i++) lst[cur[gid[i]]++]=i;
   const out=new Float32Array(n*3);
-  groups.forEach(g=>{ for(let a=0;a<g.length;a++){ const i=g[a], t=(i/3)|0, ux=fu[t*3], uy=fu[t*3+1], uz=fu[t*3+2]; let x=0,y=0,z=0;
-      for(let b=0;b<g.length;b++){ const s=(g[b]/3)|0; if(ux*fu[s*3]+uy*fu[s*3+1]+uz*fu[s*3+2]>=cosT){ x+=fr[s*3]; y+=fr[s*3+1]; z+=fr[s*3+2]; } }
-      const l=Math.hypot(x,y,z)||1; out[i*3]=x/l; out[i*3+1]=y/l; out[i*3+2]=z/l; } });
-  geo.setAttribute('normal', new THREE.BufferAttribute(out,3)); return geo;
+  for(let g=0;g<ng;g++){ const s0=st[g], s1=st[g+1];
+    for(let a=s0;a<s1;a++){ const i=lst[a], t=(i/3)|0, ux=fu[t*3], uy=fu[t*3+1], uz=fu[t*3+2]; let x=0,y=0,z=0;
+      for(let b=s0;b<s1;b++){ const q=(lst[b]/3)|0; if(ux*fu[q*3]+uy*fu[q*3+1]+uz*fu[q*3+2]>=cosT){ x+=fr[q*3]; y+=fr[q*3+1]; z+=fr[q*3+2]; } }
+      const l=Math.hypot(x,y,z)||1; out[i*3]=x/l; out[i*3+1]=y/l; out[i*3+2]=z/l; } }
+  geo.setAttribute('normal', new THREE.BufferAttribute(out,3)); geo.userData._tsm=1; return geo;
 }
 function vcolAttr(geo, fn){   // vertex-szín kitöltés: fn(x,y,z,i) -> [r,g,b] szorzó
   const p=geo.attributes.position, c=new Float32Array(p.count*3);
@@ -3216,8 +3223,9 @@ function vcolAttr(geo, fn){   // vertex-szín kitöltés: fn(x,y,z,i) -> [r,g,b]
   geo.setAttribute('color', new THREE.BufferAttribute(c,3)); return geo;
 }
 /* Lekerekített élű hasáb (gerenda / palló / kőlap): a nyers BoxGeometry borotvaéles sarkai helyett letört, fényt fogó élek. */
+const _BoxG=THREE.BoxGeometry;   // eredeti konstruktor (a troll-építés alatti hi-res csomagoló ne rekurzáljon)
 function roundBox(w,h,d,b){
-  b=Math.min(b==null?0.05:b, w*0.45, h*0.45, d*0.45); const g=new THREE.BoxGeometry(w,h,d,3,3,3).toNonIndexed(), p=g.attributes.position, hx=w/2, hy=h/2, hz=d/2;
+  b=Math.min(b==null?0.05:b, w*0.45, h*0.45, d*0.45); const g=new _BoxG(w,h,d,3,3,3).toNonIndexed(), p=g.attributes.position, hx=w/2, hy=h/2, hz=d/2;
   const snap=(v,hf)=>{ const a=Math.abs(v); return a>hf*0.9 ? Math.sign(v)*hf : Math.sign(v)*(hf-b); };   // a belső osztás a letörés-vonalra ugrik
   for(let i=0;i<p.count;i++){ const x=snap(p.getX(i),hx), y=snap(p.getY(i),hy), z=snap(p.getZ(i),hz);
     const ix=clamp(x,-hx+b,hx-b), iy=clamp(y,-hy+b,hy-b), iz=clamp(z,-hz+b,hz-b); let dx=x-ix, dy=y-iy, dz=z-iz; const l=Math.hypot(dx,dy,dz);
@@ -3240,6 +3248,20 @@ function makeRockGeo(seed, detail, cuts){
   return smoothNormals(g,36);
 }
 const GEO_DETAIL=MOBILE_INPUT?1:2;
+/* TROLL HI-RES: a TrollGen a THREE-n keresztül hívja a primitíveket -> az építés idejére részletesebb változatokat
+   cserélünk be (több szegmens, eggyel finomabb ikozaéder, a nagyobb dobozok lekerekített élűek). Mobilon mérsékeltebb. */
+const _G0={ Sphere:THREE.SphereGeometry, Cyl:THREE.CylinderGeometry, Cone:THREE.ConeGeometry, Ico:THREE.IcosahedronGeometry, Tor:THREE.TorusGeometry, Box:THREE.BoxGeometry };
+const _HQ=MOBILE_INPUT?1.5:2;
+const _GB={
+  SphereGeometry:function(r,w,h,a,b,c,d){ return new _G0.Sphere(r, Math.min(26,Math.max(12,Math.round((w||8)*_HQ))), Math.min(18,Math.max(8,Math.round((h||6)*_HQ))), a,b,c,d); },
+  CylinderGeometry:function(rt,rb,h,rs,hs,o,ts,tl){ return new _G0.Cyl(rt,rb,h, Math.min(24,Math.max(12,Math.round((rs||8)*_HQ))), Math.max(2,hs||1), o,ts,tl); },
+  ConeGeometry:function(r,h,rs,hs,o,ts,tl){ return new _G0.Cone(r,h, Math.min(16,Math.max(8,Math.round((rs||8)*_HQ))), Math.max(1,hs||1), o,ts,tl); },
+  IcosahedronGeometry:function(r,d){ return new _G0.Ico(r, Math.min(MOBILE_INPUT?1:2,(d||0)+1)); },
+  TorusGeometry:function(r,t,rs,ts,arc){ return new _G0.Tor(r,t, Math.min(12,Math.round((rs||6)*_HQ)), Math.min(36,Math.round((ts||10)*_HQ)), arc); },
+  BoxGeometry:function(w,h,d,a,b,c){ const m=Math.min(w,h,d); return m>0.035 ? roundBox(w,h,d,m*0.32) : new _G0.Box(w,h,d,a,b,c); }
+};
+function withHiResGeo(fn){ const keys=Object.keys(_GB), saved={}; for(const k of keys){ saved[k]=THREE[k]; THREE[k]=_GB[k]; }
+  try{ return fn(); } finally{ for(const k of keys) THREE[k]=saved[k]; } }
 const ROCK_GEOS=[1,2,3,4,5,6].map(i=>makeRockGeo(i*3.7, GEO_DETAIL, 9));
 const pickGeo=(arr)=>arr[(Math.random()*arr.length)|0];
 /* Álló menhir / kőtömb: nyújtott, felfelé keskenyedő vésett hasáb. */
@@ -3349,7 +3371,7 @@ const STY_FRAG={
 function applyStylized(mat, kind){
   mat.onBeforeCompile=function(sh){
     sh.vertexShader='varying vec3 vWP; varying vec3 vWN; varying vec3 vOP;\n'+sh.vertexShader
-      .replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\n{ vec3 wn_=objectNormal;\n#ifdef USE_INSTANCING\n wn_=mat3(instanceMatrix)*wn_;\n#endif\n vWN=normalize(mat3(modelMatrix)*wn_); }')
+      .replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\nvWN=normalize((vec4(transformedNormal,0.0)*viewMatrix).xyz);')   // világ-normál a three skálázás-helyes (inverz-transzponált) normáljából
       .replace('#include <begin_vertex>','#include <begin_vertex>\nvOP=position; { vec4 wp_=vec4(position,1.0);\n#ifdef USE_INSTANCING\n wp_=instanceMatrix*wp_;\n#endif\n vWP=(modelMatrix*wp_).xyz; }');
     sh.fragmentShader='varying vec3 vWP; varying vec3 vWN; varying vec3 vOP;\n'+STY_NOISE+sh.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n'+STY_FRAG[kind]);
   };
@@ -3463,9 +3485,14 @@ function rock(x,z,r){
   solidCyl(x, z, r*0.9, {top:GROUND_Y+r*0.78, climb:true, mob:true});
   return m; }
 const swayers=[];
+const MUSH_STEM=(function(){ const g=new THREE.CylinderGeometry(0.075,0.12,0.44,12,4,true), p=g.attributes.position; for(let i=0;i<p.count;i++){ const y=p.getY(i), t=(y+0.22)/0.44; p.setX(i,p.getX(i)*(1+0.18*Math.sin(t*3.1))+0.03*t*t); p.setZ(i,p.getZ(i)*(1+0.18*Math.sin(t*3.1))); } p.needsUpdate=true; g.translate(0,0.22,0); g.computeVertexNormals(); return g; })();
+const MUSH_CAP=(function(){ const g=new THREE.SphereGeometry(0.3,22,10,0,6.28,0,Math.PI/2), p=g.attributes.position;   // perem enyhén lekunkorodik
+  for(let i=0;i<p.count;i++){ const y=p.getY(i); if(y<0.06){ const k=1-y/0.06; p.setY(i,y-0.035*k); } } g.computeVertexNormals();
+  vcolAttr(g,(x,y,z)=>{ const spot=vnoise3(x*14+3,y*14,z*14)>0.7 && y>0.05; return spot?[1.0,0.97,0.9]:[0.77,0.27,0.24]; }); return g; })();
+const capMatV=std({color:0xffffff,roughness:.6,vertexColors:true});
 function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(sc);
-  g.add(mesh(new THREE.CylinderGeometry(0.09,0.13,0.42,8), glow?std({color:0xbfe8ef}):stemMat,0,0.21,0));
-  { const cap=mesh(new THREE.SphereGeometry(0.3,10,7,0,6.28,0,Math.PI/2), glow?glowCapM:capMat,0,0.4,0,1,0.75,1); g.add(cap); if(glow) enableBloom(cap); }
+  g.add(mesh(MUSH_STEM, glow?std({color:0xbfe8ef}):stemMat,0,0,0));
+  { const cap=mesh(MUSH_CAP, glow?glowCapM:capMatV,0.03,0.42,0,1,0.72,1); cap.rotation.z=rand(-0.15,0.15); g.add(cap); if(glow) enableBloom(cap); }
   if(glow){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x7fe2ff,transparent:true,opacity:0.5,depthWrite:false}));
     sp.scale.setScalar(0.9); sp.position.y=0.5; g.add(sp); enableBloom(sp); }
   g.userData.phase=Math.random()*6.28; swayers.push(g); scene.add(g); }
@@ -3709,21 +3736,22 @@ function upNormals(g,k){ const n=g.attributes.normal; for(let i=0;i<n.count;i++)
 // ---- TUFT GRASS (instanced, dense centre falloff) ----
 // fűcsomó-geometria: 5 hajló penge EGY geometriába olvasztva (a régi 1-kúp = "tüske" helyett)
 function grassTuftGeo(){
-  const pos=[], blades=5;
+  const pos=[], blades=5, SEG=3;
   for(let i=0;i<blades;i++){
-    const yaw=i*1.27+rand(-0.25,0.25), cx=Math.cos(yaw), cz=Math.sin(yaw);
-    const w=0.022, px=-cz*w, pz=cx*w, h=0.42+Math.random()*0.30, bend=0.10+Math.random()*0.14;
-    const mw=w*0.6, mpx=-cz*mw, mpz=cx*mw, mx=cx*bend*0.4, mz=cz*bend*0.4, my=h*0.55, tx=cx*bend, tz=cz*bend, ty=h;
-    pos.push(-px,0,-pz, px,0,pz, mpx+mx,my,mpz+mz);            // tő -> közép (1. háromszög)
-    pos.push(-px,0,-pz, mpx+mx,my,mpz+mz, -mpx+mx,my,-mpz+mz);  // tő -> közép (2. háromszög)
-    pos.push(-mpx+mx,my,-mpz+mz, mpx+mx,my,mpz+mz, tx,ty,tz);   // közép -> hegy (csúcs)
+    const yaw=i*1.27+rand(-0.25,0.25), cx=Math.cos(yaw), cz=Math.sin(yaw), qx=-cz, qz=cx;
+    const w=0.024, h=0.42+Math.random()*0.30, bend=0.12+Math.random()*0.16, pts=[];
+    for(let k=0;k<=SEG;k++){ const t=k/SEG, ww=w*(1-t*0.92), off=bend*t*t;   // parabolikus hajlás + elvékonyodás
+      pts.push([cx*off-qx*ww, h*t*(1-0.18*t*t), cz*off-qz*ww, cx*off+qx*ww, cz*off+qz*ww]); }
+    for(let k=0;k<SEG;k++){ const A=pts[k], B=pts[k+1];
+      if(k<SEG-1){ pos.push(A[0],A[1],A[2], A[3],A[1],A[4], B[3],B[1],B[4]);  pos.push(A[0],A[1],A[2], B[3],B[1],B[4], B[0],B[1],B[2]); }
+      else pos.push(A[0],A[1],A[2], A[3],A[1],A[4], (B[0]+B[3])/2,B[1],(B[2]+B[4])/2); }
   }
   const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return upNormals(g,0.68);
 }
 const grassBladeMat=applyWind(std({color:0xffffff, roughness:1, vertexColors:true, side:THREE.DoubleSide}),'grass');   // a zöldet a per-instance szín adja (szorzódás!) grassBladeMat.side=THREE.DoubleSide;   // a hajló pengék mindkét oldala látsszon
 const _ic=new THREE.Color();
 (function(){ const N=MOBILE_INPUT?1500:4200, BLADE=grassTuftGeo();
-  gradTint(BLADE, 0x53614f, 0xffffff, 0, 0.55, 1.2);   // sötét tő -> világos hegy (penge-mélység)
+  gradTint(BLADE, 0x3b4a36, 0xf2f0c0, 0, 0.55, 1.15);   // sötét tő -> meleg, napszítta hegy (a kék holdfény ellen)
   const im=new THREE.InstancedMesh(BLADE, grassBladeMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   grassIM=im; im.userData.full=N; syncGrassCount();
   const A=new THREE.Color(0x214a2a), B=new THREE.Color(0x48723a);
@@ -3769,8 +3797,8 @@ const fernMatV=applyWind(std({color:0xffffff, roughness:1, vertexColors:true, si
 })();
 
 // ---- PEBBLES (instanced ground stones, worn-flagstone fleck) ----
-(function(){ const N=190, PEB=new THREE.IcosahedronGeometry(0.16,0);
-  const im=new THREE.InstancedMesh(PEB, rockMat, N); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;
+(function(){ const N=190, PEB=ROCK_GEOS[3].clone().scale(0.17,0.17,0.17);   // vésett mini-szikla (festett kő-anyag)
+  const im=new THREE.InstancedMesh(PEB, envRock, N); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;
   const A=new THREE.Color(0xb0b5be), B=new THREE.Color(0xffffff);
   for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+14, 1.2), s=rand(0.5,1.6);
     _fp.set(Math.cos(a)*r, GROUND_Y+0.05*s, Math.sin(a)*r);
@@ -3782,7 +3810,8 @@ const fernMatV=applyWind(std({color:0xffffff, roughness:1, vertexColors:true, si
 })();
 
 // ---- FALLEN LEAVES (instanced flat litter quads) ----
-(function(){ const N=250, LEAF=new THREE.PlaneGeometry(0.22,0.13);
+(function(){ const N=250, LEAF=(function(){ const g=new THREE.BufferGeometry(), v=[], P=[[0,-0.11],[0.045,-0.05],[0.06,0.02],[0.035,0.08],[0,0.12],[-0.035,0.08],[-0.06,0.02],[-0.045,-0.05]];   // hegyes ovális levél-forma (a téglalap helyett)
+    for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length]; v.push(0,0,0, a[0],a[1],0, b[0],b[1],0); } g.setAttribute('position',new THREE.Float32BufferAttribute(v,3)); g.computeVertexNormals(); return g; })();
   const im=new THREE.InstancedMesh(LEAF, leafMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   const LC=[0xffffff,0xe8d0a8,0xb8d0a0,0xd8b890];
   for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+8, 1.4);
@@ -3989,7 +4018,7 @@ const hearthLight=new THREE.PointLight(0xff9448, 0.9, 36, 2); hearthLight.positi
   for(let i=0;i<4;i++){ const a=0.39+i*Math.PI/2, x=Math.cos(a)*8.0, z=Math.sin(a)*8.0;
     const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=rand(0,6.28);
     const ped=jitter(new THREE.CylinderGeometry(0.26,0.44,1.0,7,2),0.07,0.04); gradTint(ped,0x6a7080,0xffffff,-0.5,0.5);
-    const pm=new THREE.Mesh(ped,rockMatV); pm.position.y=0.5; pm.castShadow=true; pm.receiveShadow=true; g.add(pm);
+    const pm=new THREE.Mesh(ped,envRock); pm.position.y=0.5; pm.castShadow=true; pm.receiveShadow=true; g.add(pm);
     const bowl=mesh(new THREE.CylinderGeometry(0.58,0.30,0.30,8,1), ironMat, 0,1.13,0); g.add(bowl);
     const coals=mesh(new THREE.CylinderGeometry(0.48,0.48,0.06,8), coalMat, 0,1.27,0); coals.castShadow=false; g.add(coals); enableBloom(coals);
     const fl=[]; for(let k=0;k<3;k++){ const f=new THREE.Mesh(FL, k===2?flameMatB:flameMatA); f.position.set(rand(-0.16,0.16),1.28,rand(-0.16,0.16)); f.userData={ph:rand(0,6.28),s:k===2?0.62:rand(0.85,1.15)}; g.add(f); fl.push(f); enableBloom(f); }
@@ -5504,6 +5533,10 @@ const _rimSharedU={value:0};
 function _rimKey(){ return 'troll-rim'; }
 function trollRimCompile(sh){
   sh.uniforms.uFlash=(this.userData&&this.userData.flashU)||_rimSharedU;
+  sh.vertexShader='varying vec3 vTOP;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvTOP=position;');
+  sh.fragmentShader='varying vec3 vTOP;\n'+STY_NOISE+sh.fragmentShader.replace('#include <color_fragment>',
+    '#include <color_fragment>\n{ float tn1=sn3(vTOP*3.1), tn2=sn3(vTOP*11.0+4.0);\n'+
+    '  diffuseColor.rgb*=(0.86+0.26*tn1)*(0.95+0.10*tn2); }');   // festett bőr: lágy foltok + finom pórus, szöglet- és zajmentes
   sh.fragmentShader='uniform float uFlash;\n'+sh.fragmentShader.replace('#include <tonemapping_fragment>',
     '{ float rimK=pow(1.0-saturate(dot(normalize(vViewPosition),normal)),2.3);\n'+
     '  gl_FragColor.rgb+=vec3(0.26,0.46,0.90)*rimK*0.62*(0.35+0.65*saturate(normal.y*0.5+0.62));\n'+
@@ -5512,8 +5545,9 @@ function trollRimCompile(sh){
 function applyTrollRim(m){
   const flash=[], own=new Set((m.gen&&m.gen._mats)||[]);
   m.g.traverse(o=>{ if(!o.isMesh) return; const mat=o.material; if(!mat||!mat.isMeshStandardMaterial) return;
-    if(o.geometry && o.geometry.attributes.position && !o.geometry.userData._tsm){ o.geometry.userData._tsm=1; try{ smoothNormals(o.geometry,54); }catch(_e){} }   // AA-indie: lágy, élmegtartó árnyalás a trollokon
+    if(o.geometry && o.geometry.attributes.position && !o.geometry.index && !o.geometry.userData._tsm){ try{ smoothNormals(o.geometry,54); }catch(_e){} }   // indexelt primitív (gömb/henger) normáljai már simák   // AA-indie: lágy, élmegtartó árnyalás a trollokon
     if(mat.flatShading){ mat.flatShading=false; mat.needsUpdate=true; }
+    if(mat.bumpMap && !mat.userData._bmp){ mat.userData._bmp=1; mat.bumpScale*=(mat.bumpMap===SKIN_N?0.22:0.35); }   // sima árnyalásnál a régi dombortérkép "filcesen" zajos volt
     if(mat.transparent) return;
     if(!mat.userData._rim){ mat.userData._rim=true; if(own.has(mat)) mat.userData.flashU={value:0};
       mat.onBeforeCompile=trollRimCompile; mat.customProgramCacheKey=_rimKey; mat.needsUpdate=true; }
@@ -5631,7 +5665,7 @@ function makeMonsterGen(type, scale, hp, speed, el, seed){
   else { speed=hp; hp=scale; scale=type; T=TROLL_TYPES.grunt; }
   const sd = (seed==null) ? ((Math.random()*0xffffffff)>>>0) : (seed>>>0);
   const G   = TrollGen.describe(sd, { caste:T.id, el:(el!==undefined?el:(T.el||null)), tier:'normal' });
-  const gen = TrollGen.build(G);
+  const gen = withHiResGeo(()=>TrollGen.build(G));   // AA-indie: részletesebb, lekerekített troll-geometria
   const g   = gen.g;
   g.scale.setScalar(scale);                       // a hullám-skálázás a genom-méret FÖLÉ jön (gameplay-méret)
   scene.add(g);

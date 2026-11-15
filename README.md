@@ -142,5 +142,7 @@ chiselled boulders and tapered menhirs, sculpted trunks with roots and
 branches under soft leaf-card canopies, conifers, bevelled planks and
 braced crates, fluted pillars, layered mountain ridges, contact shadows under
 props, and world-space painted materials (mossy rock, grooved bark, wood
-grain, worn dirt paths in the ground). Co-op: a dependency-light Node
+grain, worn dirt paths in the ground). Trolls are generated with higher
+tessellation (rounded limbs, bevelled brow plates) and a painted, mottled skin
+shader; grass blades are curved, mushrooms spotted, litter leaf-shaped. Co-op: a dependency-light Node
 (`ws`) server at ~20 Hz, buffered entity interpolation, pid+token reconnect.
