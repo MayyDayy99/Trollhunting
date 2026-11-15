@@ -415,6 +415,88 @@
   @media (max-width:900px){ #start.screen{justify-content:center;padding-left:16px;background:rgba(4,8,16,.74);} #start .card{margin:auto;} }
   @media (max-width:560px){ .setrow{grid-template-columns:110px 1fr 40px;} .statgrid{grid-template-columns:repeat(2,1fr);} }
   @media (prefers-reduced-motion:reduce){ #startBtn::after,#restartBtn::after{animation:none;} #lowhp.on{animation:none;opacity:.5;} }
+  /* ===================== MOBIL HUD + IRÁNYÍTÁS (újratervezve) =====================
+     --u: a képernyőhöz igazított UI-lépték (JS állítja: alacsony/keskeny telefonon kisebb). Elrendezés fekvő módra:
+     bal felső = élet · felül közép = hullám · jobb felső = pont/sorozat + szünet/teljes képernyő + radar ·
+     bal alsó = LEBEGŐ joystick · alul közép = elem-gombok · jobb alsó = LŐ + körülötte ívben ÜT / KITÉR / UGR / VIHAR. */
+  :root{--u:1;}
+  html.touch body:not(.ingame) #mobileControls{display:none;}
+  html.touch body.ingame #langBtn{display:none;}
+  html.touch #mobileShootAlt, html.touch #mobileSprint, html.touch #mobileRotate, html.touch #ulthud{display:none!important;}
+  html.touch #mobileControls, html.touch #mobileControls *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+  html.touch #mobileLook{left:44%;}
+  html.touch #mobileMoveZone{position:absolute;left:0;top:22%;bottom:0;width:44%;pointer-events:auto;touch-action:none;}
+  html.touch #mobileMove{left:calc(26px + env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));width:calc(128px*var(--u));height:calc(128px*var(--u));
+    opacity:.45;transition:opacity .25s;pointer-events:none;}
+  html.touch #mobileMove.active{opacity:1;transition:none;border-color:rgba(190,238,178,.45);background:radial-gradient(circle at 50% 50%, rgba(127,226,255,.16), rgba(56,92,54,.22) 48%, rgba(8,14,28,.10) 72%);}
+  html.touch #mobileMove::before{width:calc(92px*var(--u));height:calc(92px*var(--u));}
+  html.touch #mobileStick{width:calc(56px*var(--u));height:calc(56px*var(--u));transition:box-shadow .15s,border-color .15s;}
+  html.touch #mobileStick.sprint{border-color:rgba(255,210,122,.9);box-shadow:0 0 18px rgba(255,210,122,.75),inset 0 0 12px rgba(255,210,122,.45);}
+  html.touch #mobileMove .runhint{position:absolute;left:50%;top:-18px;transform:translateX(-50%);font:700 9px/1 var(--f-body);letter-spacing:.2em;color:#ffd27a;opacity:0;transition:opacity .15s;text-shadow:0 1px 4px #000;}
+  html.touch #mobileMove.run .runhint{opacity:1;}
+
+  html.touch .mobile-actions{right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));width:calc(300px*var(--u));height:calc(210px*var(--u));}
+  html.touch .mobile-btn{font-size:calc(10px*var(--u));}
+  html.touch #mobileShoot{right:0;bottom:0;width:calc(92px*var(--u));height:calc(92px*var(--u));font-size:calc(14px*var(--u));}
+  html.touch #mobileShoot.drawing{box-shadow:0 0 0 calc(6px*var(--u)) rgba(127,226,255,.25),0 0 30px rgba(127,226,255,.55);}
+  html.touch #mobileMelee{right:calc(117px*var(--u));bottom:calc(19px*var(--u));width:calc(54px*var(--u));height:calc(54px*var(--u));}
+  html.touch #mobileDash{right:calc(99px*var(--u));bottom:calc(77px*var(--u));width:calc(54px*var(--u));height:calc(54px*var(--u));}
+  html.touch #mobileJump{right:calc(47px*var(--u));bottom:calc(113px*var(--u));width:calc(54px*var(--u));height:calc(54px*var(--u));}
+  html.touch #mobileDash.cd{opacity:.5;}
+  html.touch #mobileUlt{--ult:0;--ec:#cfe0ff;right:calc(172px*var(--u));bottom:calc(90px*var(--u));width:calc(58px*var(--u));height:calc(58px*var(--u));
+    color:#e9f1ff;text-shadow:0 1px 4px #000;background:radial-gradient(circle at 38% 30%,rgba(255,255,255,.22),rgba(8,14,28,.55) 72%);}
+  html.touch #mobileUlt::before{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;
+    background:conic-gradient(var(--ec) calc(var(--ult)*1%), rgba(255,255,255,.10) 0);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));}
+  html.touch #mobileUlt.ready{color:#061018;text-shadow:none;background:radial-gradient(circle at 38% 30%,#fff,#ffd27a 62%,#c98a2a);box-shadow:0 0 22px rgba(255,210,122,.8);animation:mUltPulse 1s ease-in-out infinite;}
+  @keyframes mUltPulse{50%{transform:scale(1.08);}}
+
+  html.touch .mobile-elements{bottom:calc(12px + env(safe-area-inset-bottom));gap:calc(6px*var(--u));padding:calc(5px*var(--u)) calc(7px*var(--u));background:rgba(8,14,28,.30);}
+  html.touch .mobile-el{--c:#cfe0ff;width:calc(42px*var(--u));min-width:0;height:calc(42px*var(--u));border-radius:50%;padding:0;
+    font:800 calc(9px*var(--u))/1 var(--f-body);letter-spacing:.02em;color:#dce6f7;text-shadow:0 1px 3px #000;
+    border:2px solid color-mix(in srgb,var(--c) 60%,transparent);background:radial-gradient(circle at 50% 36%,color-mix(in srgb,var(--c) 38%,transparent),rgba(8,14,28,.55) 72%);
+    transition:transform .14s cubic-bezier(.2,.9,.25,1.4),box-shadow .14s;}
+  html.touch .mobile-el.on{transform:translateY(calc(-4px*var(--u))) scale(1.13);color:#061018;text-shadow:none;border-color:#fff;
+    background:radial-gradient(circle at 40% 32%,#fff,var(--c) 78%);box-shadow:0 0 16px var(--c);}
+
+  html.touch #hpwrap{transform:none;left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));bottom:auto;width:calc(200px*var(--u));padding:calc(7px*var(--u)) calc(9px*var(--u));}
+  html.touch #hpwrap .hprow{margin-bottom:4px;} html.touch #hpwrap .lab{font-size:9px;} html.touch #hpnum{font-size:calc(15px*var(--u));}
+  html.touch #hpbar{height:calc(11px*var(--u));} html.touch #dashrow{margin-top:5px;} html.touch #dashrow .dk{font-size:8px;}
+  html.touch #dmgpop{top:auto;bottom:-28px;right:auto;left:8px;}
+  html.touch #buffs{left:calc(10px + env(safe-area-inset-left));top:calc(14px + 76px*var(--u) + env(safe-area-inset-top));bottom:auto;}
+  html.touch #buffs .bf{font-size:9px;padding:5px 9px;}
+  html.touch #score{left:auto;right:calc(22px + 100px*var(--u) + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));text-align:right;}
+  html.touch #score .n{font-size:calc(22px*var(--u));} html.touch #score small{font-size:8px;}
+  html.touch #combo{left:auto;right:calc(22px + 100px*var(--u) + env(safe-area-inset-right));top:calc(14px + 44px*var(--u) + env(safe-area-inset-top));text-align:right;transform-origin:right top;}
+  html.touch #combo .cx{font-size:calc(24px*var(--u));} html.touch #combo .ct{margin-left:auto;width:calc(86px*var(--u));}
+  html.touch #mobilePause,html.touch #mobileFullscreen{top:calc(10px + env(safe-area-inset-top));width:calc(42px*var(--u));height:calc(42px*var(--u));font-size:calc(9px*var(--u));}
+  html.touch #mobilePause{right:calc(10px + env(safe-area-inset-right));}
+  html.touch #mobileFullscreen{right:calc(14px + 44px*var(--u) + env(safe-area-inset-right));}
+  html.touch #radar{right:calc(10px + env(safe-area-inset-right));top:calc(16px + 44px*var(--u) + env(safe-area-inset-top));bottom:auto;width:calc(86px*var(--u));height:calc(86px*var(--u));}
+  html.touch #wave{top:calc(8px + env(safe-area-inset-top));}
+  html.touch #wave .n{font-size:calc(21px*var(--u));} html.touch #wave .wbar{width:calc(150px*var(--u));}
+  html.touch #bossbar{top:calc(66px*var(--u) + env(safe-area-inset-top));width:min(340px,40vw);}
+  html.touch #toast{top:24%;} html.touch #callout{top:calc(24% + 40px);}
+  html.touch #powlabel{top:calc(50% + 46px);}
+
+  /* menü / szünet alacsony (fekvő telefon) képernyőn: a JÁTÉK gomb görgetés nélkül is látszik */
+  @media (max-height:520px){
+    #start.screen,.screen{padding-top:8px;padding-bottom:8px;}
+    .menucard{max-width:min(760px,96vw);padding:12px 18px 12px!important;}
+    .menucard .eyebrow{font-size:9px;letter-spacing:.32em;}
+    .menucard h1{font-size:28px;margin:5px 0 3px;}
+    .menucard .tagline{display:none;}
+    .mtabs{margin-top:2px;} .card button.mtab{padding:6px 11px;font-size:10.5px;}
+    .mpage{min-height:0!important;max-height:calc(100vh - 196px);overflow-y:auto;padding:8px 6px 4px;}
+    .mgrid2{gap:6px 18px;font-size:12px;} .mtip{font-size:11.5px;margin-top:8px;}
+    .mdots{margin:4px 0 6px;}
+    .mstart{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:9px;}
+    .mstart .gfxrow{margin:0;flex-wrap:wrap;justify-content:flex-start;}
+    #startBtn{padding:12px 26px;font-size:17px;flex:none;}
+    .card:not(.menucard){padding:14px 18px;} .card h1{font-size:28px;margin:4px 0 6px;}
+    .setgrid{gap:7px;margin:4px 0 10px;} .statgrid{margin:8px 0 12px;} .statgrid b{font-size:18px;}
+    #over .stat{font-size:16px;}
+  }
 </style>
 </head>
 <body>
@@ -436,7 +518,8 @@
 </div>
 <div id="mobileControls" aria-hidden="true">
   <div id="mobileLook"></div>
-  <div id="mobileMove"><div id="mobileStick"></div></div>
+  <div id="mobileMoveZone"></div>
+  <div id="mobileMove"><span class="runhint">FUT</span><div id="mobileStick"></div></div>
   <button id="mobileShootAlt" class="mobile-btn claw" aria-label="Bal oldali lövés">LŐ</button>
   <div class="mobile-elements">
     <button class="mobile-el" data-el="base">ALAP</button>
@@ -498,12 +581,12 @@
               <div class="mrow desktopctl"><span class="kbd">Esc</span> szünet</div>
               <div class="mrow desktopctl"><span class="kbd">1</span>…<span class="kbd">5</span> elemi nyíl váltása</div>
               <div class="mrow desktopctl"><span class="kbd">R</span> VIHAR, ha a sáv tele</div>
-              <div class="mrow mobilectl"><span class="kbd">Bal karika</span> mozgás</div>
-              <div class="mrow mobilectl"><span class="kbd">Jobb oldal húzás</span> célzás</div>
+              <div class="mrow mobilectl"><span class="kbd">Bal oldal</span> mozgás (ahova érintesz) · a szélig tolva fut</div>
+              <div class="mrow mobilectl"><span class="kbd">Jobb oldal / LŐ húzása</span> célzás</div>
               <div class="mrow mobilectl"><span class="kbd">Lövés</span> nyomva feszít · elengedve lő</div>
               <div class="mrow mobilectl"><span class="kbd">Elem-gombok</span> nyíltípus váltása</div>
-              <div class="mrow mobilectl"><span class="kbd">Ugrás/Futás/Ütés</span> akciók</div>
-              <div class="mrow mobilectl"><span class="kbd">Vihar</span> ultimate, ha a sáv tele</div>
+              <div class="mrow mobilectl"><span class="kbd">UGR / KITÉR / ÜT</span> ugrás, kitérés, közelharc</div>
+              <div class="mrow mobilectl"><span class="kbd">Vihar</span> ultimate, ha a gyűrű körbeért</div>
             </div>
             <div class="mtip">Minél tovább feszíted az íjat, annál erősebb és gyorsabb a nyíl — a <b>fejlövés dupla sebzés</b>.</div>
             <div class="mtip dim">A trollok a perem barlangjaiból törnek elő — a radar mutatja, merről jön a következő hullám.</div>
@@ -2753,7 +2836,7 @@ const I18N={
     menu:{
       eyebrow:'Mohás világ · íjász túlélő', tagline:'A mohás trollok hordákban özönlenek a tisztásra. Te vagy az utolsó íjász.',
       tabs:['Alapok','Elemek','Taktika'], prev:'Előző oldal', next:'Következő oldal',
-      basics:'<div class="mgrid2"><div class="mrow desktopctl"><span class="kbd">Egér</span> célzás</div><div class="mrow desktopctl"><span class="kbd">Bal gomb</span> feszít · elengedve lő</div><div class="mrow desktopctl"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> mozgás</div><div class="mrow desktopctl"><span class="kbd">Shift</span> futás</div><div class="mrow desktopctl"><span class="kbd">Szóköz</span> ugrás</div><div class="mrow desktopctl"><span class="kbd">Esc</span> szünet</div><div class="mrow desktopctl"><span class="kbd">1</span>…<span class="kbd">5</span> elemi nyíl váltása</div><div class="mrow desktopctl"><span class="kbd">R</span> VIHAR, ha a sáv tele</div><div class="mrow mobilectl"><span class="kbd">Bal karika</span> mozgás</div><div class="mrow mobilectl"><span class="kbd">Jobb oldal húzás</span> célzás</div><div class="mrow mobilectl"><span class="kbd">Lövés</span> nyomva feszít · elengedve lő</div><div class="mrow mobilectl"><span class="kbd">Elem-gombok</span> nyíltípus váltása</div><div class="mrow mobilectl"><span class="kbd">Ugrás/Futás/Ütés</span> akciók</div><div class="mrow mobilectl"><span class="kbd">Vihar</span> ultimate, ha a sáv tele</div></div><div class="mtip">Minél tovább feszíted az íjat, annál erősebb és gyorsabb a nyíl — a <b>fejlövés dupla sebzés</b>.</div><div class="mtip dim">A trollok a perem barlangjaiból törnek elő — a radar mutatja, merről jön a következő hullám.</div>',
+      basics:'<div class="mgrid2"><div class="mrow desktopctl"><span class="kbd">Egér</span> célzás</div><div class="mrow desktopctl"><span class="kbd">Bal gomb</span> feszít · elengedve lő</div><div class="mrow desktopctl"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> mozgás</div><div class="mrow desktopctl"><span class="kbd">Shift</span> futás</div><div class="mrow desktopctl"><span class="kbd">Szóköz</span> ugrás</div><div class="mrow desktopctl"><span class="kbd">Esc</span> szünet</div><div class="mrow desktopctl"><span class="kbd">1</span>…<span class="kbd">5</span> elemi nyíl váltása</div><div class="mrow desktopctl"><span class="kbd">R</span> VIHAR, ha a sáv tele</div><div class="mrow mobilectl"><span class="kbd">Bal oldal</span> mozgás (ahova érintesz) · a szélig tolva fut</div><div class="mrow mobilectl"><span class="kbd">Jobb oldal / LŐ húzása</span> célzás</div><div class="mrow mobilectl"><span class="kbd">Lövés</span> nyomva feszít · elengedve lő</div><div class="mrow mobilectl"><span class="kbd">Elem-gombok</span> nyíltípus váltása</div><div class="mrow mobilectl"><span class="kbd">UGR / KITÉR / ÜT</span> ugrás, kitérés, közelharc</div><div class="mrow mobilectl"><span class="kbd">Vihar</span> ultimate, ha a gyűrű körbeért</div></div><div class="mtip">Minél tovább feszíted az íjat, annál erősebb és gyorsabb a nyíl — a <b>fejlövés dupla sebzés</b>.</div><div class="mtip dim">A trollok a perem barlangjaiból törnek elő — a radar mutatja, merről jön a következő hullám.</div>',
       elements:'<div class="elist"><div class="el" style="--c:#cfe0ff"><b>1 · ALAP</b><span>sima, gyors nyíl — mindig megbízható</span></div><div class="el" style="--c:#ff7a3d"><b>2 · TŰZ</b><span>folyamatos égés, átterjed a közeli trollokra — a fákat is felgyújtja</span></div><div class="el" style="--c:#7fd0ff"><b>3 · JÉG</b><span>lassít; három találat teljesen megfagyaszt</span></div><div class="el" style="--c:#9fdc4a"><b>4 · MÉREG</b><span>mérgez és maradó gázfelhőt hagy — a sámán gyógyítását is elnémítja</span></div><div class="el" style="--c:#b48cff"><b>5 · VILLÁM</b><span>bénít és a szomszéd trollokra láncol — vizes talajon messzebbre</span></div></div><div class="mtip">Az elem ereje a <b>feszítéssel</b> nő. Minden trollfajnak más a gyengéje: <b>szürke sercegés</b> = ellenáll · <b>erős felvillanás</b> = gyenge pont.</div>',
       tactics:'<div class="mh">Reakciók — egy elem a trollon + egy másik nyíl = robbanás</div><div class="rchips"><span class="rchip">🧊+⚡ <b style="color:#9fd0ff">Fagytúltöltés</b></span><span class="rchip">🔥+🧊 <b style="color:#e8f0ff">Gőzrobbanás</b></span><span class="rchip">🔥+☠️ <b style="color:#ff9a3d">Mérges gyújtás</b></span><span class="rchip">☠️+⚡ <b style="color:#c8e26a">Galván permet</b></span><span class="rchip">🧊×3 <b style="color:#bfe6ff">Teljes fagy</b></span></div><div class="mtip"><b style="color:#ffd27a">VIHAR (R):</b> reakciók és fejlövések töltik — aktiválva az egész pályát elárasztja a kezedben lévő elem.</div><div class="mtip"><b style="color:#ffd27a">Magaslatok:</b> a rámpákon felfuthatsz a lombház-fedélzetekre és a kötélhidakra — a közelharcos trollok nem érnek fel, de a köpködők onnan is levadásznak.</div><div class="mtip"><b style="color:#ffd27a">Túlélés:</b> a zöld élet-gömbök gyógyítanak és újratermődnek · minden 5. hullám <b>⚔ elit trollokat</b> hoz (extra pont!), utána a <b>Kovácsműhelyben</b> költheted el a pontjaid.</div>',
       graphics:'GRAFIKA', low:'ALACSONY', medium:'KÖZEPES', high:'MAGAS', start:'JÁTÉK ▶'
@@ -2775,7 +2858,7 @@ const I18N={
     menu:{
       eyebrow:'Mossy realm · archer survivor', tagline:'Moss-covered trolls pour into the clearing in waves. You are the last archer.',
       tabs:['Basics','Elements','Tactics'], prev:'Previous page', next:'Next page',
-      basics:'<div class="mgrid2"><div class="mrow desktopctl"><span class="kbd">Mouse</span> aim</div><div class="mrow desktopctl"><span class="kbd">Left click</span> hold to draw · release to fire</div><div class="mrow desktopctl"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> move</div><div class="mrow desktopctl"><span class="kbd">Shift</span> sprint</div><div class="mrow desktopctl"><span class="kbd">Space</span> jump</div><div class="mrow desktopctl"><span class="kbd">Esc</span> pause</div><div class="mrow desktopctl"><span class="kbd">1</span>…<span class="kbd">5</span> switch elemental arrows</div><div class="mrow desktopctl"><span class="kbd">R</span> STORM when the meter is full</div><div class="mrow mobilectl"><span class="kbd">Left stick</span> move</div><div class="mrow mobilectl"><span class="kbd">Drag right side</span> aim</div><div class="mrow mobilectl"><span class="kbd">Fire</span> hold to draw · release to shoot</div><div class="mrow mobilectl"><span class="kbd">Element buttons</span> switch arrow type</div><div class="mrow mobilectl"><span class="kbd">Jump/Run/Hit</span> actions</div><div class="mrow mobilectl"><span class="kbd">Storm</span> ultimate when the meter is full</div></div><div class="mtip">The longer you draw the bow, the stronger and faster the arrow — <b>headshots deal double damage</b>.</div><div class="mtip dim">Trolls break out from caves around the rim — the radar shows where the next wave is coming from.</div>',
+      basics:'<div class="mgrid2"><div class="mrow desktopctl"><span class="kbd">Mouse</span> aim</div><div class="mrow desktopctl"><span class="kbd">Left click</span> hold to draw · release to fire</div><div class="mrow desktopctl"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> move</div><div class="mrow desktopctl"><span class="kbd">Shift</span> sprint</div><div class="mrow desktopctl"><span class="kbd">Space</span> jump</div><div class="mrow desktopctl"><span class="kbd">Esc</span> pause</div><div class="mrow desktopctl"><span class="kbd">1</span>…<span class="kbd">5</span> switch elemental arrows</div><div class="mrow desktopctl"><span class="kbd">R</span> STORM when the meter is full</div><div class="mrow mobilectl"><span class="kbd">Left side</span> move (wherever you touch) · push to the edge to run</div><div class="mrow mobilectl"><span class="kbd">Drag right side / FIRE</span> aim</div><div class="mrow mobilectl"><span class="kbd">Fire</span> hold to draw · release to shoot</div><div class="mrow mobilectl"><span class="kbd">Element buttons</span> switch arrow type</div><div class="mrow mobilectl"><span class="kbd">JUMP / DASH / HIT</span> jump, dodge, melee</div><div class="mrow mobilectl"><span class="kbd">Storm</span> ultimate when its ring is full</div></div><div class="mtip">The longer you draw the bow, the stronger and faster the arrow — <b>headshots deal double damage</b>.</div><div class="mtip dim">Trolls break out from caves around the rim — the radar shows where the next wave is coming from.</div>',
       elements:'<div class="elist"><div class="el" style="--c:#cfe0ff"><b>1 · BASE</b><span>plain, fast arrow — always reliable</span></div><div class="el" style="--c:#ff7a3d"><b>2 · FIRE</b><span>burns over time, spreads to nearby trolls — can ignite trees too</span></div><div class="el" style="--c:#7fd0ff"><b>3 · ICE</b><span>slows enemies; three hits freeze them solid</span></div><div class="el" style="--c:#9fdc4a"><b>4 · POISON</b><span>poisons and leaves a lingering gas cloud — also silences shaman healing</span></div><div class="el" style="--c:#b48cff"><b>5 · LIGHTNING</b><span>stuns and chains to nearby trolls — travels farther through wet ground</span></div></div><div class="mtip">Element power scales with <b>draw strength</b>. Every troll type has different weaknesses: <b>gray crackle</b> = resisted · <b>bright flash</b> = weak point.</div>',
       tactics:'<div class="mh">Reactions — one element on a troll + another arrow = explosion</div><div class="rchips"><span class="rchip">🧊+⚡ <b style="color:#9fd0ff">Frost overload</b></span><span class="rchip">🔥+🧊 <b style="color:#e8f0ff">Steam burst</b></span><span class="rchip">🔥+☠️ <b style="color:#ff9a3d">Toxic ignition</b></span><span class="rchip">☠️+⚡ <b style="color:#c8e26a">Galvanic spray</b></span><span class="rchip">🧊×3 <b style="color:#bfe6ff">Deep freeze</b></span></div><div class="mtip"><b style="color:#ffd27a">STORM (R):</b> charged by reactions and headshots — activates your current element across the whole arena.</div><div class="mtip"><b style="color:#ffd27a">High ground:</b> run up ramps to treehouse decks and rope bridges — melee trolls cannot climb there, but spitters can still hunt you down.</div><div class="mtip"><b style="color:#ffd27a">Survival:</b> green health orbs heal and respawn · every 5th wave brings <b>⚔ elite trolls</b> for bonus points, then you can spend points in the <b>Forge</b>.</div>',
       graphics:'GRAPHICS', low:'LOW', medium:'MEDIUM', high:'HIGH', start:'PLAY ▶'
@@ -2799,7 +2882,7 @@ function initLang(){
 }
 let lang=initLang();
 /* ===================== TURBÓ: új feliratok (HU/EN) + mentett beállítások + futam-statisztika ===================== */
-I18N.hu.ui={ tabSet:'Beállítások', dash:'KITÉRÉS', dashKey:'KITÉRÉS · Q', combo:'sorozat', best:'rekord {n}', boss:'TROLL KIRÁLY',
+I18N.hu.ui={ runHint:'FUT', tabSet:'Beállítások', dash:'KITÉRÉS', dashKey:'KITÉRÉS · Q', combo:'sorozat', best:'rekord {n}', boss:'TROLL KIRÁLY',
   bossWave:'HULLÁM {n} — ☠ A TROLL KIRÁLY!', bossDown:'☠ A KIRÁLY ELESETT! +{n}', slam:'FÖLDRENGÉS — UGORJ!', perfect:'TÖKÉLETES!', flawless:'SÉRTETLEN HULLÁM +{n}',
   over:'TÚLTÖLTÉS {n}', inv:'SÉRTHETETLEN {n}', next:'következő hullám: {n}', streaks:['DUPLA','TRIPLA','ÖLDÖKLÉS','MEGÁLLÍTHATATLAN','LEGENDA'],
   setSens:'Egér-érzékenység', setFov:'Látószög', setVol:'Hangerő', setInv:'Fordított Y', setNums:'Sebzés-számok', setShake:'Képrázkódás',
@@ -2808,7 +2891,7 @@ I18N.hu.ui={ tabSet:'Beállítások', dash:'KITÉRÉS', dashKey:'KITÉRÉS · Q'
   newRec:'ÚJ REKORD!', bestLine:'Rekord: <b>{score}</b> pont · <b>{wave}</b>. hullám', mobDash:'KITÉR', vihar2:'VIHAR-TÚLTÖLTÉS!',
   extraKeys:'<div class="mrow desktopctl"><span class="kbd">Q</span> kitérés (rövid sérthetetlenség)</div><div class="mrow desktopctl"><span class="kbd">Jobb gomb</span>/<span class="kbd">F</span> közelharc</div><div class="mrow desktopctl"><span class="kbd">Görgő</span> elem-váltás</div><div class="mrow desktopctl"><span class="kbd">Tab</span> radar-jelmagyarázat</div>',
   tipPerfect:'<b>Tökéletes lövés:</b> engedd el abban a pillanatban, amikor a célkereszt-gyűrű <b>aranyra</b> vált — +30% sebzés. <b>Sorozat:</b> a gyors egymás utáni ölések pont-szorzót építenek.' };
-I18N.en.ui={ tabSet:'Settings', dash:'DASH', dashKey:'DASH · Q', combo:'streak', best:'best {n}', boss:'TROLL KING',
+I18N.en.ui={ runHint:'RUN', tabSet:'Settings', dash:'DASH', dashKey:'DASH · Q', combo:'streak', best:'best {n}', boss:'TROLL KING',
   bossWave:'WAVE {n} — ☠ THE TROLL KING!', bossDown:'☠ THE KING HAS FALLEN! +{n}', slam:'GROUND SLAM — JUMP!', perfect:'PERFECT!', flawless:'FLAWLESS WAVE +{n}',
   over:'OVERCHARGE {n}', inv:'INVULNERABLE {n}', next:'next wave: {n}', streaks:['DOUBLE','TRIPLE','RAMPAGE','UNSTOPPABLE','LEGENDARY'],
   setSens:'Mouse sensitivity', setFov:'Field of view', setVol:'Volume', setInv:'Invert Y', setNums:'Damage numbers', setShake:'Screen shake',
@@ -2820,7 +2903,7 @@ I18N.en.ui={ tabSet:'Settings', dash:'DASH', dashKey:'DASH · Q', combo:'streak'
 function loadJSON(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(_e){ return null; } }
 function saveJSON(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(_e){} }
 const SET_KEY='mr_settings', BEST_KEY='mr_best';
-const SET=Object.assign({ sens:1, fov:72, vol:45, invY:false, dmgNums:true, shake:true }, loadJSON(SET_KEY)||{});
+const SET=Object.assign({ sens:1, fov:(MOBILE_INPUT?80:72), vol:45, invY:false, dmgNums:true, shake:true }, loadJSON(SET_KEY)||{});   // telefonon tágabb alap-látószög
 SET.sens=Math.max(0.3,Math.min(2.5,+SET.sens||1)); SET.fov=Math.max(60,Math.min(100,+SET.fov||72)); SET.vol=Math.max(0,Math.min(100,(SET.vol==null?45:+SET.vol)));
 const BEST=Object.assign({ score:0, wave:0 }, loadJSON(BEST_KEY)||{});
 const STATS={ kills:0, heads:0, shots:0, hits:0, bestCombo:0, time:0, reacts:0 };
@@ -4461,13 +4544,13 @@ nockArrow.rotation.y=Math.PI; // a ~180°-os íjpózban a nyíl hegye a jelenetb
 bow.add(nockArrow);
 
 /* --- feszítés/lövés animációs állapot --- */
-const BOW_BASE_X=0.34, BOW_BASE_Y=-0.10, BOW_BASE_Z=-0.62, BOW_BASE_ROTZ=0.13;
+const BOW_BASE_X=MOBILE_INPUT?0.40:0.34, BOW_BASE_Y=MOBILE_INPUT?-0.13:-0.10, BOW_BASE_Z=-0.62, BOW_BASE_ROTZ=0.13;   // telefonon az íj jobbra-lejjebb húzódik (kevesebbet takar)
 let FOV_BASE=SET.fov; camera.fov=FOV_BASE; camera.updateProjectionMatrix();   // TURBÓ: állítható látószög (beállítások)
 let prevCharge=0, bowKick=0, bowKickRot=0, relTwang=0, idleT=0, drawNockIn=1, drawT=0;
 // ÚJRATÖLTÉS-animáció: egyszer-sülő hang/impulzus-jelzők (lövéskor/húzáskor/cancelkor nullázódnak)
 let raspFired=false, swingFired=false, tapFired=false, seatFired=false;
 // élő íj-hangoló: B = be/ki, J/L yaw, I/K pitch, U/O roll, N/M méret, P tükör
-const bowAdj={rx:0.05, ry:-3.22, rz:-0.27, s:0.90, mx:1, mz:-1}; // beégetett póz; mz = limb-görbület tükör (B-vel hangolható)
+const bowAdj={rx:0.05, ry:-3.22, rz:-0.27, s:MOBILE_INPUT?0.80:0.90, mx:1, mz:-1}; // beégetett póz; mz = limb-görbület tükör (B-vel hangolható)
 let bowTune=false;
 bow.traverse(o=>{ if(o.isMesh && o.material && 'side' in o.material) o.material.side=THREE.DoubleSide; });
 const bowTuneEl=document.createElement('div');
@@ -4834,7 +4917,7 @@ function buildUltHud(){
   const w=document.createElement('div'); w.id='ulthud'; w.innerHTML='<div id="ultlab"></div><div class="ut"><div class="ub"></div></div>';
   document.body.appendChild(w); _ultBar=w.querySelector('.ub'); _ultWrap=w; _ultLab=w.querySelector('#ultlab'); _ultLab.textContent=tr('hud.ult');
 }
-let _ultLab=null, _ultWrap=null, _ultChip=null, _ultChipEl=null, _ultRes=null, _lastUlt=-1, _lastElHud=null;
+let _mUlt=null, _ultLab=null, _ultWrap=null, _ultChip=null, _ultChipEl=null, _ultRes=null, _lastUlt=-1, _lastElHud=null;
 function updateUltHud(){
   if(!_ultBar) return; const def=EL[currentElement]||EL.base;
   // chip rezonancia-ragyogás: osztály-váltás csak állapotváltozáskor (nincs per-frame stílus-írás / querySelector)
@@ -4844,6 +4927,7 @@ function updateUltHud(){
   _lastUlt=ult; _lastElHud=currentElement; const full=ult>=100;
   _ultBar.style.width=Math.min(100,ult)+'%'; _ultBar.style.background=full?'linear-gradient(90deg,#ffd27a,#fff)':('linear-gradient(90deg,'+def.ui+'88,'+def.ui+')');
   if(_ultWrap) _ultWrap.classList.toggle('full',full);
+  if(MOBILE_INPUT){ if(!_mUlt) _mUlt=document.getElementById('mobileUlt'); if(_mUlt){ _mUlt.style.setProperty('--ult',Math.min(100,ult).toFixed(0)); _mUlt.style.setProperty('--ec',def.ui); if(_mUlt.classList.contains('ready')!==full){ _mUlt.classList.toggle('ready',full); if(full) buzz([20,40,20]); } } }
   if(_ultLab) _ultLab.textContent=full?tr('hud.ultReady'):tr('hud.ult');
 }
 function fireVihar(){   // VIHAR ultimate — TURBÓ: hullámmal skálázódó csapás + elem-specifikus pálya-esemény + játékos-TÚLTÖLTÉS
@@ -5951,7 +6035,7 @@ function ensureLock(){ if(MOBILE_INPUT){ showLockHint(false); return; } if(!runn
 let dragLook=false, dragBtn=-1, lastMX=0, lastMY=0;
 const LOOK_S=0.0022;
 const TOUCH_LOOK_X=2.35, TOUCH_LOOK_Y=1.85;
-function applyLook(dx,dy,xMul,yMul){ const sv=SET.sens*(drawing?(1-0.22*Math.min(1,charge)):1);   // célzás közben finomabb (feszítéssel arányos)
+function applyLook(dx,dy,xMul,yMul){ const sv=SET.sens*(drawing?(1-0.22*Math.min(1,charge)):1)*(MOBILE_INPUT?touchAimK:1);   // célzás közben finomabb (feszítéssel arányos)
   player.yaw-=dx*LOOK_S*(xMul||1)*sv; player.pitch=clamp(player.pitch-dy*LOOK_S*(yMul||xMul||1)*sv*(SET.invY?-1:1),-1.45,1.45); }
 
 addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
@@ -5974,7 +6058,12 @@ addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 // ELEM: egér-GÖRGŐVEL is váltható az elem (le = következő, fel = előző; körbe)
 addEventListener('wheel',e=>{ if(!running) return; const n=EL_ORDER.length, i=EL_ORDER.indexOf(currentElement); setElement(EL_ORDER[(((i<0?0:i)+(e.deltaY>0?1:-1))%n+n)%n]); e.preventDefault(); }, {passive:false});
-function updateMobileStick(){ if(mobileStickEl) mobileStickEl.style.transform='translate(calc(-50% + '+(mobileMove.x*36).toFixed(1)+'px),calc(-50% + '+(-mobileMove.y*36).toFixed(1)+'px))'; }
+let uiScale=1;   // mobil UI-lépték (--u): alacsony/keskeny telefonon kisebb gombok és HUD
+function setUiScale(){ uiScale=clamp(Math.min(innerHeight/430, innerWidth/880),0.70,1.08); document.documentElement.style.setProperty('--u',uiScale.toFixed(3)); }
+setUiScale(); addEventListener('resize',setUiScale);
+function buzz(ms){ if(MOBILE_INPUT && navigator.vibrate){ try{ navigator.vibrate(ms); }catch(_e){} } }   // rezgő visszajelzés (Android)
+let touchAimK=1;   // célzás-lassítás érintésen, ha troll van a célkereszt alatt
+function updateMobileStick(){ if(mobileStickEl){ const r=36*uiScale; mobileStickEl.style.transform='translate(calc(-50% + '+(mobileMove.x*r).toFixed(1)+'px),calc(-50% + '+(-mobileMove.y*r).toFixed(1)+'px))'; } }
 function resetMobileInput(){ mobileMove.id=null; mobileMove.x=0; mobileMove.y=0; mobileSprint=false; mobileJump=false; updateMobileStick(); document.querySelectorAll('.mobile-btn.on').forEach(b=>b.classList.remove('on')); }
 function clearKeys(){ for(const k in keys) keys[k]=false; resetMobileInput(); } // FIX: minden lenyomott billentyű elengedése (blur/pause -> nincs beragadt mozgás)
 
@@ -6062,7 +6151,7 @@ function setRing(frac, mode){
   _ringOn=true; const cls='on '+(mode||''); if(_ringCls!==cls){ _ringCls=cls; ringEl.setAttribute('class',cls); }
   ringArc.style.strokeDasharray=(Math.max(0,Math.min(1,frac))*226.2).toFixed(1)+' 999';
 }
-function hitMarker(kind){ hitmarkEl.className=''; void hitmarkEl.offsetWidth; hitmarkEl.className='go '+(kind||''); }
+function hitMarker(kind){ if(kind==='kill') buzz(14); hitmarkEl.className=''; void hitmarkEl.offsetWidth; hitmarkEl.className='go '+(kind||''); }
 function callout(txt, gold){ calloutEl.textContent=txt; calloutEl.className=''; void calloutEl.offsetWidth; calloutEl.className='go'+(gold?' gold':''); }
 let _ddI=0;
 function showDmgDir(sx,sz){   // vörös ív a képernyő közepe körül, a sebzés forrásának irányában
@@ -6119,7 +6208,17 @@ function bossTick(m,dt){   // TROLL KIRÁLY: időnként földrengés-csapás (v�
     EFX.ring(p.x,GROUND_Y+0.06,p.z,0xff3a2a,SLAM_R*0.98,SLAM_R,1.05,0.95); EFX.ring(p.x,GROUND_Y+0.06,p.z,0xff5a2a,0.4,SLAM_R,1.05,0.7);
     callout(tr('ui.slam'),true); if(AUD.growl) AUD.growl(); }
 }
+let _mDash=null, _aimV=null;
 function updateTurboHud(dt){
+  if(MOBILE_INPUT){
+    if(!_mDash) _mDash=document.getElementById('mobileDash');
+    if(_mDash && _mDash.classList.contains('cd')!==(dashCd>0)) _mDash.classList.toggle('cd',dashCd>0);
+    // célzás-lassítás: ha egy troll teste a célkereszt közelében van, a húzás érzékenysége ~45%-kal csökken (finom ráhúzás)
+    let k=1; if(running){ if(!_aimV) _aimV=new THREE.Vector3(); camera.getWorldDirection(_aimV);
+      for(const m of monsters){ if(!m.alive) continue; const p=m.g.position, dx=p.x-camera.position.x, dy=p.y+(m.bodyCY||1)-camera.position.y, dz=p.z-camera.position.z, d=Math.hypot(dx,dy,dz)||1;
+        if(d<45 && (dx*_aimV.x+dy*_aimV.y+dz*_aimV.z)/d > Math.cos(Math.max(0.035,(m.bodyR||0.6)/d*1.6))){ k=0.55; break; } } }
+    touchAimK=lerp(touchAimK,k,Math.min(1,dt*10));
+  }
   // sorozat-időzítő
   if(combo>0 && running){ comboT-=dt; if(comboT<=0) comboReset(); else if(combo>=2) comboF.style.transform='scaleX('+(comboT/COMBO_WIN).toFixed(3)+')'; }
   // kitérés
@@ -6227,7 +6326,7 @@ function applyI18n(){
   if(pages[2]) pages[2].innerHTML=tr('menu.tactics')+'<div class="mtip">'+tr('ui.tipPerfect')+'</div>';
   { const g2=pages[0]&&pages[0].querySelector('.mgrid2'); if(g2) g2.insertAdjacentHTML('beforeend',tr('ui.extraKeys')); }
   document.querySelectorAll('[data-i18n]').forEach(e=>{ e.textContent=tr(e.dataset.i18n); });
-  setText('#dashrow .dk', MOBILE_INPUT?tr('ui.dash'):tr('ui.dashKey')); setText('#mobileDash', tr('ui.mobDash')); setText('#bossbar .bn', tr('ui.boss'));
+  setText('#dashrow .dk', MOBILE_INPUT?tr('ui.dash'):tr('ui.dashKey')); setText('#mobileDash', tr('ui.mobDash')); setText('#mobileMove .runhint', tr('ui.runHint')); setText('#bossbar .bn', tr('ui.boss'));
   if(combo>=2) comboL.textContent=combo+' · '+tr('ui.combo'); showBest(); applySettings(false); _trollShown=null;
   document.querySelectorAll('.gfxlab,.gfx-h').forEach(e=>e.textContent=tr('menu.graphics'));
   document.querySelectorAll('.gfxbtn[data-gfx="low"]').forEach(e=>e.textContent=tr('menu.low'));
@@ -6342,15 +6441,23 @@ function initMobileControls(){
   mobileStickEl=document.getElementById('mobileStick');
   const movePad=document.getElementById('mobileMove'), lookPad=document.getElementById('mobileLook');
   const prevent=e=>{ e.preventDefault(); e.stopPropagation(); };
-  if(movePad){
+  // LEBEGŐ JOYSTICK: a bal zónában ott jelenik meg, ahol a hüvelykujj leér; a szélig tolva automatikusan fut
+  const moveZone=document.getElementById('mobileMoveZone');
+  if(movePad && moveZone){
+    const R=()=>64*uiScale, LIM=()=>52*uiScale;
     const updateMove=(e)=>{
-      const dx=e.clientX-mobileMove.cx, dy=e.clientY-mobileMove.cy, lim=52, d=Math.hypot(dx,dy), k=d>lim?lim/d:1;
+      const dx=e.clientX-mobileMove.cx, dy=e.clientY-mobileMove.cy, lim=LIM(), d=Math.hypot(dx,dy), k=d>lim?lim/d:1;
       mobileMove.x=clamp((dx*k)/lim,-1,1); mobileMove.y=clamp((-dy*k)/lim,-1,1); updateMobileStick();
+      const run=Math.hypot(mobileMove.x,mobileMove.y)>0.94; if(run!==mobileSprint){ mobileSprint=run; mobileStickEl.classList.toggle('sprint',run); movePad.classList.toggle('run',run); }
     };
-    movePad.addEventListener('pointerdown',e=>{ prevent(e); mobileMove.id=e.pointerId; const r=movePad.getBoundingClientRect(); mobileMove.cx=r.left+r.width/2; mobileMove.cy=r.top+r.height/2; movePad.setPointerCapture(e.pointerId); updateMove(e); });
-    movePad.addEventListener('pointermove',e=>{ if(e.pointerId===mobileMove.id){ prevent(e); updateMove(e); } });
-    const endMove=e=>{ if(e.pointerId!==mobileMove.id) return; prevent(e); mobileMove.id=null; mobileMove.x=0; mobileMove.y=0; updateMobileStick(); };
-    movePad.addEventListener('pointerup',endMove); movePad.addEventListener('pointercancel',endMove);
+    const endMove=e=>{ if(e.pointerId!==mobileMove.id) return; prevent(e); mobileMove.id=null; mobileMove.x=0; mobileMove.y=0; mobileSprint=false; updateMobileStick();
+      movePad.classList.remove('active','run'); mobileStickEl.classList.remove('sprint'); movePad.style.left=''; movePad.style.top=''; movePad.style.bottom=''; };
+    moveZone.addEventListener('pointerdown',e=>{ if(mobileMove.id!==null) return; prevent(e); mobileMove.id=e.pointerId;
+      const r=R(), zr=moveZone.getBoundingClientRect(), cx=clamp(e.clientX, zr.left+r+6, zr.right-r), cy=clamp(e.clientY, zr.top+r, innerHeight-r-8);
+      mobileMove.cx=cx; mobileMove.cy=cy; movePad.style.left=(cx-r)+'px'; movePad.style.top=(cy-r)+'px'; movePad.style.bottom='auto'; movePad.classList.add('active');
+      moveZone.setPointerCapture(e.pointerId); updateMove(e); });
+    moveZone.addEventListener('pointermove',e=>{ if(e.pointerId===mobileMove.id){ prevent(e); updateMove(e); } });
+    moveZone.addEventListener('pointerup',endMove); moveZone.addEventListener('pointercancel',endMove); moveZone.addEventListener('lostpointercapture',endMove);
   }
   if(lookPad){
     let lookId=null, lx=0, ly=0;
@@ -6359,7 +6466,9 @@ function initMobileControls(){
     const endLook=e=>{ if(e.pointerId===lookId){ prevent(e); lookId=null; } };
     lookPad.addEventListener('pointerup',endLook); lookPad.addEventListener('pointercancel',endLook);
   }
-  bindMobileHold(document.getElementById('mobileShoot'),()=>{ if(running){ lmbHeld=true; startDraw(); } },()=>releaseDraw());
+  { const sb=document.getElementById('mobileShoot'); let fid=null, fx=0, fy=0;   // LŐ: nyomva feszít, elengedve lő — és közben HÚZÁSSAL célozni is lehet róla
+    bindMobileHold(sb,(e)=>{ fid=e.pointerId; fx=e.clientX; fy=e.clientY; sb.classList.add('drawing'); if(running){ lmbHeld=true; startDraw(); } },()=>{ fid=null; sb.classList.remove('drawing'); releaseDraw(); });
+    sb.addEventListener('pointermove',e=>{ if(e.pointerId!==fid) return; e.preventDefault(); applyLook(e.clientX-fx,e.clientY-fy,TOUCH_LOOK_X,TOUCH_LOOK_Y); fx=e.clientX; fy=e.clientY; }); }
   bindMobileHold(document.getElementById('mobileShootAlt'),()=>{ if(running){ lmbHeld=true; startDraw(); } },()=>releaseDraw());
   bindMobileHold(document.getElementById('mobileMelee'),()=>meleeSwing());
   bindMobileHold(document.getElementById('mobileJump'),()=>{ mobileJump=true; },()=>{ mobileJump=false; });
@@ -6372,7 +6481,7 @@ function initMobileControls(){
   if(rotateBtn) rotateBtn.addEventListener('pointerdown',e=>{ prevent(e); requestLandscapeMode(); });
   document.addEventListener('fullscreenchange', updateFullscreenButton);
   document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
-  document.querySelectorAll('.mobile-el').forEach(b=>b.addEventListener('pointerdown',e=>{ prevent(e); setElement(b.dataset.el); }));
+  document.querySelectorAll('.mobile-el').forEach(b=>{ if(EL[b.dataset.el]) b.style.setProperty('--c',EL[b.dataset.el].ui); b.addEventListener('pointerdown',e=>{ prevent(e); setElement(b.dataset.el); buzz(8); }); });
   updateMobileElementButtons();
   updateFullscreenButton();
 }
@@ -6638,6 +6747,7 @@ function playerHurtFX(amount){
   if(hpbarEl){ hpbarEl.classList.remove('hit'); void hpbarEl.offsetWidth; hpbarEl.classList.add('hit'); }
   if(dmgpop){ dmgpop.textContent='-'+a; dmgpop.classList.remove('show'); void dmgpop.offsetWidth; dmgpop.classList.add('show'); }
   if(AUD.hurt) AUD.hurt();
+  buzz(a>=15?45:25);
 }
 function damagePlayer(d){
   if(player.invulnT>0) return;   // Utolsó Esély: rövid sérthetetlenség
