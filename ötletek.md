@@ -13,7 +13,8 @@ Ezek nincsenek még megvalósítva, csak feljegyzés a jövőre.
 - A **kicsi, gyors trollok (pl. kobold/scout)** tudjanak felfutni a lépcsőkön/rámpákon a játékos után — hogy a magaslat ne legyen teljesen biztonságos menedék.
 - Technikai megjegyzés: a trollok jelenleg a `pushMob` alapján a talajon mozognak; kellene egy egyszerű "lépcső-mászó" AI a fürge típusoknak (a rámpák `climb` solidBox-tetejét követve, STEP-lépcsőzéssel), csak a könnyű/gyors típusokra korlátozva, hogy ne legyen túl nehéz.
 
-## 3. VIHAR (ultimate) hasznosabbá tétele
+## 3. VIHAR (ultimate) hasznosabbá tétele — ✅ MEGVALÓSÍTVA (2026-11-15, „látvány-turbó”)
+> Elkészült: hullámmal skálázódó csapás, elem-specifikus pálya-esemény (jég: teljes fagy · tűz: lángmezők · méreg: gázfelhők · villám: bénító csapás · alap: lökéshullám), 7 mp TÚLTÖLTÉS (gyors húzás/töltés, ×1.5 elemi erő), 1.6 mp sérthetetlenség, +10% élet. Az alábbi az eredeti ötlet-jegyzet.
 - Az ötlet jó, de a jelenlegi VIHAR **túl gyenge/haszontalan** (fix 8 sebzés + 3 stack elem az egész pályára; a Vihar-Mester kártya emeli 35/62-re, de alapból lapos).
 - Kapjon **boostot vagy extra funkciót**, hogy tényleg "ultimate" élmény legyen. Ötletek:
   - Rövid idejű **elemi túltöltés**: a VIHAR után pár másodpercig minden nyíl dupla elemi erővel / ingyen elemi lövés (kapcsolódik az 1. ponthoz — muníció nélkül is).

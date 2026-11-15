@@ -17,13 +17,29 @@ server.
 | **Mouse** | Aim |
 | **Hold Left Mouse** | Draw the bow · **release** to fire |
 | **WASD** | Move · **Space** jump · **Shift** run · **Esc** pause |
+| **Q** | Dash in your movement direction (backwards when standing still) with a brief moment of invulnerability |
+| **Right Mouse / F** | Melee swing · **Mouse wheel** cycles the arrow element · **Tab** toggles the radar legend |
 | **1–5** | Arrow element: `1` ALAP · `2` TŰZ 🔥 · `3` JÉG 🧊 · `4` MÉREG ☠️ · `5` VILLÁM ⚡ |
 | **R** | VIHAR ultimate (when the meter is full) |
-| **Phone / touch** | Left joystick to move · drag right side to aim · hold either **LŐ** button to draw and release to fire · **FULL** fullscreen · **FORD** landscape request · touch buttons for jump, run, melee, pause, VIHAR, and arrow elements |
+| **Phone / touch** | Left joystick to move · drag right side to aim · hold either **LŐ** button to draw and release to fire · **FULL** fullscreen · **FORD** landscape request · touch buttons for jump, run, dash, melee, pause, VIHAR, and arrow elements |
+| **Gamepad** | Left stick move · right stick aim · **RT** draw/release · **RB / X** melee · **A** jump · **B** dash · **Y** VIHAR · **LB / D-pad** element · **L3** sprint · **Start** pause |
 | **EN / HU** | Toggle the game language between English and Hungarian (`?lang=en` / `?lang=hu` also works) |
 
 Longer draw = stronger, faster arrow **and** stronger elemental effect.
-Headshots deal double damage.
+Headshots deal double damage. Release the instant the crosshair ring turns
+**gold** for a **perfect shot** (+30% damage), and chain quick kills to build a
+**streak** score multiplier (up to ×2).
+
+Mouse sensitivity, field of view, volume, invert-Y, damage numbers and screen
+shake are adjustable in the **Settings** tab of the menu (and on the pause
+screen); they are saved in the browser together with your best score.
+
+Every **10th wave** is led by the **Troll King** — a giant with its own health
+bar and a telegraphed ground slam (jump, dash, or back off to avoid it).
+**VIHAR** now scales with the wave, triggers an element-specific field event
+(full freeze, fire fields, gas clouds, a stunning lightning strike, or a
+knock-back shockwave) and leaves you **overcharged** for a few seconds: faster
+draw and reload, ×1.5 elemental power, and a short invulnerability window.
 
 ---
 
@@ -114,5 +130,9 @@ can always confirm you're playing the latest version.
 ## Tech
 
 Three.js r128 (single-file, CDN), procedural low-poly models & textures,
-additive particle / shader-point FX pools. Co-op: a dependency-light Node
+additive particle / shader-point FX pools. The look is built from a procedural
+shader sky (stars, aurora, clouds, cratered moon), a custom filmic tone curve,
+selective bloom plus a single final grade pass (4× MSAA on the high tier),
+wind-animated instanced grass and canopies, drifting ground mist, moon shafts,
+warm braziers against the cool moonlight, and rim-lit trolls. Co-op: a dependency-light Node
 (`ws`) server at ~20 Hz, buffered entity interpolation, pid+token reconnect.
