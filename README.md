@@ -21,7 +21,7 @@ server.
 | **Right Mouse / F** | Melee swing · **Mouse wheel** cycles the arrow element · **Tab** toggles the radar legend |
 | **1–5** | Arrow element: `1` ALAP · `2` TŰZ 🔥 · `3` JÉG 🧊 · `4` MÉREG ☠️ · `5` VILLÁM ⚡ |
 | **R** | VIHAR ultimate (when the meter is full) |
-| **Phone / touch** | Left joystick to move · drag right side to aim · hold either **LŐ** button to draw and release to fire · **FULL** fullscreen · **FORD** landscape request · touch buttons for jump, run, dash, melee, pause, VIHAR, and arrow elements |
+| **Phone / touch** | Touch anywhere on the left side for a floating joystick (push it to the edge to run) · drag the right side **or the LŐ/FIRE button itself** to aim · hold **LŐ** to draw, release to fire · **UGR / KITÉR / ÜT** jump, dash, melee · **VIHAR** fills its ring and pulses when ready · element chips at the bottom · **FULL** fullscreen. Aiming slows slightly over a troll, Android phones vibrate on hits and kills, and the HUD scales to the screen. |
 | **Gamepad** | Left stick move · right stick aim · **RT** draw/release · **RB / X** melee · **A** jump · **B** dash · **Y** VIHAR · **LB / D-pad** element · **L3** sprint · **Start** pause |
 | **EN / HU** | Toggle the game language between English and Hungarian (`?lang=en` / `?lang=hu` also works) |
 
