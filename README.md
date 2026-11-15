@@ -134,5 +134,13 @@ additive particle / shader-point FX pools. The look is built from a procedural
 shader sky (stars, aurora, clouds, cratered moon), a custom filmic tone curve,
 selective bloom plus a single final grade pass (4× MSAA on the high tier),
 wind-animated instanced grass and canopies, drifting ground mist, moon shafts,
-warm braziers against the cool moonlight, and rim-lit trolls. Co-op: a dependency-light Node
+warm braziers against the cool moonlight, and rim-lit trolls.
+
+The models are built procedurally at load time with a stylized, hand-made
+look instead of raw primitives: smooth shading with crease-preserving normals,
+chiselled boulders and tapered menhirs, sculpted trunks with roots and
+branches under soft leaf-card canopies, conifers, bevelled planks and
+braced crates, fluted pillars, layered mountain ridges, contact shadows under
+props, and world-space painted materials (mossy rock, grooved bark, wood
+grain, worn dirt paths in the ground). Co-op: a dependency-light Node
 (`ws`) server at ~20 Hz, buffered entity interpolation, pid+token reconnect.
