@@ -2941,6 +2941,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE_INPUT ? 1 : 1.5)); // F
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap; // olcsóbb mint a PCFSoft
+renderer.shadowMap.autoUpdate = false;   // TELJESÍTMÉNY: az árnyéktérképet mi frissítjük (renderFrame), nem minden render()-hívás
 renderer.outputEncoding = THREE.sRGBEncoding;
 /* LÁTVÁNY-TURBÓ: saját tone-görbe MINDEN anyagra, MINDEN grafikai fokozaton (nulla extra pass):
    ACES + kontraszt-gamma + enyhe szaturáció. Az r128 a hex-színeket lineárisként értelmezi, ezért a paletta
@@ -3018,7 +3019,7 @@ if(bloomAvail){
 function bloomSize(){
   if(!bloomAvail) return;
   const pr = renderer.getPixelRatio();
-  bloomComposer.setPixelRatio(pr); finalComposer.setPixelRatio(pr);
+  bloomComposer.setPixelRatio(pr*0.5); finalComposer.setPixelRatio(pr);   // TELJESÍTMÉNY: a (mosott) bloom-forrás fél felbontáson
   bloomComposer.setSize(innerWidth, innerHeight);
   finalComposer.setSize(innerWidth, innerHeight);
 }
@@ -3027,9 +3028,12 @@ bloomSize();
 // egyetlen belépési pont: a frame() és a warmup is ezt hívja
 const _blackBG = new THREE.Color(0x000000);
 const FXS={ hurt:0, focus:0, tintK:0, lowHp:0, t:0 };   // a záró grade-pass élő paraméterei (update() írja)
+let _shadowTick=0;
 function renderFrame(){
   if(skyGroup) skyGroup.position.copy(camera.position);   // az ég a kamerával utazik (nincs parallaxis)
-  if(!bloomOn || !bloomAvail){ renderer.render(scene, camera); return; }
+  // árnyéktérkép: minden 2. képkockán (a fény iránya fix, így nincs "úszás"; a mozgó trollok árnyéka 1 képkockát késhet)
+  const _shadowNow = ((_shadowTick++)&1)===0;
+  if(!bloomOn || !bloomAvail){ renderer.shadowMap.needsUpdate=_shadowNow; renderer.render(scene, camera); return; }
   { const u=gradePass.uniforms; u.uTime.value=FXS.t; u.uHurt.value=FXS.hurt; u.uFocus.value=FXS.focus; u.uTintK.value=FXS.tintK; u.uLowHp.value=FXS.lowHp; }
   // A bloom-passban FEKETE háttér + fog KI kell: különben a navy ég/köd (küszöb 0.0 mellett)
   // beszűrődne a bloomba és az egész képet feltúlvilágítaná. Csak a címkézett fény-források izzanak.
@@ -3041,6 +3045,7 @@ function renderFrame(){
   camera.layers.enable(NOBLOOM_LAYER);
   scene.traverse(_restore);
   scene.background=_bg; scene.fog=_fog;
+  renderer.shadowMap.needsUpdate=_shadowNow;   // CSAK a fő-passban (a feketített bloom-pass árnyékot nem használ)
   finalComposer.render();
 }
 
@@ -3140,14 +3145,14 @@ function applyGraphics(tier, save){
   bloomOn = !!T.bloom && bloomAvail;           // low (v. hiányzó addon): nincs bloom -> sima render (nincs FPS-regresszió)
   syncFogColor(); SKY_U.uQ.value=(tier==='low')?0:1; syncGrassCount(); syncTreeShadows();
   if(bloomAvail){ bloomPass.strength = (tier==='high') ? 0.9 : 0.6;
-    const _ms=(tier==='high')?4:2;   // élsimítás: MAGAS 4x, KÖZEPES 2x MSAA
+    const _ms=(tier==='high')?4:0;   // élsimítás: csak MAGAS fokozaton (4x MSAA) — közepesen a kitöltési sebesség fontosabb
     [finalComposer.renderTarget1, finalComposer.renderTarget2].forEach(rt=>{ if(rt && rt.isWebGLMultisampleRenderTarget) rt.samples=_ms; });
     bloomSize(); }   // az új pixelRatio/méret átvitele a composerekre
   const wantType=T.soft?THREE.PCFSoftShadowMap:THREE.PCFShadowMap;
   if(renderer.shadowMap.type!==wantType || key.shadow.mapSize.x!==T.sm){
     renderer.shadowMap.type=wantType;
     key.shadow.mapSize.set(T.sm,T.sm);
-    if(key.shadow.map){ key.shadow.map.dispose(); key.shadow.map=null; }   // új méretű árnyéktextúra kikényszerítése
+    if(key.shadow.map){ key.shadow.map.dispose(); key.shadow.map=null; } renderer.shadowMap.needsUpdate=true;   // új méretű árnyéktextúra kikényszerítése
     scene.traverse(o=>{ const mm=o.material; if(!mm) return; (Array.isArray(mm)?mm:[mm]).forEach(x=>x.needsUpdate=true); });   // shader-újrafordítás az új árnyéktípushoz
   }
   if(save){ try{ localStorage.setItem(GFX_KEY,tier); }catch(_e){} }
@@ -3334,13 +3339,13 @@ const GEO_DETAIL=MOBILE_INPUT?1:2;
 /* TROLL HI-RES: a TrollGen a THREE-n keresztül hívja a primitíveket -> az építés idejére részletesebb változatokat
    cserélünk be (több szegmens, eggyel finomabb ikozaéder, a nagyobb dobozok lekerekített élűek). Mobilon mérsékeltebb. */
 const _G0={ Sphere:THREE.SphereGeometry, Cyl:THREE.CylinderGeometry, Cone:THREE.ConeGeometry, Ico:THREE.IcosahedronGeometry, Tor:THREE.TorusGeometry, Box:THREE.BoxGeometry };
-const _HQ=MOBILE_INPUT?1.5:2;
+const _HQ=MOBILE_INPUT?1.2:1.45;
 const _GB={
-  SphereGeometry:function(r,w,h,a,b,c,d){ return new _G0.Sphere(r, Math.min(26,Math.max(12,Math.round((w||8)*_HQ))), Math.min(18,Math.max(8,Math.round((h||6)*_HQ))), a,b,c,d); },
-  CylinderGeometry:function(rt,rb,h,rs,hs,o,ts,tl){ return new _G0.Cyl(rt,rb,h, Math.min(24,Math.max(12,Math.round((rs||8)*_HQ))), Math.max(2,hs||1), o,ts,tl); },
+  SphereGeometry:function(r,w,h,a,b,c,d){ return new _G0.Sphere(r, Math.min(18,Math.max(10,Math.round((w||8)*_HQ))), Math.min(12,Math.max(7,Math.round((h||6)*_HQ))), a,b,c,d); },
+  CylinderGeometry:function(rt,rb,h,rs,hs,o,ts,tl){ return new _G0.Cyl(rt,rb,h, Math.min(16,Math.max(10,Math.round((rs||8)*_HQ))), Math.max(1,hs||1), o,ts,tl); },
   ConeGeometry:function(r,h,rs,hs,o,ts,tl){ return new _G0.Cone(r,h, Math.min(16,Math.max(8,Math.round((rs||8)*_HQ))), Math.max(1,hs||1), o,ts,tl); },
-  IcosahedronGeometry:function(r,d){ return new _G0.Ico(r, Math.min(MOBILE_INPUT?1:2,(d||0)+1)); },
-  TorusGeometry:function(r,t,rs,ts,arc){ return new _G0.Tor(r,t, Math.min(12,Math.round((rs||6)*_HQ)), Math.min(36,Math.round((ts||10)*_HQ)), arc); },
+  IcosahedronGeometry:function(r,d){ return new _G0.Ico(r, Math.min(MOBILE_INPUT?1:2,(d||0)+(r>=0.2?1:0))); },   // csak a nagy testrészek kapnak finomabb ikozaédert
+  TorusGeometry:function(r,t,rs,ts,arc){ return new _G0.Tor(r,t, Math.min(8,Math.round((rs||6)*_HQ)), Math.min(24,Math.round((ts||10)*_HQ)), arc); },
   BoxGeometry:function(w,h,d,a,b,c){ const m=Math.min(w,h,d); return m>0.035 ? roundBox(w,h,d,m*0.32) : new _G0.Box(w,h,d,a,b,c); }
 };
 function withHiResGeo(fn){ const keys=Object.keys(_GB), saved={}; for(const k of keys){ saved[k]=THREE[k]; THREE[k]=_GB[k]; }
@@ -3473,7 +3478,7 @@ const envWood =applyStylized(std({color:0x7a5333,roughness:.86}),'wood');
 const envWoodV=applyStylized(std({color:0x7a5333,roughness:.86,vertexColors:true}),'wood');
 const leafCardMat=applyWind(std({color:0x86b25a,roughness:.9,vertexColors:true,map:LEAF_T,alphaTest:0.42,side:THREE.DoubleSide}),'canopy');
 const coniferMat=applyWind(std({color:0x1d3a26,roughness:.95,vertexColors:true}),'canopy');
-const TREE_KIT=[1,2,3,4].map(i=>({ trunk:makeTrunkGeo(i*5.1,4.6,0.3), can:makeCanopy(i*9.7, 6+(i%2), 1.05, 4.75, 1.15, GEO_DETAIL) }));
+const TREE_KIT=[1,2,3,4].map(i=>({ trunk:makeTrunkGeo(i*5.1,4.6,0.3), can:makeCanopy(i*9.7, 6+(i%2), 1.05, 4.75, 1.15, 1) }));   // detail 1: a sok fa miatt (a levél-kártyák adják a részletet)
 const CONIFER_GEOS=[1,2,3].map(i=>makeConiferGeo(i*2.3));
 const treeCasters=[];   // árnyékvető fa-mesh-ek (a grafikai fokozat kapcsolja)
 /* talaj-kontakt árnyék-foltok: minden fa/szikla/tárgy alá egy puha sötét korong -> a tárgyak "leülnek" a talajra (1 drawcall) */
@@ -3540,7 +3545,7 @@ let flammables=[];   // ELEM-ENV: gyúlékony fák (tűz-zóna gyújtja/terjed);
 function tree(x,z,s){
   s=s||1; const r=Math.hypot(x,z), y=GROUND_Y+hillH(x,z), far=r>BOUND_R+6;
   const g=new THREE.Group(); g.position.set(x,y-(far?0.25:0),z); g.rotation.y=rand(0,6.283);
-  const cast=r<66;
+  const cast=r<BOUND_R-2;   // TELJESÍTMÉNY: csak a tisztáson belüli fák vetnek árnyékot
   if(Math.random()<(far?0.62:(r>BOUND_R?0.28:0.10))){   // FENYŐ: főleg a peremen túl (változatos erdő-sziluett)
     g.scale.set(s*rand(0.95,1.2), s*rand(1.15,1.5), s*rand(0.95,1.2));
     const c=new THREE.Mesh(pickGeo(CONIFER_GEOS), coniferMat); c.castShadow=cast; c.receiveShadow=true; g.add(c); if(cast) treeCasters.push(c);
@@ -3549,7 +3554,7 @@ function tree(x,z,s){
     const K=pickGeo(TREE_KIT);
     const trunk=new THREE.Mesh(K.trunk, envBark); trunk.castShadow=cast; trunk.receiveShadow=true; g.add(trunk);
     const canopy=new THREE.Mesh(K.can.puff, canopyMat); canopy.castShadow=cast; canopy.receiveShadow=true; g.add(canopy);
-    if(!far || r<90){ const cards=new THREE.Mesh(K.can.cards, leafCardMat); cards.castShadow=false; cards.receiveShadow=false; g.add(cards); }
+    if(!far || r<90){ const cards=new THREE.Mesh(K.can.cards, leafCardMat); cards.castShadow=false; cards.receiveShadow=false; cards.layers.set(NOBLOOM_LAYER); g.add(cards); }
     if(cast) treeCasters.push(trunk,canopy);
   }
   scene.add(g);
@@ -3819,7 +3824,7 @@ function upNormals(g,k){ const n=g.attributes.normal; for(let i=0;i<n.count;i++)
 // ---- TUFT GRASS (instanced, dense centre falloff) ----
 // fűcsomó-geometria: 5 hajló penge EGY geometriába olvasztva (a régi 1-kúp = "tüske" helyett)
 function grassTuftGeo(){
-  const pos=[], blades=5, SEG=3;
+  const pos=[], blades=5, SEG=2;
   for(let i=0;i<blades;i++){
     const yaw=i*1.27+rand(-0.25,0.25), cx=Math.cos(yaw), cz=Math.sin(yaw), qx=-cz, qz=cx;
     const w=0.024, h=0.42+Math.random()*0.30, bend=0.12+Math.random()*0.16, pts=[];
@@ -3836,7 +3841,7 @@ const _ic=new THREE.Color();
 (function(){ const N=MOBILE_INPUT?1500:4200, BLADE=grassTuftGeo();
   gradTint(BLADE, 0x3b4a36, 0xf2f0c0, 0, 0.55, 1.15);   // sötét tő -> meleg, napszítta hegy (a kék holdfény ellen)
   const im=new THREE.InstancedMesh(BLADE, grassBladeMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
-  grassIM=im; im.userData.full=N; syncGrassCount();
+  grassIM=im; im.userData.full=N; syncGrassCount(); im.layers.set(NOBLOOM_LAYER);   // a bloom-passban kimarad (sosem izzik)
   const A=new THREE.Color(0x214a2a), B=new THREE.Color(0x48723a);
   for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(1.2, ARENA_R+6, 1.7), h=rand(0.75,1.5);
     _fp.set(Math.cos(a)*r, GROUND_Y-0.02, Math.sin(a)*r);   // a tő a talajban
@@ -3865,7 +3870,7 @@ function fernGeo(){
 const fernMatV=applyWind(std({color:0xffffff, roughness:1, vertexColors:true, side:THREE.DoubleSide}),'fern');   // a zöldet a per-instance szín adja
 (function(){ const N=260, FROND=fernGeo();
   gradTint(FROND, 0x3d4f3c, 0xffffff, 0, 0.9, 1.1);   // sötét tő -> világosabb levélhegy
-  const im=new THREE.InstancedMesh(FROND, fernMatV, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
+  const im=new THREE.InstancedMesh(FROND, fernMatV, N); im.layers.set(NOBLOOM_LAYER); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   const A=new THREE.Color(0x30583a), B=new THREE.Color(0x6f9c50);
   for(let i=0;i<N;i++){ const a=rand(0,6.283);
     // 75% in the outer fringe ring, 25% hugging the altar
@@ -3880,7 +3885,7 @@ const fernMatV=applyWind(std({color:0xffffff, roughness:1, vertexColors:true, si
 })();
 
 // ---- PEBBLES (instanced ground stones, worn-flagstone fleck) ----
-(function(){ const N=190, PEB=ROCK_GEOS[3].clone().scale(0.17,0.17,0.17);   // vésett mini-szikla (festett kő-anyag)
+(function(){ const N=190, PEB=makeRockGeo(23.1,0,5).scale(0.17,0.17,0.17);   // vésett mini-szikla (festett kő-anyag)
   const im=new THREE.InstancedMesh(PEB, envRock, N); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;
   const A=new THREE.Color(0xb0b5be), B=new THREE.Color(0xffffff);
   for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+14, 1.2), s=rand(0.5,1.6);
@@ -3895,7 +3900,7 @@ const fernMatV=applyWind(std({color:0xffffff, roughness:1, vertexColors:true, si
 // ---- FALLEN LEAVES (instanced flat litter quads) ----
 (function(){ const N=250, LEAF=(function(){ const g=new THREE.BufferGeometry(), v=[], P=[[0,-0.11],[0.045,-0.05],[0.06,0.02],[0.035,0.08],[0,0.12],[-0.035,0.08],[-0.06,0.02],[-0.045,-0.05]];   // hegyes ovális levél-forma (a téglalap helyett)
     for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length]; v.push(0,0,0, a[0],a[1],0, b[0],b[1],0); } g.setAttribute('position',new THREE.Float32BufferAttribute(v,3)); g.computeVertexNormals(); return g; })();
-  const im=new THREE.InstancedMesh(LEAF, leafMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
+  const im=new THREE.InstancedMesh(LEAF, leafMat, N); im.layers.set(NOBLOOM_LAYER); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   const LC=[0xffffff,0xe8d0a8,0xb8d0a0,0xd8b890];
   for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(2, ARENA_R+8, 1.4);
     _fp.set(Math.cos(a)*r, GROUND_Y+0.02, Math.sin(a)*r);
@@ -4157,10 +4162,10 @@ function applyCamera(){
 
 /* ===================== Szilárd ütközés — feloldó/groundAt függvények (a konstansok feljebb deklarálva) ===================== */
 function solidCyl(x, z, r, opts){
-  SOLIDS.push({kind:'cyl', x:x, z:z, r:r, top:(opts&&opts.top)||0, bottom:(opts&&opts.bottom)||0, climb:!!(opts&&opts.climb), mob:!!(opts&&opts.mob)});
+  SOLIDS.push({kind:'cyl', x:x, z:z, r:r, top:(opts&&opts.top)||0, bottom:(opts&&opts.bottom)||0, abot:(opts&&opts.abot!=null)?opts.abot:null, noArrow:!!(opts&&opts.noArrow), climb:!!(opts&&opts.climb), mob:!!(opts&&opts.mob)});
 }
 function solidBox(cx, cz, halfX, halfZ, opts){
-  SOLIDS.push({kind:'box', minX:cx-halfX, maxX:cx+halfX, minZ:cz-halfZ, maxZ:cz+halfZ,
+  SOLIDS.push({kind:'box', minX:cx-halfX, maxX:cx+halfX, minZ:cz-halfZ, maxZ:cz+halfZ, abot:(opts&&opts.abot!=null)?opts.abot:null, noArrow:!!(opts&&opts.noArrow),
                top:(opts&&opts.top)||0, bottom:(opts&&opts.bottom)||0, climb:!!(opts&&opts.climb), mob:!!(opts&&opts.mob)});
 }
 const OVERHEAD = 2.2;   // efölötti aljú építmény (magas fedélzet/híd) ALATT a játékos/troll szabadon átmegy, csak a tetejére mászhat
@@ -4306,7 +4311,7 @@ function buildRopeBridge(ax,az,atop, bx,bz,btop){
   // 1) KERESZTPALLÓK + collision (keskeny lécek réssel, a belógást követve)
   for(let k=0;k<N;k++){ const t=(k+0.5)/N, cx=ax+dxb*t, cz=az+dzb*t, cy=yAt(t);
     const plank=mesh(PLK, envWood, cx, cy-0.06, cz); plank.rotation.y=yaw+rand(-0.05,0.05); plank.rotation.z=rand(-0.035,0.035); scene.add(plank);   // léc KERESZTBEN (szélesség=kereszt, mélység=0.46 a járásirányban)
-    solidBox(cx, cz, 0.95, 0.95, {climb:true, top:cy, bottom:GROUND_Y+2.6, mob:true});   // ÁTFEDŐ négyzet-ütközők -> folytonos járófelület a diagonális hídon (nincs rés); bottom>=OVERHEAD -> a trollok ALATTA átmennek
+    solidBox(cx, cz, 0.95, 0.95, {climb:true, top:cy, bottom:GROUND_Y+2.6, mob:true, abot:cy-0.3});   // abot: a NYÍL csak a palló vastagságában áll meg (alatta szabadon elrepül — nincs láthatatlan fal)   // ÁTFEDŐ négyzet-ütközők -> folytonos járófelület a diagonális hídon (nincs rés); bottom>=OVERHEAD -> a trollok ALATTA átmennek
   }
   // 2) OLDALKÖTELEK: deck-szintű (a pallók pereme) + korlát (járószint+0.95), mindkét oldalon, belógással
   for(let s=-1;s<=1;s+=2){ for(const lvl of [0.0,0.95]){ const pts=[];
@@ -4323,7 +4328,7 @@ function buildRopeBridge(ax,az,atop, bx,bz,btop){
   //    hogy a tested a kötélnél fogjon meg -> nem esel le, bátran szaladhatsz/lőhetsz. NEM mászható (groundAt kihagyja -> nem állsz rá),
   //    bottom>=OVERHEAD -> a magas híd ALATT a játékos/troll szabadon átmegy a talajon.
   { const RAIL=HALF+0.15, M=Math.max(20, Math.round(span*1.6)); for(let s=-1;s<=1;s+=2){ for(let i=0;i<=M;i++){ const t=0.03+0.94*(i/M);
-    solidCyl(ax+dxb*t+qx*s*RAIL, az+dzb*t+qz*s*RAIL, 0.18, {top:Math.max(atop,btop)+1.5, bottom:GROUND_Y+2.6}); } } }
+    solidCyl(ax+dxb*t+qx*s*RAIL, az+dzb*t+qz*s*RAIL, 0.18, {top:Math.max(atop,btop)+1.5, bottom:GROUND_Y+2.6, noArrow:true}); } } }   // láthatatlan korlát: csak a játékost tartja, a nyilat nem
 }
 buildRopeBridge(18,9,GROUND_Y+4.1, 8,18,GROUND_Y+4.1);   // A<->B kilátóhíd (az eredeti lombhíd)
 
@@ -5743,6 +5748,8 @@ function makeMonster(type, scale, hp, speed, el, seed){
   try { return makeMonsterGen(type, scale, hp, speed, el, seed); }
   catch(e){ console.warn('[TrollGen] build hiba -> legacy rig:', e && e.message); return makeMonsterLegacy(type, scale, hp, speed, el); }
 }
+const TROLL_BLOB_GEO=new THREE.CircleGeometry(1,20).rotateX(-Math.PI/2);
+const TROLL_BLOB_MAT=new THREE.MeshBasicMaterial({map:GLOW,color:0x020508,transparent:true,opacity:0.55,depthWrite:false,fog:false,toneMapped:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
 function makeMonsterGen(type, scale, hp, speed, el, seed){
   let T;
   if(typeof type==='string' && TROLL_TYPES[type]) T=TROLL_TYPES[type];
@@ -5787,8 +5794,9 @@ function makeMonsterGen(type, scale, hp, speed, el, seed){
   }catch(_e){}
   // FPS: csak a sziluett vessen árnyékot
   g.traverse(o=>{ if(o.isMesh) o.castShadow=false; });
-  [gen.torso, gen.head, gen.legs&&gen.legs.L, gen.legs&&gen.legs.R, gen.arms&&gen.arms.L, gen.arms&&gen.arms.R]
+  if(gfxTier==='high') [gen.torso, gen.head, gen.legs&&gen.legs.L, gen.legs&&gen.legs.R, gen.arms&&gen.arms.L, gen.arms&&gen.arms.R]
     .forEach(p=>{ if(p) p.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); });
+  { const blob=new THREE.Mesh(TROLL_BLOB_GEO, TROLL_BLOB_MAT); blob.position.y=0.03; blob.scale.setScalar(Math.max(0.6,(gen.bodyR||0.8)/(gen.scale||1)*1.25)); blob.layers.set(NOBLOOM_LAYER); blob.renderOrder=-1; g.add(blob); }   // puha talp-árnyék (minden fokozaton; olcsó)
   attachHpBar(m);
   try{ applyTrollRim(m); }catch(_e){}   // LÁTVÁNY-TURBÓ: rim-fény + találat-villanás uniformok
   return m;
@@ -5926,7 +5934,7 @@ function makeMonsterLegacy(type, scale, hp, speed, el){
   return m;
 }
 function disposeMonster(m){
-  m.g.traverse(o=>{ if(o.isMesh && o.geometry && o.geometry!==HPBAR_GEO) o.geometry.dispose(); if(o.isSprite && o.material) o.material.dispose(); });
+  m.g.traverse(o=>{ if(o.isMesh && o.geometry && o.geometry!==HPBAR_GEO && o.geometry!==TROLL_BLOB_GEO) o.geometry.dispose(); if(o.isSprite && o.material) o.material.dispose(); });
   if(m.eyeMat) m.eyeMat.dispose();
   if(m.bodySkin && m.bodySkin!==skinMat) m.bodySkin.dispose();
   if(m.aura && m.aura.material) m.aura.material.dispose();
@@ -6993,7 +7001,7 @@ function update(dt,t){
       continue; }
     // SZILÁRD TEST (fa/kő/építmény): a nyíl beleáll, nem fúr át. A magas fedélzet/híd ALATT (y<bottom) elrepül.
     { const ax=a.g.position.x, ay=a.g.position.y, az=a.g.position.z; let solidHit=false;
-      for(const s of SOLIDS){ const bot=(s.bottom!=null?s.bottom:GROUND_Y), topH=(s.top!=null?s.top:GROUND_Y+3.6);
+      for(const s of SOLIDS){ if(s.noArrow) continue; const bot=(s.abot!=null?s.abot:(s.bottom!=null?s.bottom:GROUND_Y)), topH=(s.top!=null?s.top:GROUND_Y+3.6);
         if(ay<bot || ay>topH) continue;
         if(s.kind==='cyl'){ const ddx=ax-s.x, ddz=az-s.z; if(ddx*ddx+ddz*ddz < s.r*s.r){ solidHit=true; break; } }
         else if(ax>s.minX && ax<s.maxX && az>s.minZ && az<s.maxZ){ solidHit=true; break; } }
@@ -8149,7 +8157,7 @@ document.getElementById('restartBtn').addEventListener('click',beginPlay);
 
 // --- fejlesztői/teszt-hook: csak #dev hash-sel aktív (Playwright-verifikációhoz; játékos-úton inert) ---
 if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgrades, addScore, startWave, freezeEncase, freezeFull, killMonster, openShop, applyStatus, renderer, player, damagePlayer, camera, scene, THREE, CAVES,
-  makeMonster, disposeMonster, trollAI, update, fireVihar, gainUlt, tryDash, setElement, spawnMonster, STATS, SET, get combo(){return combo}, get slowT(){return slowT}, set bossPending(v){bossPending=v}, releaseDraw, startDraw, get charge(){return charge}, get USE_TROLLGEN(){return USE_TROLLGEN}, set USE_TROLLGEN(v){USE_TROLLGEN=v},
+  arrows, makeMonster, disposeMonster, trollAI, update, fireVihar, gainUlt, tryDash, setElement, spawnMonster, STATS, SET, get combo(){return combo}, get slowT(){return slowT}, set bossPending(v){bossPending=v}, releaseDraw, startDraw, get charge(){return charge}, get USE_TROLLGEN(){return USE_TROLLGEN}, set USE_TROLLGEN(v){USE_TROLLGEN=v},
   bloomComposer, finalComposer, bloomPass,
   setBloom:(s,r,t)=>{ if(!bloomPass)return; if(s!=null)bloomPass.strength=s; if(r!=null)bloomPass.radius=r; if(t!=null)bloomPass.threshold=t; },
   setBloomOn:(v)=>{ bloomOn=!!v; },
