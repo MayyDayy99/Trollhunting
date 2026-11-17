@@ -63,6 +63,15 @@ equipped element. Full design + implementation notes: **[ELEMENTAL-SPEC.md](ELEM
 
 ## Run it locally
 
+Troll locomotion uses articulated hips, knees, ankles, elbows and wrists, with
+distance-driven strides and blended idle poses in both single-player and co-op.
+Single-player melee clips follow the existing damage timing; casting, hit recoil
+and death joint relaxation add follow-through without changing combat rules.
+Elemental trails and status/zone particles use timed emission budgets, with
+eased shockwaves, flickering lightning and growing ice shells.
+
+Run the dependency-free animation regressions with `node --test tests\animations.test.cjs`.
+
 ### Single-player
 Just open **`mohas-roham.html`** in a modern browser (Chrome recommended).
 No build, no server — Three.js loads from a CDN.
