@@ -66,38 +66,44 @@ mindig újraépíti a szkriptből (a változat alakja a `build_scene` véletlen-
 node tools/props/to-webp.mjs vfx_out/smoke_puff_atlas.png src/assets/vfx/smoke_puff.webp 90
 ```
 
-## Közös szabályok a flipbook-effektekhez (tűz, méreg, por, villám)
+## Közös szabályok a flipbook-effektekhez (tűz, méregtócsa, por, villám)
 
 - **Adat, nem szín.** Minden atlasz 4×4 kocka, 256 px (1024×1024). Az RGB az **5 sáv** egyikének szürke értéke
   (0.10 / 0.32 / 0.54 / 0.76 / 1.00), az A a lefedettség. A színt a játék adja effektenként a saját 5 színű
   palettájából, így ugyanaz a kemény, rajzfilmes sávozás marad, bármilyen színben.
 - **Egy shader mindenre.** A `15-fire-burst.js` `makeFlipbook()` gyára effektenként EGY instanced hálót készít
-  (1 rajzolási hívás), kamera felé forduló lapokkal; a paletta, a sávonkénti átlátszóság, a bloom-súly és a
-  kockák közti áttűnés uniform, így a négy effekt egyetlen lefordított programon osztozik.
+  (1 rajzolási hívás), kamera felé forduló lapokkal, vagy talaj-módban (`ground:true`) a földre fektetett lapokkal
+  (felülnézetes atlaszhoz, mint a méregtócsa); a paletta, a sávonkénti átlátszóság, a bloom-súly, a kockák közti
+  áttűnés és a talaj-mód uniform, így az összes effekt egyetlen lefordított programon osztozik.
 - **Preview érték.** Minden `.blend` anyagában van egy `Preview` érték-node: 1 = színes előnézet (így nyílik meg),
   0 = a játéknak szánt szürke adat. A `--render` mindig adatot renderel, a `--render --preview` a színes változatot.
 - **Keretezés.** Az effekt kitölti a kockát, de egyik kocka szélét sem érinti (a `--render` után érdemes
   ellenőrizni, hogy átlátszatlan képpont nem ér a kocka-határra).
 
-## poison_splash — méreg-fröccs
+## poison_pool — méregtócsa (területi effekt, felülnézet)
 
-![előnézet](poison_splash_preview.webp)
+![előnézet](poison_pool_preview.webp)
 
 | Fájl | Mi ez |
 | --- | --- |
-| `poison_splash.blend` | A jelenet: egyetlen „Goo” metaball-család (a `Goo`, `Goo.001`, `Goo.002`… gömbök EGY folyadék-felületté olvadnak össze, így a cseppek valódi nyakkal szakadnak le), szerepek szerint gyűjteményekbe rendezve (`Goo core`, `Goo crown`, `Goo drops`, `Goo drips`, `Goo specks`), plusz három felpattanó buborék (`Bubble0–2`). |
-| `poison_splash.py` | A jelenetet a nulláról felépítő és renderelő szkript (headless). |
-| `poison_splash_preview.webp` | Színes előnézet a 16 kockáról. |
-| `../../src/assets/vfx/poison_splash.webp` | A játék atlasza: RGB = sáv (sötét perem / mélyzöld / közép / világos / nedves csúcsfény), A = lefedettség. |
+| `poison_pool.blend` | A jelenet FELÜLRŐL (ortho kamera lefelé néz): lapított metaball-tócsa. A `Goo`, `Goo.001`… gömbök egy felületté olvadnak (`Puddle core`, `Puddle rim`, `Splash fingers`); ugyanezek a gömbök kicsit nagyobban és kicsit lejjebb még kétszer szerepelnek (`Men…` = mélyzöld szegély, `Rim…` = sötét perem; az objektum `rim` tulajdonsága mondja meg az anyagnak), így a tócsa körül egyenletes, rajzfilmes kontúr fut. Plusz felpattanó buborékok (`Bubble0–6`) és a pukkanás gyűrűje (`BubblePop0–6`). |
+| `poison_pool.py` | A jelenetet a nulláról felépítő és renderelő szkript (headless). |
+| `poison_pool_preview.webp` | Színes előnézet a 16 kockáról. |
+| `../../src/assets/vfx/poison_pool.webp` | A játék atlasza: RGB = sáv (sötét perem / mélyzöld / közép / világos / nedves csúcsfény), A = lefedettség. |
 
-A becsapódáskor a mag szétlapul, ujjas „korona” csap ki belőle; az ujjak vége megduzzad, elvékonyodik és
-könnycseppként leszakad, a cseppek ívben repülnek és leesnek, a felszínen buborékok nőnek és pukkannak, a mag
-megereszkedik, csöpögni kezd, darabokra válik, a végén zaj marja szét. Az anyagban (`PoisonSplash`):
-**Erode** (szétmaródás), **Boil** (zaj), **Ink** (a sötét perem vastagsága: kisebb = vastagabb; az árnyékos
-oldalon magától vastagabb), **Gloss** (a nedves csúcsfény mérete: kisebb = nagyobb), **Preview**.
+Az 1–4. kockán a tócsa gyorsan szétterül a középpontból, szabálytalan, csomós peremmel és rövid, a talajon
+kifröccsenő ujjakkal; a 4–10. kockán buborékok nőnek és pukkannak benne, nedves fénnyel; a 10–16. kockán befelé
+zsugorodik és zaj marja szét (elpárolog). Az anyagban (`PoisonPool`): **Erode** (párolgás), **Boil** (zaj),
+**Ink** (a buborékok sötét gyűrűje: kisebb = vastagabb), **Gloss** (a nedves csúcsfény mérete: kisebb = nagyobb),
+**Preview**.
 
-A játékban a `POISONBURST` rajzolja savzöld palettával (a csúcsfény halványan izzik): méregnyíl becsapódása
-(`elementalImpact`) és méreggel megölt troll halála (`elementalDeath`).
+A játékban a `POISONPOOL` rajzolja talaj-módban (`makeFlipbook({ground:true})`: a lap vízszintesen a talajon fekszik,
+3 cm-rel fölötte, véletlen Y-forgatással, polygonOffset-tel; csak a csúcsfény izzik halványan). A méretét a valódi
+méreg-terület adja (`poisonPool()` a `16-elements.js`-ben): a tócsa ~R sugarú kör (lap = 2.6 × R), a kifröccsenő ujjak
+kicsit túlnyúlnak. R = a becsapódási sebzés sugara (`splashR('poison')` × Robbanó Szív): trollon találat 2.6 m, földbe
+vagy fába állt nyílnál a fele; méreghalálnál a visszamaradó gázfelhő sugara (2.2 m). Körben néhány alacsony, lassan
+felszálló mérgező pamacs (`SMK`) és buborék-pukkanás (`RP`) ad neki térfogatot. (A korábbi, kamera felé forduló
+`poison_splash` fröccs kikerült; a fájljai a git-történetben megvannak.)
 
 ## dust_poof — porfelhő
 
@@ -116,9 +122,10 @@ eltűnnek. A kavicsok sötétebbek: az objektum `tone` tulajdonsága szorozza a 
 (`DustPoof`): **Erode**, **Boil**, **Ink**, **Preview**. A becsapódási pont a kocka aljától ~17%-ra van:
 a játék a kamera felé forduló lapot a méret ~0.34-szeresével megemeli, így a felhő alja a talajon ül.
 
-A játékban a `DUSTPOOF` rajzolja földszínű, holdfényhez visszafogott palettával (nem izzik): troll kibújása
-a barlangból (`trollSpawnFx`), földet érés halálkor (`trollDust` a `deathThud`-ból, a földbe süllyedőknél
-azonnal), a Troll Király földrengető csapása és a lezuhanó sziklák becsapódása.
+A játékban a `DUSTPOOF` rajzolja világos, lágy meleg-szürke, kis kontrasztú palettával (kissé áttetsző, nem izzik):
+troll kibújása a barlangból (`trollSpawnFx`), földet érés halálkor (`trollCollapseDust`: két pamacs a `deathThud`-ból,
+a ledőlt test elé tolva, hogy ne takarja el; a földbe süllyedőknél azonnal), a Troll Király földrengető csapása és a
+lezuhanó sziklák becsapódása.
 
 ## zap_burst — villám-csillag
 
@@ -145,9 +152,9 @@ világos belső sugarak adnak bloomot: villámnyíl becsapódása (`elementalImp
 **Újrarenderelés és csere a játékban** (mindhárom ugyanígy, a repó gyökeréből; a `.blend` a `--save`-vel készül):
 
 ```powershell
-& "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" -b --factory-startup --python tools/vfx/poison_splash.py -- --render --out vfx_out
-node tools/props/to-webp.mjs vfx_out/poison_splash_atlas.png src/assets/vfx/poison_splash.webp 90
-& "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" -b --factory-startup --python tools/vfx/poison_splash.py -- --save tools/vfx/poison_splash.blend
+& "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" -b --factory-startup --python tools/vfx/poison_pool.py -- --render --out vfx_out
+node tools/props/to-webp.mjs vfx_out/poison_pool_atlas.png src/assets/vfx/poison_pool.webp 90
+& "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" -b --factory-startup --python tools/vfx/poison_pool.py -- --save tools/vfx/poison_pool.blend
 ```
 
 A `dust_poof` és a `zap_burst` ugyanígy, a fájlnév cseréjével. Színes előnézethez a render parancs végére tedd:

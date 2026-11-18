@@ -3,8 +3,8 @@
 import trollIdol from './assets/props/troll_idol.glb?url';
 import fireBurst from './assets/vfx/fire_burst.webp?url';   // Blender flipbooks (tools/vfx)
 import smokePuff from './assets/vfx/smoke_puff.webp?url';
-import poisonSplash from './assets/vfx/poison_splash.webp?url';
+import poisonPool from './assets/vfx/poison_pool.webp?url';
 import dustPoof from './assets/vfx/dust_poof.webp?url';
 import zapBurst from './assets/vfx/zap_burst.webp?url';
 
-window.GAME_ASSETS = { trollIdol, fireBurst, smokePuff, poisonSplash, dustPoof, zapBurst };
+window.GAME_ASSETS = { trollIdol, fireBurst, smokePuff, poisonPool, dustPoof, zapBurst };

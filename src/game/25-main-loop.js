@@ -196,6 +196,7 @@ function update(dt,t){
     if(a.g.position.y<=GROUND_Y+0.02){ a.g.position.y=GROUND_Y+0.02; a.stuck=true; a.life=0;
       arrowThud(a.g.position.x,GROUND_Y+0.08,a.g.position.z,a.vel.x,a.vel.z);
       if(a.el!=='base'){ const sx=a.g.position.x, sz=a.g.position.z;   // földbe állt ELEMI nyíl: FÉL sugarú területi sebzés
+        if(a.el==='poison') poisonPool(sx,GROUND_Y+0.1,sz,splashR('poison')*0.5*RUNM.elemRadiusMul);   // méregtócsa = a fél sugarú sebző terület
         if(coop) coop.send({t:'splash_at', x:sx, z:sz, el:a.el, dmg:a.dmg, charge:a.charge});
         else elementalSplashAt(sx, sz, a.el, a.dmg, a.charge, false, null, 0.5*RUNM.elemRadiusMul); }   // FEJLESZTÉS: Robbanó Szív sugár-szorzó
       continue; }
@@ -206,6 +207,7 @@ function update(dt,t){
         if(s.kind==='cyl'){ const ddx=ax-s.x, ddz=az-s.z; if(ddx*ddx+ddz*ddz < s.r*s.r){ solidHit=true; break; } }
         else if(ax>s.minX && ax<s.maxX && az>s.minZ && az<s.maxZ){ solidHit=true; break; } }
       if(solidHit){ arrowThud(ax,ay,az,a.vel.x,a.vel.z); a.stuck=true; a.life=0; a.vel.set(0,0,0);
+        if(a.el==='poison') poisonPool(ax,ay,az,splashR('poison')*0.5*RUNM.elemRadiusMul);   // a tócsa a fa/kő tövében, a talajon
         if(a.el!=='base'){ if(coop) coop.send({t:'splash_at', x:ax, z:az, el:a.el, dmg:a.dmg, charge:a.charge}); else elementalSplashAt(ax, az, a.el, a.dmg, a.charge, false, null, 0.5*RUNM.elemRadiusMul); }   // FEJLESZTÉS: Robbanó Szív (SP; co-op sugarat a szerver birtokolja)
         continue; } }
     // szörny-találat (szakasz vs gömb, hogy ne fúrjon át)
@@ -269,7 +271,7 @@ function update(dt,t){
     if(m.dying>0){ if(m._flashV) setTrollFlash(m,0); m.dying+=dt; const k=m.dying; const g=m.g, p=g.position; if(m.hpbar&&m.hpbar.visible) m.hpbar.visible=false;
       if(m.eyeMat && m.deathStyle!=='dissolve') m.eyeMat.emissiveIntensity=Math.max(0, 2*(1-k/1.1));   // elhaló szemfény minden stílusban
       const deathThud=(scaleMul)=>{ if(m._thudDone) return; m._thudDone=true;   // földet érés: porfelhő + por-gyűrű + rögök (egyszer)
-        trollDust(m, scaleMul);
+        trollCollapseDust(m, scaleMul);
         EFX.ring(p.x,GROUND_Y+0.05,p.z,0xa8b498,0.25,1.9*m.scale*(scaleMul||1),0.35,0.5);
         for(let i2=0;i2<8;i2++) RP.spawn(p.x+rand(-0.5,0.5)*m.scale,GROUND_Y+0.1,p.z+rand(-0.5,0.5)*m.scale, rand(-1.2,1.2),rand(0.4,1.8),rand(-1.2,1.2), pick([0x8a795c,0x6f7a5a,0xa89a78]), rand(0.4,0.7),0.05, rand(0.3,0.6), 4,1); };
       switch(m.deathStyle){
@@ -386,7 +388,7 @@ function update(dt,t){
   /* --- effektek --- */
   updateElemFx(dt);
   updateDmgNums(dt);
-  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running); FIREBURST.update(dt); POISONBURST.update(dt); DUSTPOOF.update(dt); ZAPBURST.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
+  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running); FIREBURST.update(dt); POISONPOOL.update(dt); DUSTPOOF.update(dt); ZAPBURST.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
   updateUltHud();   // PLAYER: VIHAR-csík + rezonancia-ragyogás
   updateTurboHud(dt); envUltK=ult/100;
   if(arrowLightT>0){ arrowLightT-=dt; if(arrowLightT<=0) arrowLight.intensity=0; }   // repülő elemi nyíl fénye lecseng (visible marad: konstans fény-szám)

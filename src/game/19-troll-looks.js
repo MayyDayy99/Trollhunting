@@ -78,6 +78,11 @@ function tickDmgNum(m,dt){
 // előbújás a barlangból: por-gomoly + rögök + rövid földgyűrű (a troll a sötétből "kitör")
 // porfelhő a troll lábánál (Blender flipbook, 15-fire-burst.js): kibújás a barlangból, földet érés halálkor
 function trollDust(m, k){ const p=m.g.position; DUSTPOOF.spawn(p.x, GROUND_Y, p.z, 2.6*(m.scale||1)*(k||1)); }
+// halál: földet érés -> két jól látható porpamacs; a test ELÉ tolva (kamera felé), hogy a ledőlt test ne takarja el
+function trollCollapseDust(m, k){ const p=m.g.position, s=(m.scale||1)*(k||1);
+  const dx=camera.position.x-p.x, dz=camera.position.z-p.z, d=Math.hypot(dx,dz)||1, side=Math.random()<0.5?-1:1, ox=-dz/d*side*0.9*s, oz=dx/d*side*0.9*s;
+  DUSTPOOF.spawn(p.x, GROUND_Y, p.z, 4.3*s, 1.1, 1.1*s);
+  DUSTPOOF.spawn(p.x+ox, GROUND_Y, p.z+oz, 3.0*s, 1.3, 0.6*s); }
 function trollSpawnFx(m){
   const p=m.g.position, s=m.scale||1;
   trollDust(m, 1.5);
@@ -89,7 +94,7 @@ function trollSpawnFx(m){
 function trollDeathFx(m, pts, headshot){
   const p=m.g.position, cy=p.y+(m.bodyCY||1), col=(m.el&&EL[m.el])?EL[m.el].fx:0x8fe0c0;
   const n=(gfxTier==='low')?5:11;
-  if(m.deathStyle==='sink') trollDust(m, 0.9);   // a földbe süllyedő troll azonnal port ver (a dőlő/rogyó trollok a földet éréskor: 25-main-loop deathThud)
+  if(m.deathStyle==='sink') trollCollapseDust(m, 0.9);   // a földbe süllyedő troll azonnal port ver (a dőlő/rogyó trollok a földet éréskor: 25-main-loop deathThud)
   for(let i=0;i<n;i++) RP.spawn(p.x+rand(-0.45,0.45),cy+rand(-0.3,0.5),p.z+rand(-0.45,0.45), rand(-0.35,0.35),rand(1.1,2.6),rand(-0.35,0.35), i%3?col:0xffffff, rand(0.14,0.28),0.02, rand(0.9,1.6), -0.6,0.9, 0.9);
   for(let i=0;i<(n>>1);i++) VFX.streak(p.x+rand(-0.4,0.4),cy+rand(-0.2,0.4),p.z+rand(-0.4,0.4),rand(-0.3,0.3),rand(2.2,4.2),rand(-0.3,0.3),col,rand(0.5,0.9),-0.5,0.6,0.014,0.09);   // felszálló lélek-csíkok
   if(pts>0) spawnDmgNum(p.x, p.y+(m.headCY||1.8)+0.7, p.z, '+'+pts, 'pts');

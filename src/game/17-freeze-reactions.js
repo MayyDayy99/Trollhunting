@@ -155,9 +155,11 @@ function applyReaction(id, pos, hit, dmg, charge){
   }
   return false;
 }
+// a becsapódási AoE alap-sugara elemenként (a villám LÁNCOL, nem splashel -> 0); a látvány (pl. a méregtócsa) is ezt használja
+function splashR(el){ return el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0; }
 // "AHOL IZZIK, OTT SEBEZ": kis becsapódási AoE. A látható gyűrű sugara == a sebző sugár. radMul: fél területre a földbe-állt nyílhoz.
 function elementalSplashAt(px, pz, el, dmg, charge, head, exclude, radMul){
-  const R = (el==='fire'?3.6 : el==='ice'?3.0 : el==='poison'?2.6 : 0) * (radMul||1);   // a villám LÁNCOL, nem splashel -> 0
+  const R = splashR(el) * (radMul||1);
   if(R<=0) return;
   const frac = (el==='fire'?0.30 : el==='ice'?0.22 : 0.20) * (head?1.5:1);
   const col = el==='fire'?0xff7a3d : el==='ice'?0x9fd0ff : 0x9fdc4a;
