@@ -245,7 +245,7 @@ function resolveSpell(e){
     if(main){
       for(let i=0;i<2;i++){ const a=rand(0,6.28)+i*3.14;
         VFX.flame(e.x+Math.cos(a)*e.r*0.52,GROUND_Y,e.z+Math.sin(a)*e.r*0.52,e.r*0.36,h*rand(0.9,1.2),0.52,P.fire,0.9); }
-      if(e.final) VFX.ball(e.x,y+0.5,e.z,e.r*0.3,e.r*1.05,0.5,P.fire);   // a hullám vége: záró robbanás
+      FIREBURST.spawn(e.x,y+e.r*0.55,e.z,e.r*(e.final?3.6:2.2));   // kitörés-robbanás; a hullám végén nagyobb záró robbanás
       VFX.ring(e.x,y,e.z,0xff7a2a,0.3,e.r*(e.final?1.7:1.25),0.44,e.final?0.75:0.45);
       VFX.decal(e.x,GROUND_Y,e.z,e.r*1.15,1,0x0f0704,0.85,6,0xff6a1a,2.4);
       if(EFX.light) EFX.light(e.x,y+1.4,e.z,0xff7a3d,3.2+e.rank*0.7,0.26);

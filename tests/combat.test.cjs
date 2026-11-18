@@ -30,6 +30,7 @@ function harness() {
     std: p => new Material(p), scene: { add() {} }, enableBloom() {},
     // The pooled shader VFX kit is presentation-only: every call is a no-op here.
     VFX: new Proxy({ PAL: {} }, { get: (t, k) => (k in t ? t[k] : () => null) }),
+    FIREBURST: { spawn() {}, update() {}, reset() {} },   // the Blender fire-burst flipbook is presentation-only too
     GROUND_Y: 0, SLAM_R: 9, SOLIDS: [], monsters: [], coop: false,
     player: { pos: new Vec(0, 1.7, 0), feet: 0, alive: true, witherT: 0 },
     camera: { position: new Vec(0, 1.7, 0), getWorldDirection: v => v.set(0, -0.1, -1) },

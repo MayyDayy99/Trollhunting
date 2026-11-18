@@ -74,10 +74,10 @@ function warmup(done){
     beamTube.visible=false; resetAbolts(); resetBombs(); if(wbolts[0]) wbolts[0].g.visible=false;
     for(let i2=0;i2<4;i2++){ const a=arrows[i2]; if(!a) break; a.el='base'; a.flames=null; applyArrowVisual(a); a.g.visible=false; a.active=false; }   // a felmelegítő nyilak nullára
     if(typeof BOW_SKINS!=='undefined'){ dressBow(equippedBow); BOW_SKINS.sigil.g.visible=false; }
-    clearBossHazards(); VFX.reset();
+    clearBossHazards(); VFX.reset(); FIREBURST.reset();
     if(loadingEl) loadingEl.classList.add('hide');
     done();
   })();
 }
-warmup(frame);
+Promise.all([PROPS_READY, FIREBURST.ready, SMOKE_ATLAS.ready]).then(() => warmup(frame));   // a generált tereptárgyak (07), a robbanás- és a füst-atlasz (15) is kész legyen, mire a shaderek lefordulnak
 

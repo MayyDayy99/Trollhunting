@@ -1,0 +1,17 @@
+{
+  "name": "troll-hunting-prop-tools",
+  "private": true,
+  "description": "Offline pipeline for AI-generated 3D props: optimize a GLB for the game and render a preview. Not part of the game build.",
+  "type": "module",
+  "scripts": {
+    "optimize": "node optimize.mjs",
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "meshoptimizer": "1.2.0",
+    "sharp": "0.35.5"
+  }
+}
