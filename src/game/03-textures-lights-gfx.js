@@ -43,22 +43,26 @@ const GROUND_T=groundTexture(); GROUND_T.encoding=THREE.sRGBEncoding;
 /* LÁTVÁNY-TURBÓ: SZÉL — a fű/páfrány/lomb vertex-shaderben hajladozik (nulla CPU), a fű a játékos lába elől kihajlik.
    Az instanceMatrix UTÁN, világ-térben tolunk (így a szél iránya koherens, nem pengénként forog). */
 const WIND_U={ uWind:{value:0}, uPlayer:{value:new THREE.Vector3(0,-99,0)} };
-function applyWind(mat, kind){
+// baked (csak 'canopy'): a világ-térbe összevont lombokhoz (12-world-batch). Az eredeti háló-térbeli magasságot (aOH) és a
+// háló-tér (1,0,0.6) kitérés-irányának világ-képét (aSD) csúcs-attribútum hordozza -> ugyanaz a hajladozás, háló-transzform nélkül.
+function applyWind(mat, kind, baked){
+  baked = baked && kind==='canopy';
   const amp = kind==='canopy' ? '0.042' : (kind==='fern' ? '0.20' : '0.34');
-  const hgt = kind==='canopy' ? 'clamp(transformed.y-3.1,0.0,3.6)' : 'max(0.0,transformed.y)';
+  const oy  = baked ? 'aOH' : 'transformed.y';
+  const hgt = kind==='canopy' ? 'clamp('+oy+'-3.1,0.0,3.6)' : 'max(0.0,transformed.y)';
   const pw  = kind==='canopy' ? 'hgt' : 'hgt*hgt';
   mat.onBeforeCompile=function(sh){ sh.uniforms.uWind=WIND_U.uWind; sh.uniforms.uPlayer=WIND_U.uPlayer;
     sh.fragmentShader='#undef DOUBLE_SIDED\n'+sh.fragmentShader;   // kétoldalas lapok (fű, levél-kártya): a hátoldal NE fordítsa meg a normált (különben fekete pengék)
-    sh.vertexShader='uniform float uWind; uniform vec3 uPlayer;\n'+sh.vertexShader.replace('#include <project_vertex>',
+    sh.vertexShader=(baked?'attribute float aOH; attribute vec3 aSD;\n':'')+'uniform float uWind; uniform vec3 uPlayer;\n'+sh.vertexShader.replace('#include <project_vertex>',
       'vec4 mvPosition = vec4( transformed, 1.0 );\n#ifdef USE_INSTANCING\n mvPosition = instanceMatrix * mvPosition;\n#endif\n'+
       '{ vec4 wp4 = modelMatrix * mvPosition; float hgt = '+hgt+'; float ph = wp4.x*0.31 + wp4.z*0.23;\n'+
       '  float sw = sin(uWind*1.5+ph)*0.6 + sin(uWind*2.6+ph*1.9)*0.28 + sin(uWind*0.6+ph*0.31)*0.45;\n'+
-      '  float k = '+pw+' * '+amp+';\n  mvPosition.x += sw*k; mvPosition.z += sw*k*0.6;\n'+
+      '  float k = '+pw+' * '+amp+';\n'+(baked ? '  mvPosition.xyz += aSD*(sw*k);\n' : '  mvPosition.x += sw*k; mvPosition.z += sw*k*0.6;\n')+
       (kind==='canopy' ? '' :
       '  vec2 pv = wp4.xz - uPlayer.xz; float pd = length(pv) + 0.0001; float pk = smoothstep(1.7,0.25,pd) * step(abs(uPlayer.y - wp4.y), 1.2);\n'+
       '  mvPosition.xz += (pv/pd) * pk * hgt * 0.75; mvPosition.y -= pk * hgt * 0.35;\n')+
       '}\nmvPosition = modelViewMatrix * mvPosition;\ngl_Position = projectionMatrix * mvPosition;'); };
-  mat.customProgramCacheKey=function(){ return 'wind-'+kind; };
+  mat.customProgramCacheKey=function(){ return 'wind-'+kind+(baked?'-b':''); };
   return mat;
 }
 // A canvas-textúra sRGB-ben készül — enélkül a moha kimosottan (lineárisként értelmezve) jelenik meg.

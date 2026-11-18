@@ -28,6 +28,7 @@ kivágott kódrészek akkor is működnek, ha egy függvény fájlhatáron átny
 | 06–11 | aréna, látványelemek, erdő, növényzet, égbolt, környezet |
 | 07-troll-idol | generált glTF tereptárgy (kőtroll-bálvány) betöltése, `PROPS_READY` |
 | 12-camera-collision | kamera, ütközés, hidak, fakunyhó, barlangok |
+| 12-world-batch | a kész statikus világ összevonása anyagonként + 24 m-es cellánként (draw-call) — utolsó világ-építő lépés, ezért fut a 12-camera-collision után |
 | 13-bow, 14-arrows | íj nézet-modell, nyíl-pool |
 | 15-fire-burst | Blender adat-atlasz betöltő (`loadDataAtlas`) és a tűz-robbanás flipbook (`FIREBURST`) |
 | 15-vfx | effekt-rétegek és VFX-készlet; az `SMK` füst a Blender füstpamacs-atlaszból rajzol |
