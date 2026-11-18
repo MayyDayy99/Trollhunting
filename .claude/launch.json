@@ -8,6 +8,18 @@
       "port": 5173
     },
     {
+      "name": "troll-hunting-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5175
+    },
+    {
+      "name": "troll-hunting-coop",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["mp-server/server.js"],
+      "port": 8080
+    },
+    {
       "name": "gamedev-static",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["-y", "serve", "-l", "5174", "."],

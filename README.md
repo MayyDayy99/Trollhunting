@@ -70,8 +70,15 @@ and death joint relaxation add follow-through without changing combat rules.
 Elemental trails and status/zone particles use timed emission budgets, with
 eased shockwaves, flickering lightning and growing ice shells.
 
-Run the dependency-free regressions with
-`node --test tests\animations.test.cjs tests\combat.test.cjs`.
+Tests (after `npm install`):
+
+- `npm test` — animation and combat regressions plus the single-file build check.
+- `npm run build && npm run test:e2e` — a scripted playthrough of the built game in
+  headless Edge/Chrome (waves, every element, the Forge, spells, freezes, the
+  Troll King, VIHAR, dash, melee). It fails on page errors, on shaders compiled
+  after the loading-screen warm-up (each is a visible hitch) and on runaway
+  geometry growth. `node tests/e2e/run-scenario.mjs --gpu --profile spell,boss`
+  prints per-phase frame times and CPU profiles.
 
 ### Single-player combat progression
 
@@ -108,15 +115,24 @@ client keeps server-authoritative weapons, upgrades and enemy combat unchanged;
 the new bow shop and Awakening card are hidden there.
 
 ### Single-player
-Just open **`mohas-roham.html`** in a modern browser (Chrome recommended).
-No build, no server — Three.js loads from a CDN.
+Play it at **[trollhunting.maydayprod.app](https://trollhunting.maydayprod.app)**, or build it yourself
+(Node.js ≥ 22):
+
+```bash
+npm install
+npm run dev      # → http://localhost:5175/mohas-roham.html (live reload, source maps)
+npm run build    # → dist/mohas-roham.html — ONE self-contained file, opens from disk too
+```
+
+`dist/mohas-roham.html` is generated (not in git); the root `mohas-roham.html` is
+only the source entry page and does not run on its own.
 
 ### Co-op (2–4 players, same network)
 The co-op server lives in **[`mp-server/`](mp-server/)**. Start it one of two
 ways, then open the printed URL and hit **QUICK PLAY** (or **CREATE** and share
 the invite link).
 
-**With Docker** (recommended — one command, isolated):
+**With Docker** (recommended — one command, isolated; the image builds the game itself):
 ```bash
 cd mp-server
 docker compose up -d --build
@@ -125,6 +141,7 @@ docker compose up -d --build
 
 **Without Docker** (Node.js ≥ 22):
 ```bash
+npm install && npm run build:mp   # builds the game into mp-server/public/
 cd mp-server
 npm install
 npm start
@@ -151,8 +168,11 @@ then (re)start the server — the lobby and in-game HUD will hand out
 
 The single-player game auto-publishes to GitHub Pages via
 **[`.github/workflows/pages.yml`](.github/workflows/pages.yml)** on every push
-that touches `mohas-roham.html` (it copies the file to `index.html` and
-deploys — co-op is **not** hosted here, since it needs the WebSocket server).
+to `main` that touches the game (`mohas-roham.html`, `src/`, the build config):
+it runs the tests, builds `dist/mohas-roham.html`, publishes it as `index.html`
+— co-op is **not** hosted here, since it needs the WebSocket server.
+Pull requests run the tests and the browser playthrough
+([`.github/workflows/test.yml`](.github/workflows/test.yml)).
 The build tag shown on the loading screen matches the deployed commit, so you
 can always confirm you're playing the latest version.
 
@@ -162,18 +182,25 @@ can always confirm you're playing the latest version.
 
 | Path | What |
 |---|---|
-| `mohas-roham.html` | The entire game — one IIFE, Three.js r128 (CDN), flat-shaded low-poly. |
+| `mohas-roham.html` | Source entry page: markup + one module script (`src/main.js`). |
+| `src/game/` | The game, split by area; the files share one scope and run in file-name order ([`src/game/README.md`](src/game/README.md)). |
+| `src/trollgen/` | Procedural troll generator (same one-scope scheme). |
+| `src/styles/` | Stylesheets (HUD, Forge, menus, mobile). |
+| `src/shared/config.js` | Gameplay numbers shared with the co-op server (caves, status effects, troll stats). |
+| `src/three-setup.js` | three.js r128 + post-processing add-ons as `window.THREE`. |
+| `build/concat-modules.js` | Vite plugin that joins a folder into one module (with source maps). |
+| `tests/` | Unit tests, build test, `e2e/` browser playthrough + performance probe. |
 | `ELEMENTAL-SPEC.md` | The elemental deepening design + implementation spec. |
 | `elemental-ingame.js` | Canonical elemental cinematic-FX reference (`makeRichPool`/`EFX`). |
 | `mp-server/server.js` | Node `ws` co-op server (server-authoritative waves + elemental sim). |
-| `mp-server/public/` | Served copy of the game, `net-client.js` (co-op glue), `index.html` lobby. |
+| `mp-server/public/` | `net-client.js` (co-op glue), `index.html` lobby; the built game is copied in by `npm run build:mp` / the Docker build. |
 | `mp-server/.env.example` | Template for `mp-server/.env` (`HOST_IP` for LAN invite links; the real `.env` is git-ignored). |
 
 ---
 
 ## Tech
 
-Three.js r128 (single-file, CDN), procedural low-poly models & textures,
+Three.js r128 (bundled by Vite into one file), procedural low-poly models & textures,
 additive particle / shader-point FX pools. The look is built from a procedural
 shader sky (stars, aurora, clouds, cratered moon), a custom filmic tone curve,
 selective bloom plus a single final grade pass (4× MSAA on the high tier),
