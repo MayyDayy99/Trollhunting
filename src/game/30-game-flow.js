@@ -6,7 +6,7 @@ function resetGame(){
   stepPhase=0; stepWeight=0; bowLag.yaw=bowLag.pitch=bowLag.x=bowLag.y=bowLag.sprint=bowLag.air=bowLag.swap=0; sprintNow=false;
   equippedBow='starter'; ownedBows.clear(); ownedBows.add('starter'); if(!coop) dressBow('starter');
   spellCd=0; spellKick=0; spellEvents.length=0; for(const q of spellFx) q.on=false;
-  clearZones(); VFX.reset(); FIREBURST.reset();   // előző futam zónái + minden élő effekt (láng, matrica, örvény, jelző) nullára
+  clearZones(); VFX.reset(); FIREBURST.reset(); POISONPOOL.reset(); DUSTPOOF.reset(); ZAPBURST.reset();   // előző futam zónái + minden élő effekt (láng, matrica, örvény, jelző, flipbook) nullára
   if(typeof BOW_SKINS!=='undefined') BOW_SKINS.sigil.g.visible=false;
   clearBossHazards(); playerMotion.x=0; playerMotion.z=0; playerMotion.ready=false;
   for(const m of monsters){ scene.remove(m.g); disposeMonster(m); } monsters.length=0;
@@ -137,6 +137,6 @@ if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgr
   bloomComposer, finalComposer, bloomPass,
   setBloom:(s,r,t)=>{ if(!bloomPass)return; if(s!=null)bloomPass.strength=s; if(r!=null)bloomPass.radius=r; if(t!=null)bloomPass.threshold=t; },
   setBloomOn:(v)=>{ bloomOn=!!v; },
-  get bloomOn(){return bloomOn}, renderFrame, get toSpawn(){return toSpawn}, set toSpawn(v){toSpawn=v}, spawnZone, zones, elementalDeath, FIREBURST, meleeSwing, set currentElement(v){currentElement=v},
+  get bloomOn(){return bloomOn}, renderFrame, get toSpawn(){return toSpawn}, set toSpawn(v){toSpawn=v}, spawnZone, zones, elementalDeath, FIREBURST, POISONPOOL, DUSTPOOF, ZAPBURST, poisonPool, trollSpawnFx, chainLightning, skyStrike, meleeSwing, set currentElement(v){currentElement=v},
   get wave(){return wave}, get score(){return score}, get worldBatch(){return worldBatchInfo} };
 

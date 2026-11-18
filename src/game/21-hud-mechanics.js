@@ -140,7 +140,9 @@ function updateBossHazards(dt){
           VFX.debris(h.x+ca*rr,h.y+0.2,h.z+sa*rr,5,HAZ_DUST,6,{up:0.5,lift:3.5,life:1.0,grav:14,w:0.09,vx:ca*3.5,vz:sa*3.5}); }
         VFX.spray(h.x,h.y+0.3,h.z,16,[0xffc27a,0xff8a3a],11,{up:0.15,lift:2,life:0.5,grav:10,w:0.02,len:0.05});
         if(EFX.light) EFX.light(h.x,h.y+2.0,h.z,0xff9a4a,6,0.4);
-        for(let i=0;i<14;i++){ const a=i/14*6.283+rand(-0.2,0.2), rr=SLAM_R*rand(0.35,0.95);
+        DUSTPOOF.spawn(h.x,h.y,h.z,SLAM_R*0.85,1.25);   // Blender porfelhő: középen egy nagy, körben hat kisebb gördül ki
+        for(let i=0;i<6;i++){ const a=i/6*6.283+rand(-0.3,0.3), rr=SLAM_R*rand(0.55,0.75); DUSTPOOF.spawn(h.x+Math.cos(a)*rr,h.y,h.z+Math.sin(a)*rr,rand(3.4,4.6),rand(0.95,1.2)); }
+        for(let i=0;i<6;i++){ const a=i/6*6.283+rand(-0.2,0.2), rr=SLAM_R*rand(0.35,0.95);
           SMK.spawn(h.x+Math.cos(a)*rr,h.y+0.3,h.z+Math.sin(a)*rr, Math.cos(a)*rand(1.5,3.5),rand(0.8,2.0),Math.sin(a)*rand(1.5,3.5), pick([0x4a4034,0x5e5244]), 0.7,rand(2.2,3.4),rand(0.8,1.3),-0.3,1.2,0.4); }
         if(typeof shake==='number') shake=Math.max(shake,0.88);
         if(AUD.slam) AUD.slam(); else if(AUD.die) AUD.die();
@@ -151,7 +153,8 @@ function updateBossHazards(dt){
         VFX.decal(h.x,h.y,h.z,h.r*1.1,1,0x120d08,0.85,6,0xff8a3a,1.2);
         VFX.flare(h.x,h.y+0.4,h.z,0xff9a4a,h.r*1.6,0.18);
         VFX.debris(h.x,h.y+0.25,h.z,20,HAZ_DUST,9,{up:0.25,lift:2.5,life:0.9,grav:14,w:0.085});
-        for(let i=0;i<4;i++) SMK.spawn(h.x+rand(-0.6,0.6),h.y+0.3,h.z+rand(-0.6,0.6),rand(-1.6,1.6),rand(0.6,1.6),rand(-1.6,1.6),0x3a3228,0.6,h.r*rand(0.9,1.3),rand(0.6,0.9),-0.4,1.2,0.4);
+        DUSTPOOF.spawn(h.x,h.y,h.z,h.r*2.3);   // Blender porfelhő a becsapódás körül
+        for(let i=0;i<2;i++) SMK.spawn(h.x+rand(-0.6,0.6),h.y+0.3,h.z+rand(-0.6,0.6),rand(-1.6,1.6),rand(0.6,1.6),rand(-1.6,1.6),0x3a3228,0.6,h.r*rand(0.9,1.3),rand(0.6,0.9),-0.4,1.2,0.4);
         if(typeof shake==='number') shake=Math.max(shake,0.28);
         if(AUD.slam) AUD.slam();
       } else if(h.kind==='roots'){

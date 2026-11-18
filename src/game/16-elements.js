@@ -102,17 +102,27 @@ function elementalImpact(pos, elKey, head){
     else VFX.crystal(x,y-0.22,z,0.3*big,0.5*big,0.09,rand(-0.6,0.6),rand(-0.6,0.6),true);                // testen: egy pillanatra kivirágzó jégcsillag
     if(low){ EFX.ring(x,gy+0.06,z,0xbfe6ff,0.3,2.2*big,0.4,0.7); VFX.decal(x,gy,z,1.4*big,0,0xbfe2f4,0.5,8); }
   } else if(elKey==='poison'){
-    VFX.ball(x,y,z,0.2*big,0.75*big,0.34,VFX.PAL.toxic); VFX.flare(x,y,z,0x9fe04a,0.9*big,0.12); EFX.light(x,y,z,0x9fdc4a,2.0*big,0.22);
+    poisonPool(x,y,z,splashR('poison')*RUNM.elemRadiusMul); VFX.flare(x,y,z,0x9fe04a,0.7*big,0.10); EFX.light(x,y,z,0x9fdc4a,2.0*big,0.22);   // méregtócsa a talajon, akkora, mint a sebző terület
     VFX.spray(x,y,z,head?16:11,[0xc8f26a,0x9fdc4a,0x6fae2a],5.5*big,{up:-0.1,lift:1.0,life:0.5,grav:13,w:0.028,len:0.06});
     for(let i=0;i<6;i++){ const a=rand(0,6.28), s=rand(1,4)*big; RP.spawn(x,y,z,Math.cos(a)*s,rand(1,3.5),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a,0xc8e26a]),rand(0.18,0.3),0.05,rand(0.4,0.7),6,1.2); }
     for(let i=0;i<2;i++) SMK.spawn(x+rand(-0.2,0.2),y,z+rand(-0.2,0.2),rand(-0.4,0.4),rand(0.3,0.8),rand(-0.4,0.4),0x3f5a1e,0.5,1.5,rand(0.7,1.0),-0.4,1,0.3);
     if(low){ EFX.ring(x,gy+0.06,z,0x9fdc4a,0.3,2.0*big,0.4,0.65); VFX.decal(x,gy,z,1.3*big,0,0x2f5216,0.62,10,0xb8f25a,1.2); }
   } else if(elKey==='lightning'){
-    VFX.flare(x,y,z,0xcdbcff,1.5*big,0.11); EFX.light(x,y,z,0xc8b4ff,3.4*big,0.18);
-    for(let i=0;i<6;i++){ const a=rand(0,6.28), pp=Math.acos(rand(-1,1)), L=rand(0.9,2.0)*big; EFX.bolt(x,y,z, x+Math.sin(pp)*Math.cos(a)*L, y+Math.cos(pp)*L, z+Math.sin(pp)*Math.sin(a)*L, i%2?0xcdbcff:0xa98cff, rand(0.12,0.2), 0.22, 0.045, true); }
+    ZAPBURST.spawn(x,y,z,2.6*big); VFX.flare(x,y,z,0xcdbcff,0.8*big,0.08); EFX.light(x,y,z,0xc8b4ff,3.4*big,0.18);   // Blenderben renderelt villám-csillag flipbook (15-fire-burst.js)
+    for(let i=0;i<3;i++){ const a=rand(0,6.28), pp=Math.acos(rand(-1,1)), L=rand(0.9,2.0)*big; EFX.bolt(x,y,z, x+Math.sin(pp)*Math.cos(a)*L, y+Math.cos(pp)*L, z+Math.sin(pp)*Math.sin(a)*L, i%2?0xcdbcff:0xa98cff, rand(0.12,0.2), 0.22, 0.045, true); }
     VFX.spray(x,y,z,head?16:11,[0xffffff,0xd8ccff],11*big,{up:-0.4,life:0.2,grav:3,drag:4,w:0.013,len:0.03});
     if(low){ EFX.ring(x,gy+0.06,z,0xb48cff,0.3,2.4*big,0.32,0.75); VFX.decal(x,gy,z,1.1*big,1,0x0b0812,0.7,6,0x9a78ff,0.9); }
   }
+}
+// MÉREGTÓCSA: felülnézetes Blender flipbook a talajon (POISONPOOL, 15-fire-burst.js) a becsapódás ALATT, R = a valódi méreg-sugár
+// (a tócsa területe ~R sugarú kör, a kifröccsenő ujjak kicsit túlnyúlnak), körben lassan felszálló alacsony mérgező pára és buborék-pukkanások.
+function poisonPool(x,y,z,R,durMul){
+  const gy=flipbookGround(x,y,z), lowFx=gfxTier==='low';
+  POISONPOOL.spawn(x,y,z,R*2.6,durMul);
+  for(let i=0,n=lowFx?3:5;i<n;i++){ const a=i/n*6.283+rand(-0.4,0.4), rr=R*rand(0.7,0.95), ca=Math.cos(a), sa=Math.sin(a);
+    SMK.spawn(x+ca*rr,gy+0.18,z+sa*rr, ca*0.18,rand(0.22,0.42),sa*0.18, pick([0x5e8f22,0x4f7d1c,0x6f9f2a]), 0.45*Math.sqrt(R),1.25*Math.sqrt(R), rand(1.3,1.9), -0.1,0.9, 0.34); }
+  for(let i=0,n=lowFx?3:6;i<n;i++){ const a=rand(0,6.283), rr=R*0.7*Math.sqrt(Math.random());
+    RP.spawn(x+Math.cos(a)*rr,gy+0.06,z+Math.sin(a)*rr, 0,rand(0.25,0.7),0, pick([0xc8f26a,0xe2ff9a,0x9fdc4a]), rand(0.16,0.26),rand(0.45,0.6), rand(0.4,0.75), -0.3,1.2, 0.75); }
 }
 function applyStatus(m, elKey, charge, stacksToAdd){
   const def=EL[elKey]; if(!def||!def.status) return;          // ALAP = nincs státusz
@@ -223,7 +233,7 @@ function elementalDeath(m){
     for(let i=0;i<3;i++) SMK.spawn(bx+rand(-0.4,0.4),by-0.4,bz+rand(-0.4,0.4),rand(-0.5,0.5),rand(0.1,0.5),rand(-0.5,0.5),0xcfe8f6,0.6,2.0,rand(0.8,1.2),-0.2,1,0.3);
     VFX.decal(bx,gy,bz,2.3*s,0,0xbfe2f4,0.55,10);
   } else if(k==='poison'){                                    // ELOLVAD: méreg-fröccs + tócsa + buborék + MARADÓ gázfelhő
-    VFX.flare(bx,by,bz,0xd8ff9a,1.8*s,0.14); EFX.light(bx,by,bz,0x9fdc4a,3.5,0.45); EFX.ring(bx,gy+0.06,bz,0x9fdc4a,0.5,3.6*s,0.65,0.7); spawnGasCloud(bx, p.y, bz);
+    poisonPool(bx,p.y,bz,ZONE_CFG.gas.rMax,1.15); VFX.flare(bx,by,bz,0xd8ff9a,1.2*s,0.12);   // a tócsa akkora, mint az ottmaradó gázfelhő EFX.light(bx,by,bz,0x9fdc4a,3.5,0.45); EFX.ring(bx,gy+0.06,bz,0x9fdc4a,0.5,3.6*s,0.65,0.7); spawnGasCloud(bx, p.y, bz);
     VFX.spray(bx,by,bz,18,[0xc8f26a,0x9fdc4a,0x6fae2a],7*s,{up:0,lift:1.5,life:0.7,grav:14,w:0.032,len:0.07});
     for(let i=0;i<18;i++){ const a=rand(0,6.28),v=rand(1.5,5); RP.spawn(bx,by,bz,Math.cos(a)*v,rand(-1,3),Math.sin(a)*v,pick([0x7e9a2e,0x9fdc4a,0xc8e26a]),rand(0.5,0.9),0.05,rand(0.5,0.9),6,1); }
     for(let i=0;i<8;i++) RP.spawn(bx+rand(-0.4,0.4),gy+0.05,bz+rand(-0.4,0.4),rand(-0.2,0.2),rand(0.5,1.2),rand(-0.2,0.2),0xc8e26a,0.5,0.7,0.7,-1,1,0.9);
@@ -382,7 +392,7 @@ function chainLightning(hit,dmg){   // ELEM-ENV: nedves/tócsa-trollok vezetik �
   let prev=hit, nodes=1;
   for(const tg of cand){ if(nodes>=maxNodes) break;
     const a=prev.g.position, ay=a.y+(prev.bodyCY||1), b=tg.g.position, by=b.y+(tg.bodyCY||1);
-    VFX.bolt(a.x,ay,a.z,b.x,by,b.z,0xb9a4ff,0.2,0.45); VFX.flare(b.x,by,b.z,0xb9a4ff,1.6,0.16); EFX.light(b.x,by,b.z,0xc8b4ff,2.4,0.18);
+    VFX.bolt(a.x,ay,a.z,b.x,by,b.z,0xb9a4ff,0.2,0.45); ZAPBURST.spawn(b.x,by,b.z,2.1,1,(tg.bodyR||0.5)+0.15); EFX.light(b.x,by,b.z,0xc8b4ff,2.4,0.18);   // csomópont: villám-csillag a test kamera felőli oldalán
     VFX.spray(b.x,by,b.z,8,[0xffffff,0xd8ccff],8,{up:-0.4,life:0.22,grav:3,drag:4,w:0.014,len:0.03});
     tg.hp-=dmg*(tg.wet>0?0.9:0.5); tg.hurtFlash=0.15; applyStatus(tg,'lightning'); if(tg.hp<=0&&tg.alive) killMonster(tg,false); prev=tg; nodes++; }
   shake=Math.max(shake,0.12);
