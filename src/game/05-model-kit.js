@@ -183,14 +183,15 @@ const STY_FRAG={
     '  path=max(path, 1.0-smoothstep(0.8,1.9,abs(r-5.6)+wob*0.45));',
     '  diffuseColor.rgb=mix(diffuseColor.rgb, vec3(0.105,0.082,0.058)*(0.72+0.56*n3)*(0.8+0.4*n2), path*0.92); }' ].join('\n')   // kitaposott föld-ösvények + gyűrű az oltár körül
 };
-function applyStylized(mat, kind){
+// baked: világ-térbe összevont hálóhoz (12-world-batch) — a háló-térbeli pozíciót (vOP: a deszka-minta ezt olvassa) az aOP attribútum hordozza
+function applyStylized(mat, kind, baked){
   mat.onBeforeCompile=function(sh){
-    sh.vertexShader='varying vec3 vWP; varying vec3 vWN; varying vec3 vOP;\n'+sh.vertexShader
+    sh.vertexShader=(baked?'attribute vec3 aOP;\n':'')+'varying vec3 vWP; varying vec3 vWN; varying vec3 vOP;\n'+sh.vertexShader
       .replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\nvWN=normalize((vec4(transformedNormal,0.0)*viewMatrix).xyz);')   // világ-normál a three skálázás-helyes (inverz-transzponált) normáljából
-      .replace('#include <begin_vertex>','#include <begin_vertex>\nvOP=position; { vec4 wp_=vec4(position,1.0);\n#ifdef USE_INSTANCING\n wp_=instanceMatrix*wp_;\n#endif\n vWP=(modelMatrix*wp_).xyz; }');
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvOP='+(baked?'aOP':'position')+'; { vec4 wp_=vec4(position,1.0);\n#ifdef USE_INSTANCING\n wp_=instanceMatrix*wp_;\n#endif\n vWP=(modelMatrix*wp_).xyz; }');
     sh.fragmentShader='varying vec3 vWP; varying vec3 vWN; varying vec3 vOP;\n'+STY_NOISE+sh.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n'+STY_FRAG[kind]);
   };
-  mat.customProgramCacheKey=function(){ return 'sty-'+kind; }; return mat;
+  mat.customProgramCacheKey=function(){ return 'sty-'+kind+(baked?'-b':''); }; return mat;
 }
 /* levél-fürt alfa-textúra a lomb-kártyákhoz (alulról legyezőszerűen kihajló levelek) */
 const LEAF_T=(function(){ const S=128, c=document.createElement('canvas'); c.width=c.height=S; const x=c.getContext('2d');

@@ -1,5 +1,6 @@
 // Visual check: puts one troll of every type in front of the camera, lets them walk / attack for a moment
-// and saves screenshots. CLI: node tests/e2e/troll-shots.mjs --dir dist --out shots/new [--gpu]
+// and saves screenshots. CLI: node tests/e2e/troll-shots.mjs --dir dist --out shots/new [--gpu] [--seed 1] [--no-world-batch]
+// --seed makes two runs of one build pixel-comparable (same world, same trolls); --no-world-batch draws the world unmerged.
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
@@ -15,6 +16,12 @@ const browser = await chromium.launch({ channel, headless: true,
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on('pageerror', e => console.log('pageerror', e.message));
+  await page.addInitScript(({ seed, noWorldBatch }) => {   // same as run-scenario.mjs --seed / --no-world-batch
+    if (noWorldBatch) window.__noWorldBatch = true;
+    if (seed == null) return;
+    window.__mrHold = true; let t = seed >>> 0;
+    Math.random = () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+  }, { seed: arg('--seed') != null ? +arg('--seed') : null, noWorldBatch: process.argv.includes('--no-world-batch') });
   await page.goto(`http://127.0.0.1:${port}/mohas-roham.html#dev`);
   await page.waitForFunction(() => window.__MR && document.getElementById('loading').classList.contains('hide'), null, { timeout: 180000 });
   await page.click('#startBtn');

@@ -27,6 +27,7 @@ kivágott kódrészek akkor is működnek, ha egy függvény fájlhatáron átny
 | 04-materials, 05-model-kit | anyagok, modell-készlet (sziklák, fák, menhirek) |
 | 06–11 | aréna, látványelemek, erdő, növényzet, égbolt, környezet |
 | 12-camera-collision | kamera, ütközés, hidak, fakunyhó, barlangok |
+| 12-world-batch | a kész statikus világ összevonása anyagonként + 24 m-es cellánként (draw-call) — utolsó világ-építő lépés, ezért fut a 12-camera-collision után |
 | 13-bow, 14-arrows | íj nézet-modell, nyíl-pool |
 | 15-vfx | effekt-rétegek és VFX-készlet |
 | 16-elements, 17-freeze-reactions | elemi rendszer, fagyás, zónák, reakciók |
