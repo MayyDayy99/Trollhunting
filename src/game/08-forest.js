@@ -20,6 +20,7 @@ const KEEP_CLEAR = [
   [-16.3,7.65,7.0],    // fallenTree (hosszú log)
   [-15.9,-15.2,4.0],   // brokenPillars #1
   [3.7,-19.6,4.0],     // brokenPillars #2
+  [TROLL_IDOL.x, TROLL_IDOL.z, 3.6],   // generált kőtroll-bálvány (07-troll-idol.js)
   [22.5,9,5.2],[18,9,2.8],   // A-kilátó rámpa + fedélzet
   [8,22.5,5.2],[8,18,2.8],   // B-kilátó rámpa + fedélzet
   [13,13.5,3.2],             // lombhíd közép (A<->B)

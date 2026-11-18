@@ -187,7 +187,9 @@ can always confirm you're playing the latest version.
 | `src/trollgen/` | Procedural troll generator (same one-scope scheme). |
 | `src/styles/` | Stylesheets (HUD, Forge, menus, mobile). |
 | `src/shared/config.js` | Gameplay numbers shared with the co-op server (caves, status effects, troll stats). |
-| `src/three-setup.js` | three.js r128 + post-processing add-ons as `window.THREE`. |
+| `src/three-setup.js` | three.js r128 + post-processing add-ons (+ `GLTFLoader`) as `window.THREE`. |
+| `src/assets/props/` | AI-generated, game-optimized 3D props (`.glb`, inlined into the build) and how they were made ([README](src/assets/props/README.md)). |
+| `tools/props/` | Offline prop pipeline: `optimize.mjs` (simplify, WebP textures, rune glow map) and `render.mjs` (preview). Own `package.json`, not part of the game build. |
 | `build/concat-modules.js` | Vite plugin that joins a folder into one module (with source maps). |
 | `tests/` | Unit tests, build test, `e2e/` browser playthrough + performance probe. |
 | `ELEMENTAL-SPEC.md` | The elemental deepening design + implementation spec. |

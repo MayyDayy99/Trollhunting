@@ -26,6 +26,7 @@ kivágott kódrészek akkor is működnek, ha egy függvény fájlhatáron átny
 | 03-textures-lights-gfx | procedurális textúrák, fények, grafikai fokozatok |
 | 04-materials, 05-model-kit | anyagok, modell-készlet (sziklák, fák, menhirek) |
 | 06–11 | aréna, látványelemek, erdő, növényzet, égbolt, környezet |
+| 07-troll-idol | generált glTF tereptárgy (kőtroll-bálvány) betöltése, `PROPS_READY` |
 | 12-camera-collision | kamera, ütközés, hidak, fakunyhó, barlangok |
 | 13-bow, 14-arrows | íj nézet-modell, nyíl-pool |
 | 15-vfx | effekt-rétegek és VFX-készlet |

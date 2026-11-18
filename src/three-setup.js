@@ -11,9 +11,10 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { CopyShader } from 'three/examples/jsm/shaders/CopyShader.js';
 import { LuminosityHighPassShader } from 'three/examples/jsm/shaders/LuminosityHighPassShader.js';
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';   // generated props (src/assets/props)
 
 export const THREE = Object.assign({}, THREE_NS, {
   EffectComposer, Pass, FullScreenQuad, RenderPass, ShaderPass, MaskPass, ClearMaskPass,
-  UnrealBloomPass, CopyShader, LuminosityHighPassShader, GammaCorrectionShader,
+  UnrealBloomPass, CopyShader, LuminosityHighPassShader, GammaCorrectionShader, GLTFLoader,
 });
 window.THREE = THREE;

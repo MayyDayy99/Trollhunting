@@ -79,5 +79,5 @@ function warmup(done){
     done();
   })();
 }
-warmup(frame);
+PROPS_READY.then(() => warmup(frame));   // a generált tereptárgyak (07-troll-idol.js) is a színen legyenek, mire a shaderek lefordulnak
 
