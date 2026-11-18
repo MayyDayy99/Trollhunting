@@ -1,0 +1,13 @@
+# Build context is the repository root (see Dockerfile). Send only what the image needs.
+*
+!package.json
+!package-lock.json
+!vite.config.js
+!mohas-roham.html
+!build/
+!src/
+!mp-server/
+mp-server/node_modules
+mp-server/.env
+mp-server/public/mohas-roham.html
+**/*.md

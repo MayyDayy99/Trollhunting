@@ -25,11 +25,11 @@ let currentElement='base';
 /* JÓZAN ALAP gameplay-számok — ITT HANGOLHATÓ:
      dur=státusz hossz (mp), dps=sebzés/mp (DoT), slow=mozgásszorzó (1=nincs),
      stun=bénítás (mp, a meglévő m.rooted mezőt használja), tint=szem-emissive státusz-szín */
-const STATUS_CFG = {
-  fire:      { dur:4.0, dps:7, slow:1.0,  stun:0,   tint:0xff6a2a, maxStacks:3, dpsRamp:3,      leaves:'' },        // ÉG:    7/10/13 dmg/mp, 4 mp, stackel
-  ice:       { dur:3.0, dps:0, slow:0.45, stun:0,   tint:0x9fd2ff, maxStacks:3, slowRamp:-0.10, leaves:'wet' },     // FAGY:  55→75% lassítás, stack≥3 → TELJES FAGY; olvadás → nedves
-  poison:    { dur:6.0, dps:4, slow:0.85, stun:0,   tint:0x9fd24a, maxStacks:3, dpsRamp:2,      leaves:'' },        // MÉREG: 4/6/8 dmg/mp, 6 mp, stackel
-  lightning: { dur:1.2, dps:0, slow:1.0,  stun:1.2, tint:0xc8b4ff, maxStacks:1,                 leaves:'charged' }, // SOKK:  1.2 mp bénítás, töltötté tesz (charged)
+const STATUS_CFG = {   // számok: src/shared/config.js (a co-op szerver is ezeket használja); a tint csak kliens-oldali
+  fire:      { ...SHARED.STATUS.fire, tint:0xff6a2a },        // ÉG:    7/10/13 dmg/mp, 4 mp, stackel
+  ice:       { ...SHARED.STATUS.ice, tint:0x9fd2ff },     // FAGY:  55→75% lassítás, stack≥3 → TELJES FAGY; olvadás → nedves
+  poison:    { ...SHARED.STATUS.poison, tint:0x9fd24a },        // MÉREG: 4/6/8 dmg/mp, 6 mp, stackel
+  lightning: { ...SHARED.STATUS.lightning, tint:0xc8b4ff }, // SOKK:  1.2 mp bénítás, töltötté tesz (charged)
 };
 
 function applyArrowVisual(a){

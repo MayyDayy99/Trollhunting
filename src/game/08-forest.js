@@ -6,7 +6,7 @@
    vagy tisztán blokkoljon. */
 
 // FÁZIS 5: barlang-spawnpontok az aréna peremén (a trollok innen bújnak elő, nem a falból). A szerver UGYANEZEKET a pozíciókat használja.
-const R_CAVE=52.5, CAVE_ANGS=[0.5, 1.4, 2.3, 3.2, 4.1, 5.0, 5.9];
+const R_CAVE=SHARED.R_CAVE, CAVE_ANGS=SHARED.CAVE_ANGS;   // közös a co-op szerverrel: src/shared/config.js
 const CAVES=CAVE_ANGS.map(a=>({ ang:a, x:Math.cos(a)*R_CAVE, z:Math.sin(a)*R_CAVE }));
 // foglalt zónák, amiket KERÜLÜNK (cx,cz,r) — spawn + mászó-építmények + landmarkok + barlangok
 const KEEP_CLEAR = [

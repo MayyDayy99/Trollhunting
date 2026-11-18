@@ -55,8 +55,8 @@ buildElementHUD(); buildUltHud(); updateNockElement();
 /* ===================== Szörnyek (mohás trollok) ===================== */
 const monsters=[];
 /* ---- 5 troll-típus (art-direkciós újratervezés, erős sziluett-különbség) ---- */
-const TROLL_TYPES = {
-  wisp: { id:'wisp', el:'ice', resist:{fire:1.0,ice:0.35,poison:0.8,lightning:1.0}, name:'Lidérc', threat:0x7fe2ff, scaleMul:0.95, hpMul:0.8, speedMul:1.2, dmgMul:0.5, speedCap:5.6,
+const TROLL_TYPES = {   // el / resist / scaleMul / hpMul / speedMul: src/shared/config.js (közös a co-op szerverrel)
+  wisp: { id:'wisp', ...SHARED.trollBase('wisp'), name:'Lidérc', threat:0x7fe2ff, dmgMul:0.5, speedCap:5.6,
     rangedCd:2.4, bandMin:6.0, bandMax:18.0, castDmg0:8, auraR:3.0, auraSpd:1.25, auraDmg:1.35,   // FEJLESZTÉS: távolsági jég-lövedék + 3m erősítő aura (server-mirror: WISP_S)
     skin:0x16414f, eyeColor:0x7fe2ff, club:false, noTusks:true, earLen:0.52, deathSpin:1.4, postureLean:0.05,
     build(m){
@@ -79,7 +79,7 @@ const TROLL_TYPES = {
       const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x9becff,transparent:true,opacity:0.6,depthWrite:false,blending:THREE.AdditiveBlending})); core.scale.setScalar(1.15); core.position.set(0,1.05,0); g.add(core); m.wispGlow=[core];   // szellem-ragyogás (ref: elementSkin az elem színére tinteli)
       for(let i=0;i<3;i++){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x36c5ff,transparent:true,opacity:0.35,depthWrite:false,blending:THREE.AdditiveBlending})); sp.scale.setScalar(0.42-i*0.07); sp.position.set(rand(-0.28,0.28),0.5-i*0.18,rand(-0.22,0.22)); g.add(sp); m.wispGlow.push(sp); }
     } },
-  grunt: { id:'grunt', resist:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, name:'Mohás Troll', threat:0x5f9168, scaleMul:1.0, hpMul:1.0, speedMul:1.0, dmgMul:1.0, speedCap:5.6, skin:0x6b9c6e, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.12, shoulderW:1.12, torsoW:1.05, neckLen:-0.03, tuskScale:1.0, earLen:0.34, noTusks:false,
+  grunt: { id:'grunt', ...SHARED.trollBase('grunt'), name:'Mohás Troll', threat:0x5f9168, dmgMul:1.0, speedCap:5.6, skin:0x6b9c6e, eyeColor:0xff7a3d, club:true, deathSpin:1.0, postureLean:0.12, shoulderW:1.12, torsoW:1.05, neckLen:-0.03, tuskScale:1.0, earLen:0.34, noTusks:false,
     build(m){
 const g=m.g;
 // ---- HAFTED STONE-&-WOOD CLUB, parented to the RIGHT FIST so it swings with the attack ----
@@ -124,7 +124,7 @@ m.head.add(mesh(new THREE.SphereGeometry(0.075, 6, 5), mossMat, -0.15, 0.22, -0.
 // a small mossy clump crusted on the right shoulder (ties club arm into the back-moss line)
 m.arms.R.add(mesh(jitter(new THREE.DodecahedronGeometry(0.13, 0), 0.04, 0.04), mossMat, 0.04, 0.16, -0.08));
     } },
-  scout: { id:'scout', el:'fire', resist:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2}, name:'Fürge Kobold', threat:0xb6ff5a, scaleMul:0.62, hpMul:0.45, speedMul:2.1, dmgMul:0.5, speedCap:11.0, skin:0x93c653, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.40, shoulderW:0.78, torsoW:0.66, neckLen:0.06, tuskScale:0.0, noTusks:true, earLen:0.95,
+  scout: { id:'scout', ...SHARED.trollBase('scout'), name:'Fürge Kobold', threat:0xb6ff5a, dmgMul:0.5, speedCap:11.0, skin:0x93c653, eyeColor:0xc6ff4a, club:false, deathSpin:1.9, postureLean:0.40, shoulderW:0.78, torsoW:0.66, neckLen:0.06, tuskScale:0.0, noTusks:true, earLen:0.95,
     build(m){
 const g=m.g;
   // LITHE LIMBS — thin the rigged arm/leg Groups so the imp reads lean & wiry.
@@ -166,7 +166,7 @@ const g=m.g;
   // the least moss of the caste, per the art direction).
   m.head.add(mesh(new THREE.SphereGeometry(0.07,7,6), mossMat, 0.20,0.20,-0.05));
     } },
-  brute: { id:'brute', el:'lightning', resist:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, name:'Kőbunkó', threat:0xc98a3a, scaleMul:1.7, hpMul:3.4, speedMul:0.55, dmgMul:2.4, speedCap:2.8, skin:0x77828c, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.22, shoulderW:1.6, torsoW:1.42, neckLen:-0.14, tuskScale:2.2, earLen:0.22,
+  brute: { id:'brute', ...SHARED.trollBase('brute'), name:'Kőbunkó', threat:0xc98a3a, dmgMul:2.4, speedCap:2.8, skin:0x77828c, eyeColor:0xffce5a, club:false, deathSpin:0.6, postureLean:0.22, shoulderW:1.6, torsoW:1.42, neckLen:-0.14, tuskScale:2.2, earLen:0.22,
     build(m){
 const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   // SHRINK THE HEAD so it reads buried between the shoulders (tiny sunken head = key brute silhouette).
@@ -200,7 +200,7 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
   // a brow-ridge moss crust to anchor the sunken-eyes "two coals in shadow" look on the tiny head
   m.head.add(mesh(new THREE.SphereGeometry(0.14,7,6), mossDk, 0,0.16,0.18, 1.6,0.6,1.0));
     } },
-  shard: { id:'shard', el:null, resist:{fire:0.6,ice:0.7,poison:0.9,lightning:1.3}, name:'Kőszilánk', threat:0xc98a3a, scaleMul:0.62, hpMul:0.9, speedMul:1.15, dmgMul:1.0, speedCap:4.5, skin:0x6a7480, eyeColor:0xffce5a, club:false, deathSpin:1.1, postureLean:0.16, shoulderW:1.15, torsoW:1.1, neckLen:-0.06, tuskScale:1.2, earLen:0.22,
+  shard: { id:'shard', ...SHARED.trollBase('shard'), name:'Kőszilánk', threat:0xc98a3a, dmgMul:1.0, speedCap:4.5, skin:0x6a7480, eyeColor:0xffce5a, club:false, deathSpin:1.1, postureLean:0.16, shoulderW:1.15, torsoW:1.1, neckLen:-0.06, tuskScale:1.2, earLen:0.22,
     build(m){ m._crackMat=new THREE.MeshBasicMaterial({color:0xffb24d,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});   // izzó repedés-varratok (a pop-out alatt felvillannak)
       [[0.0,1.1,0.45,0.5],[0.2,0.85,0.42,0.4],[-0.18,1.3,0.36,0.35]].forEach(s=>{ const c=mesh(new THREE.BoxGeometry(0.05,s[3],0.05), m._crackMat, s[0],s[1],s[2]); c.rotation.z=rand(-0.5,0.5); m.g.add(c); });
       // KRISTÁLYFÜRT: 6-8 nyújtott oktaéder a vállakból/hátból, sötét tő -> sápadt hegy — EGY merge-elt mesh
@@ -215,7 +215,7 @@ const g=m.g, mossDk=mossMat; m.bodyR*=1.25;
           gr.push({geo:gradTint(jitter(new THREE.IcosahedronGeometry(0.07+Math.random()*0.04,0),0.02,0.02),0x777d88,0xffffff,-0.1,0.1),
             x:Math.cos(a)*r2, y:0.55+rand(-0.08,0.10), z:Math.sin(a)*r2*0.7}); }
         m.g.add(mesh(mergeGeos(gr), rockMatV, 0,0,0)); } } },
-  shaman: { id:'shaman', resist:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5}, name:'Sámán', threat:0x36c5ff, scaleMul:1.05, hpMul:1.3, speedMul:0.8, dmgMul:0.7, speedCap:4.5, skin:0x3a7a72, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18,
+  shaman: { id:'shaman', ...SHARED.trollBase('shaman'), name:'Sámán', threat:0x36c5ff, dmgMul:0.7, speedCap:4.5, skin:0x3a7a72, eyeColor:0x6fe0ff, club:false, deathSpin:1.2, healCd:4.0, healRadius:7.0, healAmt:18,
     castRange:12.0, castMax:22.0, castWind:1.1, castCd:3.2, castDmg0:8, beamNear:5.0, beamDrop:5.5, beamDps:6.0, beamTickHz:4, witherDur:1.2, witherDmgMul:0.65, witherReloadMul:1.35,   // ÚJ: nagy távról arkán lövedék + közelről gyengítő varázs-nyaláb (HEX) postureLean:0.0, shoulderW:0.9, torsoW:0.80, neckLen:0.20, tuskScale:1.2, earLen:0.5,
     build(m){
 const g=m.g;
@@ -276,7 +276,7 @@ const g=m.g;
       m.healTimer=rand(1.5,3.0); m.auraPulse=0;
       m.castTimer=rand(1.5,2.6); m.casting=0; m.beaming=false; m.beamAcc=0;   // ÚJ: lövedék-telegráf + nyaláb-akkumulátor
     } },
-  spitter: { id:'spitter', el:'poison', resist:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, name:'Köpködő', threat:0x9fb84a, scaleMul:1.05, hpMul:0.9, speedMul:0.7, dmgMul:1.0, speedCap:3.5, skin:0xa8bd52, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.16, shoulderW:0.95, torsoW:1.32, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
+  spitter: { id:'spitter', ...SHARED.trollBase('spitter'), name:'Köpködő', threat:0x9fb84a, dmgMul:1.0, speedCap:3.5, skin:0xa8bd52, eyeColor:0xc6ff4a, club:false, deathSpin:1.3, rangedCd:2.6, bandMin:8.0, bandMax:17.0, postureLean:0.16, shoulderW:0.95, torsoW:1.32, neckLen:-0.05, tuskScale:0.6, earLen:0.26,
     build(m){
 const g=m.g, head=m.head;
       // ── per-monster bile material (the ONLY new material → disposed via m.spitMat) ──

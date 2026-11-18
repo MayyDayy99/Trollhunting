@@ -100,6 +100,8 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { WebSocketServer } from 'ws';
+// Gameplay numbers shared with the browser game (one source of truth, no hand-mirroring).
+import { R_CAVE, CAVE_ANGS, EL_NULL_CHANCE, STATUS, TROLL_BASE } from '../src/shared/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -117,9 +119,7 @@ const MIN_PLAYERS         = 2;                            // co-op design minimu
 // Mirrors the single-player pacing in mohas-roham.html so co-op feels the same.
 const SPAWN_R       = 26;     // (legacy ring radius — radar/scale reference; spawns now come from caves)
 const GROUND_Y      = 0;      // monsters live on the ground plane (player y=1.7)
-// FÁZIS 5: barlang-spawnpontok — UGYANAZOK a pozíciók mint a kliens CAVES (mohas-roham.html), hogy a trollok co-opban is a barlangokból bújjanak elő
-const R_CAVE        = 52.5;
-const CAVE_ANGS     = [0.5, 1.4, 2.3, 3.2, 4.1, 5.0, 5.9];
+// FÁZIS 5: barlang-spawnpontok — UGYANAZOK a pozíciók mint a kliens CAVES (R_CAVE + CAVE_ANGS: src/shared/config.js)
 const SERVER_CAVES  = CAVE_ANGS.map(a => ({ x: Math.cos(a) * R_CAVE, z: Math.sin(a) * R_CAVE }));
 const MELEE_RANGE   = 2.2;    // horizontal (x,z) distance at which a troll bites
 const MELEE_DMG     = 8;      // hp removed per melee connect
@@ -127,37 +127,22 @@ const MELEE_CD      = 1.0;    // seconds between a given monster's melee hits
 const INTERMISSION  = 3.0;    // seconds of calm between cleared wave and next
 // 6 troll types must match the client's TROLL_TYPES keys (mohas-roham.html).
 const TROLL_TYPES   = ['grunt', 'scout', 'brute', 'shaman', 'spitter', 'wisp', 'shard'];   // 'shard' csak osztódásból (nem a rollTrollType táblából)
-// Per-type stat multipliers — EXACT copy of the client's TROLL_TYPES table so a
-// brute is tanky and a scout/wisp is fast in co-op too (server was applying NONE = bug).
-const TYPE_STATS = {
-  grunt:   { scaleMul:1.00, hpMul:1.0,  speedMul:1.0,  speedCap:4.5 },
-  scout:   { scaleMul:0.62, hpMul:0.45, speedMul:2.1,  speedCap:9.0 },
-  brute:   { scaleMul:1.70, hpMul:3.4,  speedMul:0.55, speedCap:2.2 },
-  shaman:  { scaleMul:1.05, hpMul:1.3,  speedMul:0.8,  speedCap:3.6 },
-  spitter: { scaleMul:1.05, hpMul:0.9,  speedMul:0.7,  speedCap:2.8 },
-  wisp:    { scaleMul:0.95, hpMul:0.8,  speedMul:1.2,  speedCap:4.5 },
-  shard:   { scaleMul:0.62, hpMul:0.9,  speedMul:1.15, speedCap:3.6 },
-};
+// Per-type stat multipliers: scaleMul / hpMul / speedMul come from the shared table (src/shared/config.js),
+// so a brute is tanky and a scout/wisp is fast in co-op too.
+// speedCap is still server-local: the client's caps are ~25% higher (retuned later) — see the PR notes.
+const SERVER_SPEED_CAP = { grunt:4.5, scout:9.0, brute:2.2, shaman:3.6, spitter:2.8, wisp:4.5, shard:3.6 };
+const TYPE_STATS = Object.fromEntries(Object.entries(TROLL_BASE).map(([type, b]) =>
+  [type, { scaleMul: b.scaleMul, hpMul: b.hpMul, speedMul: b.speedMul, speedCap: SERVER_SPEED_CAP[type] }]));
 let   monsterSeq    = 0;      // process-wide monotonic monster id source
 
-// ELEM (co-op, server-authoritative): mirrors mohas-roham.html STATUS_CFG + TROLL_TYPES.resist
+// ELEM (co-op, server-authoritative): STATUS + resist + innate element are the client's own numbers (src/shared/config.js)
 const EL_STATUS = { fire:'fire', ice:'ice', poison:'poison', lightning:'lightning' };   // base -> no status
-const STATUS_CFG_S = {
-  fire:      { dur:4.0, dps:7, slow:1.0,  stun:0,   maxStacks:3, dpsRamp:3,      leaves:'' },
-  ice:       { dur:3.0, dps:0, slow:0.45, stun:0,   maxStacks:3, slowRamp:-0.10, leaves:'wet' },
-  poison:    { dur:6.0, dps:4, slow:0.85, stun:0,   maxStacks:3, dpsRamp:2,      leaves:'' },
-  lightning: { dur:1.2, dps:0, slow:1.0,  stun:1.2, maxStacks:1,                 leaves:'charged' },
-};
-const RESIST_S = {
-  grunt:{fire:1.4,ice:1.0,poison:1.0,lightning:1.0}, scout:{fire:1.2,ice:1.3,poison:0.5,lightning:1.2},
-  brute:{fire:0.5,ice:0.6,poison:0.9,lightning:1.4}, shaman:{fire:1.0,ice:1.0,poison:1.3,lightning:1.5},
-  spitter:{fire:1.4,ice:1.0,poison:0.4,lightning:1.0}, wisp:{fire:1.0,ice:0.35,poison:0.8,lightning:1.0},
-  shard:{fire:0.6,ice:0.7,poison:0.9,lightning:1.3},
-};
-// INNATE elem típusonként — PONTOSAN tükrözi a kliens TROLL_TYPES.el-t (különben a co-op trollok rossz elemre reagálnak)
-const INNATE_EL = { grunt:null, scout:'fire', brute:'lightning', shaman:null, spitter:'poison', wisp:'ice', shard:null };
+const STATUS_CFG_S = STATUS;
+const RESIST_S = Object.fromEntries(Object.entries(TROLL_BASE).map(([type, b]) => [type, b.resist]));
+// INNATE elem típusonként (különben a co-op trollok rossz elemre reagálnának)
+const INNATE_EL = Object.fromEntries(Object.entries(TROLL_BASE).map(([type, b]) => [type, b.el]));
 // RANDOM ELEM: spawnonként sorsolt innate elem a TÍPUSTÓL FÜGGETLENÜL (kliens-tükör). Lidérc=jég identitás; sámán/szilánk semleges.
-const EL_NULL_CHANCE = 0.20;   // EGYEZZEN a kliens mohas-roham.html EL_NULL_CHANCE-ével (byte-azonos)
+// EL_NULL_CHANCE: src/shared/config.js
 function rollMonsterElS(type){ return Math.random()<EL_NULL_CHANCE ? null : ['fire','ice','poison','lightning'][(Math.random()*4)|0]; }   // MIRROR: teljesen random elem minden típusra
 // SÁMÁN képesség-konfig (a kliens TROLL_TYPES.shaman számaival EGYEZŐ): távoli arkán lövedék + közeli gyengítő-nyaláb
 // FIX (co-op „valami távolról sebez" ellen): a ranged támadások KÖZELEBBRŐL jönnek + TELEGRÁF + windup alatt BEFAGYASZTOTT célpont -> el lehet lépni (mint SP-ben a repülő lövedék).

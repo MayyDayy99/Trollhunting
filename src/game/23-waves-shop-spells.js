@@ -375,7 +375,7 @@ function pickTrollType(){
   return 'grunt';
 }
 // RANDOM ELEM: spawnonként sorsolt innate elem, a TÍPUSTÓL FÜGGETLENÜL (a Lidérc marad jég-identitás; sámán/szilánk semleges)
-const EL_NULL_CHANCE = 0.20;   // hány hányad legyen SEMLEGES (base) troll; MUST EQUAL mp-server/server.js EL_NULL_CHANCE
+const EL_NULL_CHANCE = SHARED.EL_NULL_CHANCE;   // hány hányad legyen SEMLEGES (base) troll; közös a co-op szerverrel: src/shared/config.js
 function rollMonsterEl(id){ return Math.random()<EL_NULL_CHANCE ? null : EL_ORDER[1+((Math.random()*4)|0)]; }   // FEJLESZTÉS: TELJESEN random elem MINDEN típusra (nincs wisp=jég / spitter=méreg rögzítés)
 function spawnMonster(){
   const ca=(spawnAngles.length ? spawnAngles.shift() : CAVES[(Math.random()*CAVES.length)|0].ang);

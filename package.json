@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/animations.test.cjs tests/combat.test.cjs tests/build.test.mjs",
-    "test:e2e": "node --test --test-concurrency=1 tests/e2e/smoke.test.mjs"
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/smoke.test.mjs",
+    "build:mp": "vite build && node -e \"require('fs').copyFileSync('dist/mohas-roham.html','mp-server/public/mohas-roham.html')\""
   },
   "dependencies": {
     "three": "0.128.0"
