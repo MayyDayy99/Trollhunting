@@ -70,7 +70,42 @@ and death joint relaxation add follow-through without changing combat rules.
 Elemental trails and status/zone particles use timed emission budgets, with
 eased shockwaves, flickering lightning and growing ice shells.
 
-Run the dependency-free animation regressions with `node --test tests\animations.test.cjs`.
+Run the dependency-free regressions with
+`node --test tests\animations.test.cjs tests\combat.test.cjs`.
+
+### Single-player combat progression
+
+The Forge now sells three bow variants alongside the starting Hunting Bow.
+Ownership lasts for the current run; switching between owned bows is free, but
+only possible in the Forge. Bow bonuses replace one another rather than stacking.
+
+| Bow | Unlock / price | Identity |
+| --- | --- | --- |
+| Bone Recurve | Wave 5 / 1,000 points | Heavy hits, faster draw/reload, one extra base-arrow pierce |
+| Living Bough | Wave 10 / 2,600 points | Fast draw/reload, an extra spread arrow, shorter spell cooldown |
+| Runebow | Wave 15 / 4,200 points | Highest damage and stronger/faster-recharging spells; slower reload |
+
+**Elemental Awakening** has three ranks, available at waves 5/10/15 for
+800/1,600/2,800 points. With a rank purchased, fully drawing an elemental bow
+automatically casts its signature spell when ready: advancing flame eruptions,
+a frost-spire fan, a pulling poison vortex, or a lightning strike with chained
+arcs. Higher ranks expand the actual patterns, coverage and pulse/chain counts.
+Base shots, partial draws and releases during cooldown still fire arrows.
+The same hold/release controls work on mouse, touch and gamepad; the HUD shows
+the equipped bow and spell readiness. Spells retain absorption, resistances,
+freeze vulnerability and elemental reactions, and their primary areas respect
+solid cover. Visuals and delayed attacks use bounded pools/queues.
+
+Single-player trolls now use stable flanking sides, limited movement prediction
+and cover-aware ranged positioning. The Troll King has three health-based
+phases, locked-direction charges, marked rockfalls, jumpable slams and later-phase
+area denial. Warnings precede damage; attacks leave recovery windows granting
+50% more direct arrow, spell and melee damage. Boss health is lower than the
+former slam-only version. No new wave limit or ending is introduced.
+
+These combat/progression changes are **single-player only**. The mirrored co-op
+client keeps server-authoritative weapons, upgrades and enemy combat unchanged;
+the new bow shop and Awakening card are hidden there.
 
 ### Single-player
 Just open **`mohas-roham.html`** in a modern browser (Chrome recommended).
