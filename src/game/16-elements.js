@@ -88,7 +88,7 @@ function elementalImpact(pos, elKey, head){
     for(let i=0;i<4;i++) RP.spawn(x,y,z,rand(-1.5,1.5),rand(0,2),rand(-1.5,1.5),0xcfe0ff,rand(0.12,0.2),0.02,rand(0.25,0.45),5,1.5);
     return; }
   if(elKey==='fire'){
-    VFX.ball(x,y,z,0.3*big,1.2*big,0.42,VFX.PAL.fire); VFX.flare(x,y,z,0xffa040,1.5*big,0.12); EFX.light(x,y,z,0xff7a3d,3.0*big,0.24);
+    FIREBURST.spawn(x,y+0.25*big,z,3.4*big); VFX.flare(x,y,z,0xffa040,1.5*big,0.12);   // Blenderben renderelt robbanás-flipbook (15-fire-burst.js) EFX.light(x,y,z,0xff7a3d,3.0*big,0.24);
     VFX.spray(x,y,z,head?20:13,[0xffd27a,0xff8a3a,0xff5a2a],6.5*big,{up:-0.1,lift:1.2,life:0.55,grav:8,w:0.020,len:0.05});
     for(let i=0;i<6;i++) RP.spawn(x+rand(-0.3,0.3),y+rand(-0.2,0.3),z+rand(-0.3,0.3),rand(-0.8,0.8),rand(0.8,2.2),rand(-0.8,0.8),pick([0xff8a3a,0xffc24d]),rand(0.16,0.3),0.03,rand(0.5,0.9),-1.5,1.2);
     for(let i=0;i<3;i++) SMK.spawn(x+rand(-0.2,0.2),y+rand(0,0.3),z+rand(-0.2,0.2),rand(-0.5,0.5),rand(0.7,1.4),rand(-0.5,0.5),0x241710,0.5,1.7,rand(0.7,1.1),-1,1,0.4);

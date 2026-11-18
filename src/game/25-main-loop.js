@@ -385,7 +385,7 @@ function update(dt,t){
   /* --- effektek --- */
   updateElemFx(dt);
   updateDmgNums(dt);
-  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
+  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running); FIREBURST.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
   updateUltHud();   // PLAYER: VIHAR-csík + rezonancia-ragyogás
   updateTurboHud(dt); envUltK=ult/100;
   if(arrowLightT>0){ arrowLightT-=dt; if(arrowLightT<=0) arrowLight.intensity=0; }   // repülő elemi nyíl fénye lecseng (visible marad: konstans fény-szám)

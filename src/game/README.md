@@ -29,6 +29,7 @@ kivágott kódrészek akkor is működnek, ha egy függvény fájlhatáron átny
 | 07-troll-idol | generált glTF tereptárgy (kőtroll-bálvány) betöltése, `PROPS_READY` |
 | 12-camera-collision | kamera, ütközés, hidak, fakunyhó, barlangok |
 | 13-bow, 14-arrows | íj nézet-modell, nyíl-pool |
+| 15-fire-burst | Blenderben renderelt tűz-robbanás flipbook (`FIREBURST`) |
 | 15-vfx | effekt-rétegek és VFX-készlet |
 | 16-elements, 17-freeze-reactions | elemi rendszer, fagyás, zónák, reakciók |
 | 18-troll-projectiles, 19-troll-looks | troll-lövedékek, sámán, HP-csíkok, troll-megjelenés, `makeMonster` |
