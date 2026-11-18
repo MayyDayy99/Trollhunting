@@ -1,3 +1,6 @@
 mp-server/.env
 node_modules/
 .DS_Store
+
+# build output (generated: npm run build)
+dist/

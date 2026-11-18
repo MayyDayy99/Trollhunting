@@ -4,12 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'mohas-roham.html'), 'utf8').replace(/\r\n/g, '\n');
-function between(start, end) {
-  const a = source.indexOf(start), b = source.indexOf(end, a);
-  assert.ok(a >= 0 && b > a, `Missing combat source: ${start}`);
-  return source.slice(a, b);
-}
+const { between: cut } = require('./source.cjs');
+const between = (start, end) => cut(start, end, 'combat');
 class Vec {
   constructor(x = 0, y = 0, z = 0) { this.set(x, y, z); }
   set(x, y, z) { Object.assign(this, { x, y, z }); return this; }

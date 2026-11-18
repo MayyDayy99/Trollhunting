@@ -4,14 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const root = path.join(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'mohas-roham.html'), 'utf8');
-function between(start, end) {
-  const source = html.replace(/\r\n/g, '\n');
-  const a = source.indexOf(start), b = source.indexOf(end, a);
-  assert.ok(a >= 0 && b > a, `Missing animation source: ${start}`);
-  return source.slice(a, b);
-}
+const { root, trollgen, game, between: cut } = require('./source.cjs');
+const between = (start, end) => cut(start, end, 'animation');
 
 class Transform {
   constructor(x = 0, y = 0, z = 0) { this.set(x, y, z); }
@@ -185,9 +179,12 @@ test('boss states drive full slam follow-through, charge coil, and deep exhauste
   assert.ok(m.pelvis.position.y < 0.82 && m.knees.L.rotation.x > 0.5, 'exhausted boss visibly crouches');
 });
 
-test('single-player and co-op ship identical game code, with valid inline scripts', () => {
-  assert.equal(html, fs.readFileSync(path.join(root, 'mp-server', 'public', 'mohas-roham.html'), 'utf8'));
-  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    if (match[2].trim() && !match[1].includes('type="module"')) new vm.Script(match[2]);
-  }
+test('the concatenated troll generator and game each compile as one module body', () => {
+  // Mirrors the build: each folder becomes one module, so it must be valid as a single scope.
+  // (Wrapped in a function so vm can parse it as a script; modules are always strict.)
+  new vm.Script('(function(){"use strict";const global=this;\n' + trollgen + '\n})');
+  new vm.Script('(function(){"use strict";\n' + game + '\n})');
+  const served = path.join(root, 'mp-server', 'public', 'mohas-roham.html');
+  assert.ok(!fs.existsSync(served) || !/src\/main\.js/.test(fs.readFileSync(served, 'utf8')),
+    'mp-server/public/mohas-roham.html must be a built file (npm run build), never the source entry');
 });
