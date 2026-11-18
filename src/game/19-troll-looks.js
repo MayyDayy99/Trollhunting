@@ -34,9 +34,16 @@ function setTrollFlash(m,v){ if(!m._flashU || m._flashV===v) return; m._flashV=v
 // Így a warmup biztosan lefordítja mindet, és a programok sosem szabadulnak fel. Rajzolási költség: 0 (a csoport láthatatlan).
 (function(){ const g=new THREE.Group(), geo=new THREE.BufferGeometry(); g.visible=false;
   geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(9),3)); geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(9),3));   // szín-attribútum kell: a csúcs-színes variáns kulcsa a geometriától is függ
+  // ugyanez SKINNELT változatban is: a trollok összevont hálói (batchTrollMeshes) skinnelt programot használnak
+  const sgeo=geo.clone(), bone=new THREE.Object3D(); g.add(bone);
+  sgeo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(new Uint16Array(12),4));
+  sgeo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(new Float32Array([1,0,0,0,1,0,0,0,1,0,0,0]),4));
+  const skel=new THREE.Skeleton([bone]);
   for(const c of [[0,1,1,0],[1,1,1,0],[0,0,0,0],[0,0,1,0],[0,1,0,0],[1,1,0,0],[0,0,0,1]]){
     const mat=new THREE.MeshStandardMaterial({roughness:0.9,metalness:0,map:c[0]?MOSS_T:null,bumpMap:c[1]?(c[0]?MOSS_T:SKIN_N):null,vertexColors:!!c[2],side:c[3]?THREE.DoubleSide:THREE.FrontSide});
-    mat.userData._rim=true; mat.onBeforeCompile=trollRimCompile; mat.customProgramCacheKey=_rimKey; g.add(new THREE.Mesh(geo,mat)); }
+    mat.userData._rim=true; mat.onBeforeCompile=trollRimCompile; mat.customProgramCacheKey=_rimKey; g.add(new THREE.Mesh(geo,mat));
+    const smat=mat.clone(); smat.skinning=true; smat.onBeforeCompile=trollRimCompile; smat.customProgramCacheKey=_rimKey;
+    const sm=new THREE.SkinnedMesh(sgeo,smat); sm.castShadow=true; g.add(sm); sm.bind(skel); }   // castShadow: a skinnelt árnyék-mélység program is bemelegedjen (a próbabábuk az árnyék-kamerán kívül állnak)
   scene.add(g); })();
 
 /* --- lebegő sebzés-számok (DOM-pool; világ-pozícióhoz kötve, minden frame-ben újravetítve) --- */
@@ -194,7 +201,136 @@ function makeMonsterGen(type, scale, hp, speed, el, seed){
   { const blob=new THREE.Mesh(TROLL_BLOB_GEO, TROLL_BLOB_MAT); blob.position.y=0.03; blob.scale.setScalar(Math.max(0.6,(gen.bodyR||0.8)/(gen.scale||1)*1.25)); blob.layers.set(NOBLOOM_LAYER); blob.renderOrder=-1; g.add(blob); }   // puha talp-árnyék (minden fokozaton; olcsó)
   attachHpBar(m);
   try{ applyTrollRim(m); }catch(_e){}   // LÁTVÁNY-TURBÓ: rim-fény + találat-villanás uniformok
+  try{ batchTrollMeshes(m); }catch(e){ console.warn('[troll batch] kimarad:', e && e.message); }   // FPS: ~100 -> ~25 rajzolási hívás / troll
   return m;
+}
+/* FPS — DRAW-CALL ÖSSZEVONÁS (merev "skinneléssel"). Egy generált troll ~80-110 külön hálóból állt; mindegyik külön rajzolási
+   hívás a fő-, a bloom- és az árnyék-passban (15 trollnál ~1300 háló: a képkocka CPU-idejének nagyja uniform-feltöltés volt).
+   Itt a troll NEM animált levél-hálóit anyagonként EGY SkinnedMesh-sé fűzzük: minden csúcs 1.0 súllyal a saját ízületéhez
+   (a régi szülőjéhez) kötődik, az ízületek a csontok. Így a mozgás pontosan ugyanaz, mint eddig (az ízületek ugyanúgy forognak),
+   csak trollonként ~10 rajzolási hívással.
+   Érintetlen marad: minden ízület és minden objektum, amire az m / m.gen mezői hivatkoznak (fej, törzs, áll, végtagok, ököl,
+   fegyver, szemek, HP-csík...), valamint az az anyag, amelyet egy külön maradó háló is használ.
+   r128: egy anyag NEM lehet egyszerre skinnelt és sima hálón (anyagonként egy program él) -> a megosztott könyvtár-anyagokat
+   trollonként klónozzuk; a saját (m.gen._mats) anyagokat csak akkor skinneljük, ha a troll MINDEN ilyen hálója összevonható. */
+const _TB_MAPS=['map','bumpMap','normalMap','roughnessMap','metalnessMap','emissiveMap','alphaMap','aoMap','lightMap','displacementMap'];
+const _tbInvRoot=new THREE.Matrix4(), _tbM=new THREE.Matrix4();
+function _tbSkinMat(src, own, m){
+  if(own) { src.skinning=true; return src; }
+  const c=src.clone(); c.skinning=true;
+  if(src.onBeforeCompile) c.onBeforeCompile=src.onBeforeCompile;
+  if(src.customProgramCacheKey) c.customProgramCacheKey=src.customProgramCacheKey;
+  c.userData=src.userData;   // azonos (rim-)beállítás; villanás-uniformot csak a saját anyagok hordoznak
+  (m._batchMats||(m._batchMats=[])).push(c);
+  return c;
+}
+function _tbAttrs(mat){   // a merged geometriának ezek az attribútumai kellenek (a többit az anyag nem olvassa)
+  const n=['position'];
+  if(!mat.isMeshBasicMaterial) n.push('normal');
+  if(mat.vertexColors) n.push('color');
+  if(_TB_MAPS.some(k=>mat[k])) n.push('uv');
+  return n;
+}
+function batchTrollMeshes(m){
+  // csont-textúra nélkül (régi mobil GPU) ~100 csont nem férne el a vertex-uniformokban -> ott marad a régi, háló-per-rész rajzolás
+  if(!renderer.capabilities.floatVertexTextures) return;
+  if(window.__noTrollBatch && location.hash.indexOf('dev')>=0) return;   // fejlesztői A/B-mérés: #dev + window.__noTrollBatch=true -> régi rajzolás
+  // ownMats: anyagok, amikre a troll mezői hivatkoznak (bodySkin: elem-tint, villanás...) + a generátor saját anyagai —
+  // trollonkéntiek, ezért helyben skinneljük őket (klón esetén egy későbbi módosítás nem érné el az összevont hálót)
+  const ownMats=new Set((m.gen&&m.gen._mats)||[]);
+  const collect=(v,d)=>{
+    if(!v || typeof v!=='object' || d>4 || v.isObject3D || v.isBufferGeometry || v.isTexture) return;
+    if(v.isMaterial){ ownMats.add(v); return; }
+    if(Array.isArray(v)){ for(const x of v) collect(x,d+1); return; }
+    for(const k in v) collect(v[k],d+1);
+  };
+  for(const k in m) if(k!=='g' && k!=='type' && k!=='genome') collect(m[k],0);
+  if(m.gen) for(const k in m.gen) if(k!=='g' && k!=='genome') collect(m.gen[k],0);
+  const skip=new Set(); if(m.hpbar) m.hpbar.traverse(o=>skip.add(o));
+  const groups=new Map(), defaultOBR=THREE.Object3D.prototype.onBeforeRender, matUse=new Map(), matOk=new Map();
+  m.g.updateMatrixWorld(true);
+  m.g.traverse(o=>{
+    if(!o.isMesh) return;
+    const mat=o.material; matUse.set(mat,(matUse.get(mat)||0)+1);
+    if(skip.has(o) || o.isSkinnedMesh || o.isInstancedMesh || !mat || Array.isArray(mat) || mat.skinning || mat.transparent) return;
+    if(!(mat.isMeshStandardMaterial || mat.isMeshBasicMaterial || mat.isMeshLambertMaterial || mat.isMeshPhongMaterial)) return;
+    const geo=o.geometry;   // (egy anyagnál a geometry.groups nem számít: a three az egészet rajzolja)
+    if(!geo || !geo.isBufferGeometry || !geo.attributes.position || o.onBeforeRender!==defaultOBR || (o.layers.mask & ~3)) return;
+    if(geo.morphAttributes && Object.keys(geo.morphAttributes).length) return;
+    if(Object.values(geo.attributes).some(a=>a.isInterleavedBufferAttribute)) return;
+    for(let p=o; p && p!==m.g; p=p.parent) if(!p.visible) return;   // rejtett rész (pl. a lidérc lába) marad, ahogy van
+    const key=mat.uuid+'|'+o.castShadow+'|'+o.receiveShadow+'|'+o.renderOrder+'|'+o.layers.mask;
+    let gr=groups.get(key); if(!gr) groups.set(key, gr={mat, list:[]});
+    gr.list.push(o); matOk.set(mat,(matOk.get(mat)||0)+1);
+  });
+  // saját anyag csak akkor skinnelhető helyben, ha a troll MINDEN ilyen anyagú hálója összevonható (különben a külön maradó
+  // sima háló is skinnelt programmal rajzolódna — r128-ban anyagonként egy program él)
+  const merge=[...groups.values()].filter(gr=>(gr.list.length>=2 || matOk.get(gr.mat)>=2) && (!ownMats.has(gr.mat) || matUse.get(gr.mat)===matOk.get(gr.mat)));
+  if(!merge.length) return;
+  // CSONTOK = maguk az eredeti hálók: a jelenet-gráfban maradnak (animáció, hivatkozások, beálló nyilak változatlanok),
+  // csak a rétegüket kapcsoljuk le, így egyik pass (fő, bloom, árnyék) sem rajzolja őket külön
+  const bones=[], boneIdx=new Map();
+  for(const gr of merge) for(const o of gr.list){ boneIdx.set(o, bones.length); bones.push(o); }
+  const skeleton=new THREE.Skeleton(bones);   // inverzek a MOSTANI (építéskori) pózból
+  _tbInvRoot.copy(m.g.matrixWorld).invert();
+  const skinMats=new Map();
+  let merged=0;
+  for(const gr of merge){
+    const geo=_tbMerge(gr.list, _tbAttrs(gr.mat), boneIdx);
+    if(!skinMats.has(gr.mat)) skinMats.set(gr.mat, _tbSkinMat(gr.mat, ownMats.has(gr.mat), m));
+    const sm=new THREE.SkinnedMesh(geo, skinMats.get(gr.mat));
+    const first=gr.list[0];
+    sm.castShadow=first.castShadow; sm.receiveShadow=first.receiveShadow; sm.renderOrder=first.renderOrder; sm.layers.mask=first.layers.mask;
+    sm.userData._trollBatch=gr.list.length;
+    m.g.add(sm); sm.bind(skeleton);   // bindMatrix = a troll gyökere (az sm identitásként ül rajta)
+    for(const o of gr.list){ o.layers.disableAll(); merged++; }
+  }
+  m._skeleton=skeleton; m._batched=merged;
+}
+const _tbN=new THREE.Matrix3();
+function _tbMerge(meshes, names, boneIdx){
+  // Indexelt Float32 kimenet, közvetlen tömb-matekkal (a spawn-költség miatt: ez minden troll építésekor lefut).
+  // A hiányzó attribútum alapértéket kap (szín: fehér, uv: 0, normál: számolt), így eltérő felépítésű részek is egy hálóba férnek.
+  const wantN=names.indexOf('normal')>=0, wantC=names.indexOf('color')>=0, wantU=names.indexOf('uv')>=0;
+  let vTot=0, iTot=0;
+  const geos=meshes.map(o=>{ let g=o.geometry;
+    if(wantN && !g.attributes.normal){ g=g.clone(); g.computeVertexNormals(); }
+    vTot+=g.attributes.position.count; iTot+=g.index?g.index.count:g.attributes.position.count; return g; });
+  const P=new Float32Array(vTot*3), Nn=wantN?new Float32Array(vTot*3):null, C=wantC?new Float32Array(vTot*3):null, U=wantU?new Float32Array(vTot*2):null;
+  const SI=new Uint16Array(vTot*4), SW=new Float32Array(vTot*4), I=new (vTot>65535?Uint32Array:Uint16Array)(iTot);
+  let vo=0, io=0;
+  for(let mi=0;mi<meshes.length;mi++){
+    const o=meshes[mi], g=geos[mi], pa=g.attributes.position, n=pa.count, b=boneIdx.get(o);
+    _tbM.multiplyMatrices(_tbInvRoot, o.matrixWorld);   // a háló csúcsai a troll-gyökér terébe (építéskori póz)
+    const e=_tbM.elements, flip=_tbM.determinant()<0;   // tükrözött rész: a háromszög-körüljárást is meg kell fordítani
+    for(let k=0;k<n;k++){ const x=pa.getX(k), y=pa.getY(k), z=pa.getZ(k), d=(vo+k)*3;
+      P[d]=e[0]*x+e[4]*y+e[8]*z+e[12]; P[d+1]=e[1]*x+e[5]*y+e[9]*z+e[13]; P[d+2]=e[2]*x+e[6]*y+e[10]*z+e[14]; }
+    if(wantN){ _tbN.getNormalMatrix(_tbM); const q=_tbN.elements, na=g.attributes.normal;
+      for(let k=0;k<n;k++){ const x=na.getX(k), y=na.getY(k), z=na.getZ(k), d=(vo+k)*3;
+        let nx=q[0]*x+q[3]*y+q[6]*z, ny=q[1]*x+q[4]*y+q[7]*z, nz=q[2]*x+q[5]*y+q[8]*z; const l=Math.hypot(nx,ny,nz)||1;
+        Nn[d]=nx/l; Nn[d+1]=ny/l; Nn[d+2]=nz/l; } }
+    if(wantC){ const ca=g.attributes.color;
+      if(ca) for(let k=0;k<n;k++){ const d=(vo+k)*3; C[d]=ca.getX(k); C[d+1]=ca.getY(k); C[d+2]=ca.getZ(k); }
+      else C.fill(1,vo*3,(vo+n)*3); }
+    if(wantU){ const ua=g.attributes.uv; if(ua) for(let k=0;k<n;k++){ const d=(vo+k)*2; U[d]=ua.getX(k); U[d+1]=ua.getY(k); } }
+    for(let k=0;k<n;k++){ SI[(vo+k)*4]=b; SW[(vo+k)*4]=1; }
+    if(g.index){ const ia=g.index.array, ic=ia.length; for(let k=0;k<ic;k++) I[io+k]=ia[k]+vo;
+      if(flip) for(let k=0;k+2<ic;k+=3){ const t=I[io+k+1]; I[io+k+1]=I[io+k+2]; I[io+k+2]=t; } io+=ic; }
+    else { for(let k=0;k<n;k+=3){ I[io+k]=vo+k; I[io+k+1]=vo+k+(flip?2:1); I[io+k+2]=vo+k+(flip?1:2); } io+=n; }
+    vo+=n;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(P,3));
+  if(wantN) geo.setAttribute('normal', new THREE.BufferAttribute(Nn,3));
+  if(wantC) geo.setAttribute('color', new THREE.BufferAttribute(C,3));
+  if(wantU) geo.setAttribute('uv', new THREE.BufferAttribute(U,2));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI,4));
+  geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW,4));
+  geo.setIndex(new THREE.BufferAttribute(I,1));
+  geo.userData._tsm=1;   // a normálok már simítva (applyTrollRim)
+  geo.computeBoundingSphere();
+  geo.boundingSphere.radius*=1.35;   // a végtagok mozognak: a nyugalmi gömb köré tartalék, hogy a frustum-culling ne vágja le
+  return geo;
 }
 function makeMonsterLegacy(type, scale, hp, speed, el){
   let T;
@@ -339,5 +475,8 @@ function disposeMonster(m){
   if(m._crackMat) m._crackMat.dispose();   // szilánk repedés-anyag (klónozott Mesh-anyag, a sprite-traverzál nem fogja)
   // TROLLGEN: a generátor per-troll anyagai (bodySkin/eyeMat/mossMat + minden own()-olt) — a SHARED TrollGen.M-et SOSEM szabad diszponálni
   if(m.gen && m.gen._mats) m.gen._mats.forEach(x=>{ if(x && x.dispose && x!==m.bodySkin && x!==m.eyeMat) x.dispose(); });
+  // összevont (skinnelt) hálók: a csont-textúra és a trollonként klónozott könyvtár-anyagok
+  if(m._skeleton){ m._skeleton.dispose(); m._skeleton=null; }
+  if(m._batchMats){ m._batchMats.forEach(x=>x.dispose()); m._batchMats=null; }
 }
 

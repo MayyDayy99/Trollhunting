@@ -13,9 +13,10 @@ const enableBloom = (o)=>{ if(o) o.traverse(c=>c.layers.enable(BLOOM_LAYER)); };
 let bloomOn = false;                                              // applyGraphics állítja
 
 const _darkMat  = new THREE.MeshBasicMaterial({color:0x000000});  // megosztott, egyszer lefordul
+const _darkMatSkin = new THREE.MeshBasicMaterial({color:0x000000, skinning:true});   // az összevont (skinnelt) troll-hálókhoz: a takaró-forma is mozogjon
 const BLOOM_PASS_U = {value:0};                                   // 1 a bloom-pass alatt: a VFX-shaderek ilyenkor CSAK az izzó részüket adják ki (pl. jégkristály pereme)
 const _darkStack = [];                                            // páros verem [obj, mat, ...] -> nincs uuid-kulcs, nincs delete, nincs 2. scene.traverse!
-function _darken(o){ const m=o.material; if(m && !bloomLayer.test(o.layers)){ _darkStack.push(o, m); o.material=_darkMat; } }
+function _darken(o){ const m=o.material; if(m && !bloomLayer.test(o.layers)){ _darkStack.push(o, m); o.material=o.isSkinnedMesh?_darkMatSkin:_darkMat; } }
 function _restoreAll(){ for(let i=_darkStack.length-2;i>=0;i-=2) _darkStack[i].material=_darkStack[i+1]; _darkStack.length=0; }
 
 // GRACEFUL FALLBACK: ha a bloom-addonok (jsdelivr) NEM töltöttek be, a játék sima renderrel fut tovább (nincs összeomlás).

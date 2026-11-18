@@ -51,6 +51,11 @@ function warmup(done){
   // a renderer.compile() a pozíciótól FÜGGETLENÜL lefordít minden, a scene-ben lévő anyagot -> nincs első-feltűnéskori akadás.
   // LÉNYEGES: a composer-út (közepes/magas grafika) LINEÁRIS render-célba rajzol, ami MÁS shader-variáns, mint a képernyőre fordított —
   // ezért a ténylegesen használt kimenethez fordítunk (mérve: enélkül minden troll-/effekt-anyag az első feltűnésekor fordult újra, ~40 ms akadással).
+  // MINDEN rejtett objektum is látszik a bemelegítés idejére (pl. a kamerára szerelt közelharc-ív, rejtett poolok, ritka kellékek):
+  // a renderer.compile és a render csak a LÁTHATÓ fát járja be, így ami rejtve vár az első használatára, az különben játék közben
+  // fordulna le (mérve: a közelharc-ív shadere az első csapásnál ~200 ms akadást okozott). A takarítás pontosan ezeket rejti el újra.
+  const warmShown=[];
+  steps.push(()=>{ try{ scene.traverse(o=>{ if(o!==scene && !o.visible){ o.visible=true; warmShown.push(o); } }); }catch(_e){} });
   steps.push(()=>{ try{ const rt=(bloomOn && bloomAvail)?finalComposer.renderTarget1:null;
     if(rt) renderer.setRenderTarget(rt); renderer.compile(scene, camera); if(rt) renderer.setRenderTarget(null); }catch(_e){ try{ renderer.setRenderTarget(null); }catch(_e2){} } });
   // BLOOM előmelegítés: a bloom-pass shaderei (UnrealBloom mip-blur, mix, gamma) csak composer-renderkor fordulnak le
@@ -62,7 +67,8 @@ function warmup(done){
     steps[i](); i++;
     if(loadbar) loadbar.style.width=Math.round(i/steps.length*100)+'%';
     if(i<steps.length){ setTimeout(step, 0); return; }   // setTimeout (nem rAF): a csík lépések közt kirajzolódik, és fojtott rAF mellett sem ragad be a töltőképernyő
-    // takarítás: a próbabábuk lekerülnek a színről (de élnek tovább: WARM_HOLD), a zónák + poolok nyugalomba
+    // takarítás: a csak a bemelegítéshez felfedett objektumok újra rejtve; a próbabábuk lekerülnek a színről (de élnek tovább: WARM_HOLD), a zónák + poolok nyugalomba
+    for(const o of warmShown) o.visible=false;
     for(const m of dummies){ if(m.iceShell) removeIceShell(m); scene.remove(m.g); WARM_HOLD.push(m); }
     clearZones();
     beamTube.visible=false; resetAbolts(); resetBombs(); if(wbolts[0]) wbolts[0].g.visible=false;
