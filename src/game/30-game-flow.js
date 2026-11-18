@@ -134,7 +134,7 @@ if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgr
   get equippedBow(){return equippedBow}, get ownedBows(){return [...ownedBows]}, get spellCd(){return spellCd}, get coop(){return coop}, get running(){return running},
   arrows, makeMonster, disposeMonster, trollAI, update, animateMonster, motionRig, animateDeathJoints, statusAura, fxSteps, emitArrowTrail, elementalImpact, EFX, RP, SMK, coopInterp, coopRemoteById,
   fireVihar, gainUlt, tryDash, setElement, spawnMonster, STATS, SET, get combo(){return combo}, get slowT(){return slowT}, set bossPending(v){bossPending=v}, releaseDraw, startDraw, get charge(){return charge}, get USE_TROLLGEN(){return USE_TROLLGEN}, set USE_TROLLGEN(v){USE_TROLLGEN=v},
-  bloomComposer, finalComposer, bloomPass,
+  bloomComposer, finalComposer, bloomPass, AUD,
   setBloom:(s,r,t)=>{ if(!bloomPass)return; if(s!=null)bloomPass.strength=s; if(r!=null)bloomPass.radius=r; if(t!=null)bloomPass.threshold=t; },
   setBloomOn:(v)=>{ bloomOn=!!v; },
   get bloomOn(){return bloomOn}, renderFrame, get toSpawn(){return toSpawn}, set toSpawn(v){toSpawn=v}, spawnZone, zones, elementalDeath, FIREBURST, meleeSwing, set currentElement(v){currentElement=v},
