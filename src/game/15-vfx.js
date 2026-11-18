@@ -3,7 +3,11 @@
    A demó-kártyák szépségét hozza a játékba: per-részecske MÉRET + elhalványulás
    (shader-points), táguló lökés-GYŰRŰK, villanás-SPRITE-ok, valódi VILLÁM-ívek
    (Line) és dinamikus FÉNY. Minden elemi effekt ezen fut. */
-function makeRichPool(max, blending, fade){
+function makeRichPool(max, blending, fade, atlas){
+  // FÜST-FLIPBOOK (tools/vfx/smoke_puff.*): ha van atlasz, a 'puff' részecske a kora szerinti kockát rajzolja
+  // (2 változat x 16 kocka egy 8x4-es rácsban, áttűnéssel, véletlen tükrözéssel). Az 5 sávot (tus-kontúr, árnyék,
+  // közép, fény, csúcsfény) a részecske saját színével árnyalja: hűvösebb árnyék, melegebb csúcsfény (holdfényes jelenet).
+  const book = fade==='puff' && atlas && atlas.tex;
   const pos=new Float32Array(max*3), acol=new Float32Array(max*3), asz=new Float32Array(max), aal=new Float32Array(max);
   const vel=new Float32Array(max*3), life=new Float32Array(max), ml=new Float32Array(max);
   const s0=new Float32Array(max), s1=new Float32Array(max), grv=new Float32Array(max), drg=new Float32Array(max), amax=new Float32Array(max);
@@ -13,7 +17,24 @@ function makeRichPool(max, blending, fade){
   g.setAttribute('acolor',new THREE.BufferAttribute(acol,3));
   g.setAttribute('size',new THREE.BufferAttribute(asz,1));
   g.setAttribute('alpha',new THREE.BufferAttribute(aal,1));
-  const mat=new THREE.ShaderMaterial({
+  const aage=book?new Float32Array(max):null, avar=book?new Float32Array(max):null;
+  if(book){ g.setAttribute('aage',new THREE.BufferAttribute(aage,1)); g.setAttribute('avar',new THREE.BufferAttribute(avar,1)); }
+  const mat=book ? new THREE.ShaderMaterial({
+    uniforms:{ map:{value:atlas.tex} },
+    vertexShader:'attribute float size; attribute float alpha; attribute vec3 acolor; attribute float aage; attribute float avar;'+
+      'varying vec3 vC; varying float vA; varying float vAge; varying float vVar;'+
+      'void main(){ vC=acolor; vA=alpha; vAge=aage; vVar=avar; vec4 mv=modelViewMatrix*vec4(position,1.0);'+
+      'gl_PointSize=clamp(size*1.1*(300.0/-mv.z),1.0,260.0); gl_Position=projectionMatrix*mv; }',   // 1.1: a pamacs nem tölti ki teljesen a kockát, mint a puha GLOW-folt
+    fragmentShader:'uniform sampler2D map; varying vec3 vC; varying float vA; varying float vAge; varying float vVar;'+
+      'vec4 cell(float f, vec2 pc){ float col=mod(f,8.0), row=floor(f/8.0); return texture2D(map, vec2((col+pc.x)*0.125,(3.0-row+pc.y)*0.25)); }'+
+      'void main(){ vec2 pc=vec2(gl_PointCoord.x, 1.0-gl_PointCoord.y); if(vVar>=2.0) pc.x=1.0-pc.x;'+   // tükrözés a koordinátán
+      ' float base=mod(vVar,2.0)*16.0, fr=clamp(vAge,0.0,1.0)*15.0, f0=floor(fr);'+
+      ' vec4 t=mix(cell(base+f0,pc), cell(base+min(f0+1.0,15.0),pc), fr-f0);'+
+      ' float a=smoothstep(0.30,0.60,t.a)*min(1.0,vA*1.8); if(a<0.02) discard;'+   // a rajzolt pamacs tömörebb lehet, mint a régi puha folt: x1.8 átlátszatlanság
+      ' float h=t.r; vec3 c=vC*(h<0.21?vec3(0.26,0.28,0.36):(h<0.44?vec3(0.50,0.54,0.66):(h<0.67?vec3(0.76,0.78,0.82):(h<0.89?vec3(0.95,0.95,0.94):vec3(1.06,1.04,0.98)))));'+
+      ' c+=vec3(0.045,0.035,0.02)*step(0.89,h);'+   // tus-kontúr / hűvös árnyék / közép / fény / meleg csúcsfény
+      ' gl_FragColor=vec4(c, a); }',
+    transparent:true, blending:blending, depthWrite:false, depthTest:true }) : new THREE.ShaderMaterial({
     uniforms:{ map:{value:GLOW} },
     vertexShader:'attribute float size; attribute float alpha; attribute vec3 acolor; varying vec3 vC; varying float vA;'+
       'void main(){ vC=acolor; vA=alpha; vec4 mv=modelViewMatrix*vec4(position,1.0);'+
@@ -27,7 +48,8 @@ function makeRichPool(max, blending, fade){
     C.set(color); if(fade==='add') C.convertSRGBToLinear();   // izzó részecskék: sRGB->lineáris, hogy halmozódva is telített színűek maradjanak (ne fehéredjenek ki)
     acol[i*3]=C.r;acol[i*3+1]=C.g;acol[i*3+2]=C.b;
     s0[i]=size0; s1[i]=(size1==null?size0*0.15:size1); life[i]=lifeS; ml[i]=lifeS;
-    grv[i]=grav||0; drg[i]=drag||0; amax[i]=(a0==null?1:a0); asz[i]=size0; aal[i]=amax[i]; }
+    grv[i]=grav||0; drg[i]=drag||0; amax[i]=(a0==null?1:a0); asz[i]=size0; aal[i]=amax[i];
+    if(book){ aage[i]=0; avar[i]=(Math.random()*4)|0; aal[i]=0; } }
   function update(dt){ let live=false;
     for(let i=0;i<max;i++){ if(life[i]<=0){ if(aal[i]!==0){aal[i]=0;asz[i]=0;live=true;} continue; }
       live=true;
@@ -35,13 +57,15 @@ function makeRichPool(max, blending, fade){
       const df=Math.max(0,1-drg[i]*dt); vel[i*3]*=df; vel[i*3+2]*=df; vel[i*3+1]=vel[i*3+1]*df-grv[i]*dt;
       pos[i*3]+=vel[i*3]*dt; pos[i*3+1]+=vel[i*3+1]*dt; pos[i*3+2]+=vel[i*3+2]*dt;
       asz[i]=s1[i]+(s0[i]-s1[i])*k;
-      aal[i]=amax[i]*(fade==='puff'?Math.sin(Math.PI*(1-k)):k); }
-    if(live){ g.attributes.position.needsUpdate=true; g.attributes.size.needsUpdate=true; g.attributes.alpha.needsUpdate=true; g.attributes.acolor.needsUpdate=true; } }   // FPS: üresjáratban ne tölts fel buffert
+      if(book){ aage[i]=1-k; aal[i]=amax[i]*Math.min(1,(1-k)*8)*Math.min(1,k*12); }   // gyors be, a végén a kép maga maródik szét
+      else aal[i]=amax[i]*(fade==='puff'?Math.sin(Math.PI*(1-k)):k); }
+    if(live){ g.attributes.position.needsUpdate=true; g.attributes.size.needsUpdate=true; g.attributes.alpha.needsUpdate=true; g.attributes.acolor.needsUpdate=true; if(book) g.attributes.aage.needsUpdate=true; } }   // FPS: üresjáratban ne tölts fel buffert
   return { spawn, update, pts };
 }
 const RP=makeRichPool(2600, THREE.AdditiveBlending, 'add');   // izzó: parázs, szikra, dér, buborék, mágia
 enableBloom(RP.pts);                                          // az additív izzó-részecskék adják a fő harci glow-t
-const SMK=makeRichPool(360, THREE.NormalBlending, 'puff');    // füst: sötét, növekvő, lágy puff (NEM izzik)
+const SMOKE_ATLAS=loadDataAtlas(window.GAME_ASSETS && window.GAME_ASSETS.smokePuff);   // Blender füstpamacs (tools/vfx)
+const SMK=makeRichPool(360, THREE.NormalBlending, 'puff', SMOKE_ATLAS);    // füst: sötét, növekvő, lágy puff (NEM izzik)
 
 /* ===================== VFX-KÉSZLET (AA-látvány) =====================
    Előre lefoglalt, shader-alapú effekt-technika — futás közben nincs geometria-/anyag-foglalás és nincs shader-fordítás:

@@ -6,13 +6,18 @@
    - Bloom-passban csak a sárga/fehér mag ad fényt (BLOOM_PASS_U), a füst nem.
    - Mindig "látható" (frustumCulled=false, az inaktív példányok a vágótéren kívülre kerülnek), így a bemelegítés
      lefordítja a shaderét és feltölti a textúráját; FIREBURST.ready-re a bemelegítés vár (27-frame-warmup.js). */
+// Közös betöltő a Blenderben renderelt ADAT-atlaszokhoz (tűz-robbanás, füstpamacs): lineáris textúra + "kész" ígéret.
+// A bemelegítés (27-frame-warmup.js) ezekre az ígéretekre vár, hogy a textúrák a töltőképernyő alatt feltöltődjenek.
+function loadDataAtlas(url){
+  if(!url) return { tex:null, ready:Promise.resolve() };
+  let tex; const ready=new Promise(r=>{ tex=new THREE.TextureLoader().load(url, ()=>r(), undefined, ()=>r()); });
+  tex.encoding=THREE.LinearEncoding;   // adat (sáv + lefedettség), nem sRGB szín
+  return { tex, ready };
+}
 const FIREBURST=(function(){
   const N=14, FRAMES=16, DUR=0.62;
-  const url=window.GAME_ASSETS && window.GAME_ASSETS.fireBurst;
-  let markReady; const ready=new Promise(r=>{ markReady=r; });
-  if(!url){ markReady(); return { ready, spawn(){}, update(){}, reset(){} }; }
-  const tex=new THREE.TextureLoader().load(url, ()=>markReady(), undefined, ()=>markReady());
-  tex.encoding=THREE.LinearEncoding;   // adat-textúra (hő + lefedettség), nem sRGB szín
+  const { tex, ready } = loadDataAtlas(window.GAME_ASSETS && window.GAME_ASSETS.fireBurst);
+  if(!tex) return { ready, spawn(){}, update(){}, reset(){} };
 
   const base=new THREE.PlaneGeometry(1,1), geo=new THREE.InstancedBufferGeometry();
   geo.index=base.index; geo.setAttribute('position',base.attributes.position); geo.setAttribute('uv',base.attributes.uv);

@@ -79,5 +79,5 @@ function warmup(done){
     done();
   })();
 }
-Promise.all([PROPS_READY, FIREBURST.ready]).then(() => warmup(frame));   // a generált tereptárgyak (07) és a robbanás-atlasz (15) is kész legyen, mire a shaderek lefordulnak
+Promise.all([PROPS_READY, FIREBURST.ready, SMOKE_ATLAS.ready]).then(() => warmup(frame));   // a generált tereptárgyak (07), a robbanás- és a füst-atlasz (15) is kész legyen, mire a shaderek lefordulnak
 
