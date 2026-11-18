@@ -76,9 +76,12 @@ function tickDmgNum(m,dt){
     m._dnAcc=0; m._dnT=big?0:0.28; m._dnHead=false; m._dnCrit=false; }
 }
 // előbújás a barlangból: por-gomoly + rögök + rövid földgyűrű (a troll a sötétből "kitör")
+// porfelhő a troll lábánál (Blender flipbook, 15-fire-burst.js): kibújás a barlangból, földet érés halálkor
+function trollDust(m, k){ const p=m.g.position; DUSTPOOF.spawn(p.x, GROUND_Y, p.z, 2.6*(m.scale||1)*(k||1)); }
 function trollSpawnFx(m){
   const p=m.g.position, s=m.scale||1;
-  for(let i=0;i<7;i++) SMK.spawn(p.x+rand(-0.6,0.6)*s,GROUND_Y+rand(0.2,1.2)*s,p.z+rand(-0.6,0.6)*s, rand(-0.8,0.8),rand(0.4,1.3),rand(-0.8,0.8), pick([0x2a3038,0x39404a,0x1f242b]), 0.7*s,2.0*s, rand(0.7,1.2), -0.3,1.2, 0.5);
+  trollDust(m, 1.5);
+  for(let i=0;i<3;i++) SMK.spawn(p.x+rand(-0.6,0.6)*s,GROUND_Y+rand(0.2,1.2)*s,p.z+rand(-0.6,0.6)*s, rand(-0.8,0.8),rand(0.4,1.3),rand(-0.8,0.8), pick([0x2a3038,0x39404a,0x1f242b]), 0.7*s,2.0*s, rand(0.7,1.2), -0.3,1.2, 0.5);
   VFX.debris(p.x,GROUND_Y+0.15,p.z,10,[0x8a795c,0x6f7a5a,0x5a4c3a],4.5*Math.min(1.5,s),{up:0.3,lift:2,life:0.7,grav:13,w:0.06*Math.min(1.5,s)});   // felrúgott föld- és kőrögök
   EFX.ring(p.x,GROUND_Y+0.05,p.z,0x8fa0b8,0.3,2.1*s,0.4,0.45);
 }
@@ -86,6 +89,7 @@ function trollSpawnFx(m){
 function trollDeathFx(m, pts, headshot){
   const p=m.g.position, cy=p.y+(m.bodyCY||1), col=(m.el&&EL[m.el])?EL[m.el].fx:0x8fe0c0;
   const n=(gfxTier==='low')?5:11;
+  if(m.deathStyle==='sink') trollDust(m, 0.9);   // a földbe süllyedő troll azonnal port ver (a dőlő/rogyó trollok a földet éréskor: 25-main-loop deathThud)
   for(let i=0;i<n;i++) RP.spawn(p.x+rand(-0.45,0.45),cy+rand(-0.3,0.5),p.z+rand(-0.45,0.45), rand(-0.35,0.35),rand(1.1,2.6),rand(-0.35,0.35), i%3?col:0xffffff, rand(0.14,0.28),0.02, rand(0.9,1.6), -0.6,0.9, 0.9);
   for(let i=0;i<(n>>1);i++) VFX.streak(p.x+rand(-0.4,0.4),cy+rand(-0.2,0.4),p.z+rand(-0.4,0.4),rand(-0.3,0.3),rand(2.2,4.2),rand(-0.3,0.3),col,rand(0.5,0.9),-0.5,0.6,0.014,0.09);   // felszálló lélek-csíkok
   if(pts>0) spawnDmgNum(p.x, p.y+(m.headCY||1.8)+0.7, p.z, '+'+pts, 'pts');

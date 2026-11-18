@@ -146,7 +146,7 @@ function skyStrike(x,z,s){
   const y=GROUND_Y;
   VFX.column(x,y,z,0.42*s,17,0xcdbcff,0.30);
   VFX.bolt(x+rand(-1.6,1.6)*s,y+17,z+rand(-1.6,1.6)*s, x,y+0.05,z, 0xcdbcff,0.30,0.6*s,0.11+0.10*s);
-  VFX.flare(x,y+0.45,z,0xe8e0ff,3.4*s,0.22);
+  ZAPBURST.spawn(x,y+0.55*s,z,3.4*s,1.15); VFX.flare(x,y+0.45,z,0xe8e0ff,2.0*s,0.16);   // becsapódás: Blenderben renderelt villám-csillag
   VFX.ring(x,y+0.06,z,0xcdbcff,0.3,2.3*s,0.34,0.85);
   VFX.decal(x,y,z,1.5*s,1,0x0c0a14,0.85,5,0xb9a4ff,1.5);
   VFX.spray(x,y+0.15,z,Math.round(12*s),[0xffffff,0xd8ccff,0xa98cff],9*s,{up:0.05,life:0.42,grav:14,w:0.02,len:0.05});

@@ -268,7 +268,8 @@ function update(dt,t){
     tickDmgNum(m,dt);   // LÁTVÁNY-TURBÓ: lebegő sebzés-számok (HP-delta alapján)
     if(m.dying>0){ if(m._flashV) setTrollFlash(m,0); m.dying+=dt; const k=m.dying; const g=m.g, p=g.position; if(m.hpbar&&m.hpbar.visible) m.hpbar.visible=false;
       if(m.eyeMat && m.deathStyle!=='dissolve') m.eyeMat.emissiveIntensity=Math.max(0, 2*(1-k/1.1));   // elhaló szemfény minden stílusban
-      const deathThud=(scaleMul)=>{ if(m._thudDone) return; m._thudDone=true;   // földet érés: por-gyűrű + rögök (egyszer)
+      const deathThud=(scaleMul)=>{ if(m._thudDone) return; m._thudDone=true;   // földet érés: porfelhő + por-gyűrű + rögök (egyszer)
+        trollDust(m, scaleMul);
         EFX.ring(p.x,GROUND_Y+0.05,p.z,0xa8b498,0.25,1.9*m.scale*(scaleMul||1),0.35,0.5);
         for(let i2=0;i2<8;i2++) RP.spawn(p.x+rand(-0.5,0.5)*m.scale,GROUND_Y+0.1,p.z+rand(-0.5,0.5)*m.scale, rand(-1.2,1.2),rand(0.4,1.8),rand(-1.2,1.2), pick([0x8a795c,0x6f7a5a,0xa89a78]), rand(0.4,0.7),0.05, rand(0.3,0.6), 4,1); };
       switch(m.deathStyle){
@@ -385,7 +386,7 @@ function update(dt,t){
   /* --- effektek --- */
   updateElemFx(dt);
   updateDmgNums(dt);
-  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running); FIREBURST.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
+  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running); FIREBURST.update(dt); POISONBURST.update(dt); DUSTPOOF.update(dt); ZAPBURST.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
   updateUltHud();   // PLAYER: VIHAR-csík + rezonancia-ragyogás
   updateTurboHud(dt); envUltK=ult/100;
   if(arrowLightT>0){ arrowLightT-=dt; if(arrowLightT<=0) arrowLight.intensity=0; }   // repülő elemi nyíl fénye lecseng (visible marad: konstans fény-szám)

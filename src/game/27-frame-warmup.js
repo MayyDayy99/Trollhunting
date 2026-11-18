@@ -27,6 +27,7 @@ function warmup(done){
   steps.push(()=>{ try{
     EFX.flash(wx,wy,wz,0xffffff,0.6,2.5,0.3); EFX.ring(wx,GROUND_Y+0.05,wz,0xffffff,0.4,2.5,0.4,0.6); EFX.bolt(wx,wy,wz,wx+2,wy,wz,0xffffff,0.12,0.3); EFX.light(wx,wy,wz,3,0.3);
     for(const el of ['fire','ice','poison','lightning']) elementalImpact({x:wx,y:wy,z:wz}, el, true);
+    FIREBURST.spawn(wx,wy,wz,3); POISONBURST.spawn(wx,wy,wz,3); DUSTPOOF.spawn(wx,GROUND_Y,wz,3); ZAPBURST.spawn(wx,wy,wz,3);   // Blender flipbookok (egy közös shader + a négy atlasz feltöltése)
     for(let i=0;i<10;i++){ RP.spawn(wx,wy,wz,rand(-2,2),rand(0,3),rand(-2,2),0xffffff,0.6,0.04,0.3,0,1); SMK.spawn(wx,wy,wz,rand(-1,1),rand(1,2),rand(-1,1),0xffffff,0.6,1,0.6,0,0.6,0.5); }
     gore.burst(wx,wy,wz,10,0x5f9168,5,0.3); sparks.burst(wx,wy,wz,10,0xffd27a,5,0.3);
     for(const k of ['gas','fire','frost','steam','puddle']) spawnZone(k,wx,wz,{});
@@ -74,10 +75,10 @@ function warmup(done){
     beamTube.visible=false; resetAbolts(); resetBombs(); if(wbolts[0]) wbolts[0].g.visible=false;
     for(let i2=0;i2<4;i2++){ const a=arrows[i2]; if(!a) break; a.el='base'; a.flames=null; applyArrowVisual(a); a.g.visible=false; a.active=false; }   // a felmelegítő nyilak nullára
     if(typeof BOW_SKINS!=='undefined'){ dressBow(equippedBow); BOW_SKINS.sigil.g.visible=false; }
-    clearBossHazards(); VFX.reset(); FIREBURST.reset();
+    clearBossHazards(); VFX.reset(); FIREBURST.reset(); POISONBURST.reset(); DUSTPOOF.reset(); ZAPBURST.reset();
     if(loadingEl) loadingEl.classList.add('hide');
     done();
   })();
 }
-Promise.all([PROPS_READY, FIREBURST.ready, SMOKE_ATLAS.ready]).then(() => warmup(frame));   // a generált tereptárgyak (07), a robbanás- és a füst-atlasz (15) is kész legyen, mire a shaderek lefordulnak
+Promise.all([PROPS_READY, FIREBURST.ready, POISONBURST.ready, DUSTPOOF.ready, ZAPBURST.ready, SMOKE_ATLAS.ready]).then(() => warmup(frame));   // a generált tereptárgyak (07), a Blender flipbook- és füst-atlaszok (15) is készen legyenek, mire a shaderek lefordulnak
 

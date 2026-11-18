@@ -190,7 +190,7 @@ can always confirm you're playing the latest version.
 | `src/three-setup.js` | three.js r128 + post-processing add-ons (+ `GLTFLoader`) as `window.THREE`. |
 | `src/assets/props/` | AI-generated, game-optimized 3D props (`.glb`, inlined into the build) and how they were made ([README](src/assets/props/README.md)). |
 | `tools/props/` | Offline prop pipeline: `optimize.mjs` (simplify, WebP textures, rune glow map), `render.mjs` (preview), `to-webp.mjs`. Own `package.json`, not part of the game build. |
-| `src/assets/vfx/`, `tools/vfx/` | Blender-made effects (fire burst, smoke puff): flipbook atlases plus their `.blend` files and headless build/render scripts ([README](tools/vfx/README.md)). |
+| `src/assets/vfx/`, `tools/vfx/` | Blender-made effects (fire burst, smoke puff, poison splash, dust poof, lightning impact): flipbook atlases plus their `.blend` files and headless build/render scripts ([README](tools/vfx/README.md)). |
 | `build/concat-modules.js` | Vite plugin that joins a folder into one module (with source maps). |
 | `tests/` | Unit tests, build test, `e2e/` browser playthrough + performance probe. |
 | `ELEMENTAL-SPEC.md` | The elemental deepening design + implementation spec. |

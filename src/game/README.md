@@ -30,7 +30,7 @@ kivágott kódrészek akkor is működnek, ha egy függvény fájlhatáron átny
 | 12-camera-collision | kamera, ütközés, hidak, fakunyhó, barlangok |
 | 12-world-batch | a kész statikus világ összevonása anyagonként + 24 m-es cellánként (draw-call) — utolsó világ-építő lépés, ezért fut a 12-camera-collision után |
 | 13-bow, 14-arrows | íj nézet-modell, nyíl-pool |
-| 15-fire-burst | Blender adat-atlasz betöltő (`loadDataAtlas`) és a tűz-robbanás flipbook (`FIREBURST`) |
+| 15-fire-burst | Blender adat-atlasz betöltő (`loadDataAtlas`), flipbook-gyár (`makeFlipbook`: egy instanced háló + egy közös shader) és a négy Blender flipbook: tűz-robbanás (`FIREBURST`), méreg-fröccs (`POISONBURST`), porfelhő (`DUSTPOOF`), villám-csillag (`ZAPBURST`) |
 | 15-vfx | effekt-rétegek és VFX-készlet; az `SMK` füst a Blender füstpamacs-atlaszból rajzol |
 | 16-elements, 17-freeze-reactions | elemi rendszer, fagyás, zónák, reakciók |
 | 18-troll-projectiles, 19-troll-looks | troll-lövedékek, sámán, HP-csíkok, troll-megjelenés, `makeMonster` |
