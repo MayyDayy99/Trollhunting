@@ -72,7 +72,7 @@ eased shockwaves, flickering lightning and growing ice shells.
 
 Tests (after `npm install`):
 
-- `npm test` — animation and combat regressions plus the single-file build check.
+- `npm test` — animation, combat and static-world batching regressions plus the single-file build check.
 - `npm run build && npm run test:e2e` — a scripted playthrough of the built game in
   headless Edge/Chrome (waves, every element, the Forge, spells, freezes, the
   Troll King, VIHAR, dash, melee). It fails on page errors, on shaders compiled

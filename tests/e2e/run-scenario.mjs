@@ -11,7 +11,9 @@
 //   - shader programs compiled AFTER the warm-up (each one is a visible hitch on a real GPU),
 //   - geometry/texture counts (growth = allocations that never get reused).
 //
-// CLI:  node tests/e2e/run-scenario.mjs [--dir dist] [--json out.json] [--gpu]
+// CLI:  node tests/e2e/run-scenario.mjs [--dir dist] [--json out.json] [--gpu] [--width 1280 --height 720]
+//                                        [--seed 1] [--no-world-batch] [--profile spell,boss]
+// A/B of the static-world merge on ONE build: same --seed, with and without --no-world-batch (identical trolls/effects).
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -104,7 +106,7 @@ function summariseProfile(profile) {
   return { self: top(self), total: top(total), gcMs: +(gc / 1000).toFixed(1) };
 }
 
-export async function runScenario({ dir = 'dist', gpu = false, width = 640, height = 360, renderEvery = 1, profile = [], log = () => {} } = {}) {
+export async function runScenario({ dir = 'dist', gpu = false, width = 640, height = 360, renderEvery = 1, profile = [], seed = null, noWorldBatch = false, log = () => {} } = {}) {
   const { server, port } = await serveDir(dir);
   const channel = process.env.E2E_CHANNEL || (process.platform === 'win32' ? 'msedge' : 'chrome');
   const args = gpu ? ['--ignore-gpu-blocklist', '--enable-gpu'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
@@ -120,6 +122,14 @@ export async function runScenario({ dir = 'dist', gpu = false, width = 640, heig
       if (/^Failed to load resource/.test(msg.text())) return;   // real failures are collected from responses above
       errors.push('console: ' + msg.text());
     });
+    // --seed: repeatable run (same trolls, same effects) — seeded Math.random, and the frame loop is held from the start
+    // so no wall-clock-dependent menu frames consume random numbers. --no-world-batch: draw the world unmerged (A/B).
+    await page.addInitScript(({ seed, noWorldBatch }) => {
+      if (noWorldBatch) window.__noWorldBatch = true;
+      if (seed == null) return;
+      window.__mrHold = true; let t = seed >>> 0;
+      Math.random = () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+    }, { seed, noWorldBatch });
     const t0 = Date.now();
     await page.goto(`http://127.0.0.1:${port}/mohas-roham.html#dev`);
     await page.waitForFunction(() => window.__MR && document.getElementById('loading').classList.contains('hide'), null, { timeout: 180000 });
@@ -192,7 +202,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : undefined; };
   const res = await runScenario({ dir: arg('--dir') || 'dist', gpu: process.argv.includes('--gpu'),
     width: +(arg('--width') || 640), height: +(arg('--height') || 360),
-    profile: (arg('--profile') || '').split(',').filter(Boolean), log: s => console.log(s) });
+    profile: (arg('--profile') || '').split(',').filter(Boolean), seed: arg('--seed') != null ? +arg('--seed') : null,
+    noWorldBatch: process.argv.includes('--no-world-batch'), log: s => console.log(s) });
   const json = arg('--json');
   if (json) fs.writeFileSync(json, JSON.stringify(res, null, 2));
   console.log(`runtime shader programs after warm-up: ${res.runtimePrograms}; errors: ${res.errors.length}`);

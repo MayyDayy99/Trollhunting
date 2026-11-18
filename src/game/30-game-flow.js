@@ -138,5 +138,5 @@ if(location.hash.indexOf('dev')>=0) window.__MR={ monsters, RUN, RUNM, applyUpgr
   setBloom:(s,r,t)=>{ if(!bloomPass)return; if(s!=null)bloomPass.strength=s; if(r!=null)bloomPass.radius=r; if(t!=null)bloomPass.threshold=t; },
   setBloomOn:(v)=>{ bloomOn=!!v; },
   get bloomOn(){return bloomOn}, renderFrame, get toSpawn(){return toSpawn}, set toSpawn(v){toSpawn=v}, spawnZone, zones, elementalDeath, meleeSwing, set currentElement(v){currentElement=v},
-  get wave(){return wave}, get score(){return score} };
+  get wave(){return wave}, get score(){return score}, get worldBatch(){return worldBatchInfo} };
 

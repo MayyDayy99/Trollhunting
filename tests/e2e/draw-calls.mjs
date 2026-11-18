@@ -1,5 +1,6 @@
 // Where do the draw calls go? Starts a busy fight (wave 15, every element, spells, the boss)
-// and reports, for one frame, draw calls per render pass and visible meshes per category.
+// and reports, for one frame, draw calls per render pass and visible meshes per category, plus the total of
+// the next frame (frameCalls: the shadow map is only re-rendered every 2nd frame).
 // CLI: node tests/e2e/draw-calls.mjs [--dir dist] [--gpu] [--gfx high|medium|low]
 import { chromium } from 'playwright-core';
 import { serveDir } from './run-scenario.mjs';
@@ -31,7 +32,10 @@ try {
     r.render = (scene, cam) => { const c0 = info.render.calls, t0 = info.render.triangles; orig(scene, cam);
       passes.push({ target: r.getRenderTarget() ? 'rt' : 'screen', obj: scene.type || scene.constructor.name, calls: info.render.calls - c0, tris: info.render.triangles - t0 }); };
     M.renderFrame();
-    r.render = orig; info.autoReset = true;
+    r.render = orig;
+    // the shadow map is re-rendered every 2nd frame (renderFrame): the next frame is the other kind
+    info.reset(); M.renderFrame(); const nextFrameCalls = info.render.calls;
+    info.autoReset = true;
     // visible meshes per category (what the main pass can draw before frustum culling)
     const cat = { trolls: 0, trollMeshesMax: 0, effects: 0, world: 0, camera: 0 }, troll = new Set(M.monsters.map(m => m.g));
     const vis = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
@@ -46,8 +50,10 @@ try {
     const per = M.monsters.slice(0, 4).map(m => { let n = 0; const par = new Set(), pm = new Set(), batched = []; m.g.traverse(o => { if (o.isMesh && vis(o)) { n++; par.add(o.parent.uuid); pm.add(o.parent.uuid + o.material.uuid); if (o.userData._trollBatch) batched.push(o.userData._trollBatch); } }); return { type: m.typeId, meshes: n, parents: par.size, parentMat: pm.size, batched }; });
 
     return { gfx: document.querySelector('.gfxbtn.on') ? document.querySelector('.gfxbtn.on').dataset.gfx : '?', bloomOn: M.bloomOn,
-      monsters: M.monsters.length, passes, totalCalls: passes.reduce((s, p) => s + p.calls, 0), visible: cat,
-      per, shadowMap: r.shadowMap.enabled, shadowAuto: r.shadowMap.autoUpdate };
+      monsters: M.monsters.length, passes, totalCalls: passes.reduce((s, p) => s + p.calls, 0),
+      // which of the two frames re-rendered the shadow map depends on frame parity: the one with more calls did
+      frameCalls: (t => ({ withShadowMap: Math.max(t, nextFrameCalls), withoutShadowMap: Math.min(t, nextFrameCalls) }))(passes.reduce((s, p) => s + p.calls, 0)), visible: cat,
+      per, worldBatch: M.worldBatch, shadowMap: r.shadowMap.enabled, shadowAuto: r.shadowMap.autoUpdate };
   });
   console.log(JSON.stringify(out, null, 1));
 } finally { await browser.close(); server.close(); }
