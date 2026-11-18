@@ -1,0 +1,127 @@
+/* ===== FEJLESZTÉS-BOLT (Kovácsműhely) ===== */
+/* lágy felúszás (a display:none->flex újraindítja a CSS-animációt): a háttér beúszik, a kártya alulról emelkedik */
+#shop:not(.hide){ animation: shopFade .34s ease-out both; }
+#shop:not(.hide) .shopwrap{ animation: shopRise .42s cubic-bezier(.2,.9,.25,1) both; }
+@keyframes shopFade{ from{opacity:0} to{opacity:1} }
+@keyframes shopRise{ from{opacity:0; transform:translateY(34px) scale(.93)} to{opacity:1; transform:none} }
+#shop .shopwrap{max-width:980px;width:94%;padding:22px 24px;max-height:94vh;display:flex;flex-direction:column;}
+#shop .shop-lanes{overflow-y:auto;min-height:0;}
+.upcard.locked{opacity:.5;filter:saturate(.4);cursor:default;}
+.upcard.locked:hover{transform:none;filter:saturate(.4);}
+.uc-cost.lock{color:#8fa6c9;background:rgba(120,140,180,.15);}
+.shop-top{display:flex;justify-content:space-between;align-items:baseline;}
+.shop-title{font:900 26px/1 inherit;letter-spacing:.08em;background:linear-gradient(90deg,#7fe2ff,#fff,#ffd27a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.shop-pts{font:800 22px/1 inherit;color:#ffd27a;}
+.shop-sub{font:700 12px/1.4 inherit;letter-spacing:.1em;color:#9db4d6;text-transform:uppercase;margin:8px 0 16px;}
+.shop-lanes{display:flex;gap:13px;text-align:left;}
+.lane{flex:1;min-width:0;border-radius:14px;padding:10px;background:rgba(10,16,30,.45);border:1px solid rgba(180,200,240,.12);}
+.lane-h{font:800 12px/1 inherit;letter-spacing:.14em;text-transform:uppercase;margin:2px 0 10px;text-align:center;}
+.lane-atk .lane-h{color:#ff7a3d;} .lane-def .lane-h{color:#7fd0ff;} .lane-mys .lane-h{color:#b48cff;}
+.lane-cards{display:flex;flex-direction:column;gap:9px;}
+.forge-bows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px;}
+#shop .forge-bows button{margin:0;padding:9px;text-align:left;white-space:normal;border:1px solid #455344;border-radius:10px;background:#101b1c;color:#e5dfc7;font:600 12px/1.3 var(--f-body);letter-spacing:.02em;min-width:0;box-shadow:none;}
+#shop .forge-bows button b{display:block;font-size:12px;}
+#shop .forge-bows button small{display:block;color:#a8b7b0;font-size:10px;font-weight:400;line-height:1.4;margin:5px 0;}
+#shop .forge-bows button strong{font-size:10px;color:#d6b879;}
+.forge-bows[hidden]{display:none;}
+.forge-bows button:disabled{opacity:.5;cursor:default;}
+#shop .forge-bows button.active{border-color:#d6b879;background:#25312a;opacity:1;}
+.forge-label{grid-column:1/-1;color:#d6b879;font:700 11px/1 var(--f-body);letter-spacing:.16em;}
+#arsenalHud{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:5;pointer-events:none;text-align:center;color:#e6dec4;font:700 10px/1.4 var(--f-body);letter-spacing:.10em;text-shadow:0 1px 3px #000;padding:3px 11px;border-radius:999px;background:rgba(8,14,28,.52);border:1px solid rgba(214,184,121,.24);max-width:86vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#arsenalHud[hidden]{display:none;}
+html.touch #arsenalHud{bottom:calc(68px * var(--u) + env(safe-area-inset-bottom));font-size:9px;padding:2px 9px;}
+.upcard{border-radius:12px;padding:8px 10px;cursor:pointer;background:rgba(18,28,48,.7);border:1px solid rgba(180,200,240,.16);transition:transform .1s, filter .12s;}
+.upcard:hover{transform:translateY(-3px);filter:brightness(1.1);}
+.upcard .uc-top{display:flex;align-items:center;gap:8px;}
+.upcard .uc-glyph{font-size:18px;line-height:1;}
+.upcard .uc-name{font:800 14px/1.2 inherit;color:#eaf2ff;}
+.upcard .uc-eff{font:600 12px/1.4 inherit;color:#a9bcdc;margin:5px 0 8px;}
+.upcard .uc-row{display:flex;justify-content:space-between;align-items:center;}
+.upcard .uc-pips{letter-spacing:2px;font-size:13px;color:#7fd0ff;}
+.upcard .uc-cost{font:800 13px/1 inherit;padding:4px 9px;border-radius:8px;}
+.upcard .uc-cost.afford{color:#061018;background:linear-gradient(90deg,#ffe7b8,#ffd27a);}
+.upcard .uc-cost.poor{color:#c88aa6;background:rgba(120,80,100,.25);}
+.upcard .uc-cost.max{color:#9db4d6;background:rgba(120,140,180,.18);}
+.upcard.shake{animation:upshake .25s;}
+@keyframes upshake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+#shopGoBtn{margin-top:16px;}
+.shop-foot{font:600 12px/1.4 inherit;color:#8fa6c9;margin-top:8px;}
+@media(max-width:760px){ .shop-lanes{flex-direction:column;} }
+.hide{display:none!important;}
+#over .stat{font:800 22px/1.5 inherit;color:#ffd27a;margin:10px 0;}
+#radar{position:fixed;right:18px;bottom:64px;z-index:6;width:160px;height:160px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 50% 50%, rgba(12,20,36,.62), rgba(6,11,20,.82));
+  border:2px solid rgba(180,200,240,.28);box-shadow:0 6px 22px rgba(0,0,0,.5), inset 0 0 24px rgba(8,14,28,.6);}
+#radarkey{position:fixed;right:18px;bottom:232px;z-index:6;width:160px;box-sizing:border-box;pointer-events:none;
+  font:600 8.5px/1.3 -apple-system,'Segoe UI',sans-serif;letter-spacing:.02em;color:#aec2e2;
+  background:linear-gradient(rgba(12,20,36,.5),rgba(6,11,20,.66));border:1px solid rgba(180,200,240,.15);
+  border-radius:10px;padding:6px 8px 7px;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+#radarkey .rk-h{font-size:7.5px;letter-spacing:.14em;color:#6f89b3;margin:0 0 3px;}
+#radarkey .rk-h+.rk-h{margin-top:6px;}
+#radarkey .rk-el{display:flex;flex-wrap:wrap;gap:2px 7px;}
+#radarkey .rk-el span{display:inline-flex;align-items:center;gap:3px;}
+#radarkey .rk-el i{width:7px;height:7px;border-radius:50%;box-shadow:0 0 0 1px rgba(6,11,20,.6);}
+#radarkey .rk-ty{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;}
+#radarkey .rk-ty>span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+#radarkey canvas{display:block;}
+.touch #radarkey{display:none;}
+.mobilectl{display:none;}
+.touch .desktopctl{display:none;}
+.touch .mobilectl{display:flex;}
+#mobileControls{display:none;position:fixed;inset:0;z-index:8;pointer-events:none;touch-action:none;font-family:-apple-system,'Segoe UI',sans-serif;}
+.touch #mobileControls{display:block;}
+#mobileControls button{-webkit-tap-highlight-color:transparent;}
+#mobileLook{position:absolute;top:0;right:0;bottom:0;left:36%;pointer-events:auto;touch-action:none;}
+#mobileMove{position:absolute;left:calc(22px + env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));width:148px;height:148px;border-radius:50%;pointer-events:auto;touch-action:none;
+  background:radial-gradient(circle at 50% 50%, rgba(127,226,255,.09), rgba(56,92,54,.15) 48%, rgba(8,14,28,.03) 72%);
+  border:1px solid rgba(190,238,178,.18);box-shadow:0 10px 32px rgba(0,0,0,.30), inset 0 0 28px rgba(127,226,255,.06);}
+#mobileMove::before,#mobileMove::after{content:'';position:absolute;left:50%;top:50%;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;}
+#mobileMove::before{width:104px;height:104px;border:1px dashed rgba(190,238,178,.20);}
+#mobileMove::after{width:5px;height:5px;background:rgba(233,241,255,.48);box-shadow:0 0 9px rgba(127,226,255,.55);}
+#mobileStick{position:absolute;left:50%;top:50%;width:64px;height:64px;border-radius:50%;transform:translate(-50%,-50%);
+  background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.52),rgba(147,197,132,.30) 38%,rgba(54,197,255,.12) 70%,rgba(8,14,28,.08));
+  border:1px solid rgba(220,245,255,.24);box-shadow:0 8px 24px rgba(54,197,255,.14), inset 0 0 16px rgba(255,255,255,.08);}
+.mobile-actions{position:absolute;right:calc(15px + env(safe-area-inset-right));bottom:calc(18px + env(safe-area-inset-bottom));width:230px;height:222px;pointer-events:none;}
+.mobile-btn{position:absolute;width:58px;height:58px;border-radius:50%;border:1px solid rgba(210,230,255,.26);color:#e9f1ff;
+  background:
+    radial-gradient(circle at 35% 28%,rgba(255,255,255,.16),rgba(147,197,132,.18) 38%,rgba(8,14,28,.20) 70%),
+    conic-gradient(from 20deg,rgba(127,226,255,.16),rgba(255,210,122,.12),rgba(159,220,74,.15),rgba(127,226,255,.16));
+  backdrop-filter:blur(5px);font:900 11px/1 -apple-system,'Segoe UI',sans-serif;letter-spacing:.05em;text-transform:uppercase;
+  text-shadow:0 2px 8px rgba(0,0,0,.85);box-shadow:0 8px 24px rgba(0,0,0,.30), inset 0 0 18px rgba(127,226,255,.045);touch-action:none;pointer-events:auto;}
+.mobile-btn.primary{right:0;bottom:0;width:104px;height:104px;color:#061018;font-size:14px;border:2px solid rgba(255,255,255,.55);
+  background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.78) 0,rgba(159,240,255,.46) 24%,rgba(54,197,255,.30) 56%,rgba(27,111,160,.20) 100%);
+  box-shadow:0 0 0 7px rgba(54,197,255,.07),0 12px 34px rgba(54,197,255,.22),inset 0 -10px 20px rgba(6,16,24,.10);text-shadow:none;}
+.mobile-btn.primary::after{content:'';position:absolute;inset:12px;border-radius:50%;border:1px dashed rgba(6,16,24,.22);}
+.mobile-btn.claw{left:calc(18px + env(safe-area-inset-left));top:calc(82px + env(safe-area-inset-top));width:72px;height:72px;color:#061018;
+  background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.70),rgba(159,240,255,.38) 34%,rgba(54,197,255,.22));box-shadow:0 9px 28px rgba(54,197,255,.18);text-shadow:none;}
+#mobileMelee{right:112px;bottom:22px;}
+#mobileJump{right:78px;bottom:126px;}
+#mobileSprint{right:8px;bottom:122px;}
+#mobileUlt{right:144px;bottom:112px;width:64px;height:64px;color:#061018;background:radial-gradient(circle at 35% 28%,rgba(255,255,255,.68),rgba(255,210,122,.42) 38%,rgba(180,140,255,.25) 100%);text-shadow:none;}
+#mobilePause{right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.24);}
+#mobileFullscreen{right:calc(68px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.24);}
+#mobileRotate{right:calc(124px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:48px;height:48px;background:rgba(8,14,28,.24);}
+.mobile-btn.on{filter:brightness(1.18);transform:scale(.93);}
+.mobile-elements{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:8px;padding:6px 8px;border-radius:999px;pointer-events:auto;
+  background:rgba(8,14,28,.18);border:1px solid rgba(190,238,178,.14);box-shadow:0 8px 28px rgba(0,0,0,.20);backdrop-filter:blur(5px);}
+.mobile-el{min-width:44px;height:40px;border-radius:999px;border:1px solid rgba(180,200,240,.16);background:rgba(8,14,28,.22);color:#d8f4dc;
+  font:900 11px/1 -apple-system,'Segoe UI',sans-serif;box-shadow:inset 0 0 12px rgba(255,255,255,.04);touch-action:none;}
+.mobile-el.on{color:#061018;background:linear-gradient(135deg,rgba(234,247,255,.78),rgba(127,226,255,.58) 45%,rgba(255,210,122,.58));box-shadow:0 0 18px rgba(127,226,255,.28);}
+#rotateHint{display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;padding:24px;pointer-events:none;
+  background:rgba(6,10,18,.72);font:800 18px/1.35 -apple-system,'Segoe UI',sans-serif;color:#ffe7b8;text-shadow:0 2px 10px #000;}
+.touch #powwrap{bottom:calc(84px + env(safe-area-inset-bottom));}
+.touch #hpwrap{left:calc(18px + env(safe-area-inset-left));bottom:calc(178px + env(safe-area-inset-bottom));width:min(250px,36vw);}
+.touch #radar{right:calc(18px + env(safe-area-inset-right));bottom:calc(248px + env(safe-area-inset-bottom));width:112px;height:112px;}
+.touch #score{right:calc(14px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));}
+.touch #wave{top:calc(10px + env(safe-area-inset-top));}
+.touch .screen{padding:calc(18px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));}
+.touch .card{max-width:min(640px,94vw);padding:22px 18px;}
+.touch .mpage{min-height:210px;}
+.touch .mobile-actions,.touch .mobile-elements,#mobileMove{user-select:none;-webkit-user-select:none;}
+#langBtn{position:fixed;left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));z-index:30;width:52px;height:38px;border-radius:999px;
+  border:1px solid rgba(190,238,178,.24);background:rgba(8,14,28,.38);color:#d8f4dc;font:900 12px/1 -apple-system,'Segoe UI',sans-serif;letter-spacing:.08em;box-shadow:0 8px 24px rgba(0,0,0,.28);backdrop-filter:blur(5px);cursor:pointer;}
+@media (orientation:portrait) and (pointer:coarse){
+  .touch #rotateHint{display:flex;}
+  .touch .mobile-actions,.touch .mobile-elements,.touch #mobileMove,.touch #mobileLook,.touch #mobileShootAlt,.touch #mobilePause,.touch #mobileFullscreen,.touch #mobileRotate{opacity:.25;}
+}
+

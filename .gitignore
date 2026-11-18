@@ -1,3 +1,8 @@
 mp-server/.env
 node_modules/
 .DS_Store
+
+# build output (generated: npm run build)
+dist/
+# generated: npm run build:mp (or the Docker build) copies dist/mohas-roham.html here
+mp-server/public/mohas-roham.html

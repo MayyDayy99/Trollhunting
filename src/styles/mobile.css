@@ -1,0 +1,82 @@
+/* ===================== MOBIL HUD + IRÁNYÍTÁS (újratervezve) =====================
+   --u: a képernyőhöz igazított UI-lépték (JS állítja: alacsony/keskeny telefonon kisebb). Elrendezés fekvő módra:
+   bal felső = élet · felül közép = hullám · jobb felső = pont/sorozat + szünet/teljes képernyő + radar ·
+   bal alsó = LEBEGŐ joystick · alul közép = elem-gombok · jobb alsó = LŐ + körülötte ívben ÜT / KITÉR / UGR / VIHAR. */
+:root{--u:1;}
+html.touch body:not(.ingame) #mobileControls{display:none;}
+html.touch body.ingame #langBtn{display:none;}
+html.touch #mobileShootAlt, html.touch #mobileSprint, html.touch #mobileRotate, html.touch #ulthud{display:none!important;}
+html.touch #mobileControls, html.touch #mobileControls *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+html.touch #mobileLook{left:44%;}
+html.touch #mobileMoveZone{position:absolute;left:0;top:22%;bottom:0;width:44%;pointer-events:auto;touch-action:none;}
+html.touch #mobileMove{left:calc(26px + env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));width:calc(128px*var(--u));height:calc(128px*var(--u));
+  opacity:.45;transition:opacity .25s;pointer-events:none;}
+html.touch #mobileMove.active{opacity:1;transition:none;border-color:rgba(190,238,178,.45);background:radial-gradient(circle at 50% 50%, rgba(127,226,255,.16), rgba(56,92,54,.22) 48%, rgba(8,14,28,.10) 72%);}
+html.touch #mobileMove::before{width:calc(92px*var(--u));height:calc(92px*var(--u));}
+html.touch #mobileStick{width:calc(56px*var(--u));height:calc(56px*var(--u));transition:box-shadow .15s,border-color .15s;}
+html.touch #mobileStick.sprint{border-color:rgba(255,210,122,.9);box-shadow:0 0 18px rgba(255,210,122,.75),inset 0 0 12px rgba(255,210,122,.45);}
+html.touch #mobileMove .runhint{position:absolute;left:50%;top:-18px;transform:translateX(-50%);font:700 9px/1 var(--f-body);letter-spacing:.2em;color:#ffd27a;opacity:0;transition:opacity .15s;text-shadow:0 1px 4px #000;}
+html.touch #mobileMove.run .runhint{opacity:1;}
+
+html.touch .mobile-actions{right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));width:calc(300px*var(--u));height:calc(210px*var(--u));}
+html.touch .mobile-btn{font-size:calc(10px*var(--u));}
+html.touch #mobileShoot{right:0;bottom:0;width:calc(92px*var(--u));height:calc(92px*var(--u));font-size:calc(14px*var(--u));}
+html.touch #mobileShoot.drawing{box-shadow:0 0 0 calc(6px*var(--u)) rgba(127,226,255,.25),0 0 30px rgba(127,226,255,.55);}
+html.touch #mobileMelee{right:calc(117px*var(--u));bottom:calc(19px*var(--u));width:calc(54px*var(--u));height:calc(54px*var(--u));}
+html.touch #mobileDash{right:calc(99px*var(--u));bottom:calc(77px*var(--u));width:calc(54px*var(--u));height:calc(54px*var(--u));}
+html.touch #mobileJump{right:calc(47px*var(--u));bottom:calc(113px*var(--u));width:calc(54px*var(--u));height:calc(54px*var(--u));}
+html.touch #mobileDash.cd{opacity:.5;}
+html.touch #mobileUlt{--ult:0;--ec:#cfe0ff;right:calc(172px*var(--u));bottom:calc(90px*var(--u));width:calc(58px*var(--u));height:calc(58px*var(--u));
+  color:#e9f1ff;text-shadow:0 1px 4px #000;background:radial-gradient(circle at 38% 30%,rgba(255,255,255,.22),rgba(8,14,28,.55) 72%);}
+html.touch #mobileUlt::before{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(var(--ec) calc(var(--ult)*1%), rgba(255,255,255,.10) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));}
+html.touch #mobileUlt.ready{color:#061018;text-shadow:none;background:radial-gradient(circle at 38% 30%,#fff,#ffd27a 62%,#c98a2a);box-shadow:0 0 22px rgba(255,210,122,.8);animation:mUltPulse 1s ease-in-out infinite;}
+@keyframes mUltPulse{50%{transform:scale(1.08);}}
+
+html.touch .mobile-elements{bottom:calc(12px + env(safe-area-inset-bottom));gap:calc(6px*var(--u));padding:calc(5px*var(--u)) calc(7px*var(--u));background:rgba(8,14,28,.30);}
+html.touch .mobile-el{--c:#cfe0ff;width:calc(42px*var(--u));min-width:0;height:calc(42px*var(--u));border-radius:50%;padding:0;
+  font:800 calc(9px*var(--u))/1 var(--f-body);letter-spacing:.02em;color:#dce6f7;text-shadow:0 1px 3px #000;
+  border:2px solid color-mix(in srgb,var(--c) 60%,transparent);background:radial-gradient(circle at 50% 36%,color-mix(in srgb,var(--c) 38%,transparent),rgba(8,14,28,.55) 72%);
+  transition:transform .14s cubic-bezier(.2,.9,.25,1.4),box-shadow .14s;}
+html.touch .mobile-el.on{transform:translateY(calc(-4px*var(--u))) scale(1.13);color:#061018;text-shadow:none;border-color:#fff;
+  background:radial-gradient(circle at 40% 32%,#fff,var(--c) 78%);box-shadow:0 0 16px var(--c);}
+
+html.touch #hpwrap{transform:none;left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));bottom:auto;width:calc(200px*var(--u));padding:calc(7px*var(--u)) calc(9px*var(--u));}
+html.touch #hpwrap .hprow{margin-bottom:4px;} html.touch #hpwrap .lab{font-size:9px;} html.touch #hpnum{font-size:calc(15px*var(--u));}
+html.touch #hpbar{height:calc(11px*var(--u));} html.touch #dashrow{margin-top:5px;} html.touch #dashrow .dk{font-size:8px;}
+html.touch #dmgpop{top:auto;bottom:-28px;right:auto;left:8px;}
+html.touch #buffs{left:calc(10px + env(safe-area-inset-left));top:calc(14px + 76px*var(--u) + env(safe-area-inset-top));bottom:auto;}
+html.touch #buffs .bf{font-size:9px;padding:5px 9px;}
+html.touch #score{left:auto;right:calc(22px + 100px*var(--u) + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));text-align:right;}
+html.touch #score .n{font-size:calc(22px*var(--u));} html.touch #score small{font-size:8px;}
+html.touch #combo{left:auto;right:calc(22px + 100px*var(--u) + env(safe-area-inset-right));top:calc(14px + 44px*var(--u) + env(safe-area-inset-top));text-align:right;transform-origin:right top;}
+html.touch #combo .cx{font-size:calc(24px*var(--u));} html.touch #combo .ct{margin-left:auto;width:calc(86px*var(--u));}
+html.touch #mobilePause,html.touch #mobileFullscreen{top:calc(10px + env(safe-area-inset-top));width:calc(42px*var(--u));height:calc(42px*var(--u));font-size:calc(9px*var(--u));}
+html.touch #mobilePause{right:calc(10px + env(safe-area-inset-right));}
+html.touch #mobileFullscreen{right:calc(14px + 44px*var(--u) + env(safe-area-inset-right));}
+html.touch #radar{right:calc(10px + env(safe-area-inset-right));top:calc(16px + 44px*var(--u) + env(safe-area-inset-top));bottom:auto;width:calc(86px*var(--u));height:calc(86px*var(--u));}
+html.touch #wave{top:calc(8px + env(safe-area-inset-top));}
+html.touch #wave .n{font-size:calc(21px*var(--u));} html.touch #wave .wbar{width:calc(150px*var(--u));}
+html.touch #bossbar{top:calc(66px*var(--u) + env(safe-area-inset-top));width:min(340px,40vw);}
+html.touch #toast{top:24%;} html.touch #callout{top:calc(24% + 40px);}
+html.touch #powlabel{top:calc(50% + 46px);}
+
+/* menü / szünet alacsony (fekvő telefon) képernyőn: a JÁTÉK gomb görgetés nélkül is látszik */
+@media (max-height:520px){
+  #start.screen,.screen{padding-top:8px;padding-bottom:8px;}
+  .menucard{max-width:min(760px,96vw);padding:12px 18px 12px!important;}
+  .menucard .eyebrow{font-size:9px;letter-spacing:.32em;}
+  .menucard h1{font-size:28px;margin:5px 0 3px;}
+  .menucard .tagline{display:none;}
+  .mtabs{margin-top:2px;} .card button.mtab{padding:6px 11px;font-size:10.5px;}
+  .mpage{min-height:0!important;max-height:calc(100vh - 196px);overflow-y:auto;padding:8px 6px 4px;}
+  .mgrid2{gap:6px 18px;font-size:12px;} .mtip{font-size:11.5px;margin-top:8px;}
+  .mdots{margin:4px 0 6px;}
+  .mstart{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:9px;}
+  .mstart .gfxrow{margin:0;flex-wrap:wrap;justify-content:flex-start;}
+  #startBtn{padding:12px 26px;font-size:17px;flex:none;}
+  .card:not(.menucard){padding:14px 18px;} .card h1{font-size:28px;margin:4px 0 6px;}
+  .setgrid{gap:7px;margin:4px 0 10px;} .statgrid{margin:8px 0 12px;} .statgrid b{font-size:18px;}
+  #over .stat{font-size:16px;}
+}

@@ -12,7 +12,9 @@
 # =============================================================================
 services:
   mp-server:
-    build: .
+    build:
+      context: ..                    # repo root: the image builds the game and needs src/shared
+      dockerfile: mp-server/Dockerfile
     image: mohas-roham-mp-server:0.1.0
     container_name: mohas-roham-mp
     ports:

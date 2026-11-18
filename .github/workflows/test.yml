@@ -1,0 +1,44 @@
+name: Tests
+
+# Runs on every pull request and push to main:
+#  - unit tests (animations, combat) and the single-file build check
+#  - the scripted browser playthrough against the built game (headless Chrome,
+#    software WebGL): no errors, no shader compiles after the warm-up
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Unit + build tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Browser playthrough (headless Chrome)
+        env:
+          E2E_CHANNEL: chrome
+        run: npm run test:e2e
+      - name: Co-op server starts with the shared config
+        run: |
+          cd mp-server
+          npm ci --omit=dev --no-audit --no-fund
+          PORT=8099 node server.js & sleep 2
+          curl -fsS http://localhost:8099/healthz

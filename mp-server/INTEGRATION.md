@@ -2,9 +2,10 @@
 
 The whole point of this scaffold is that **single-player stays the default and
 keeps working offline**. Co-op is something the game *opts into* at runtime when
-a room is present in the URL. The original `mohas-roham.html` is **not modified**
-by this project — a copy is served from `public/` so the server has something to
-host, but you make integration edits to *that copy* (or your own build) only.
+a room is present in the URL. The game's co-op code lives in `src/game/29-coop.js` (and `src/coop-loader.js`);
+the server hosts the built single-file game in `public/` (`npm run build:mp` or
+the Docker build). Gameplay numbers both sides must agree on are in
+`src/shared/config.js`, which `server.js` imports.
 
 ## The opt-in switch: `?room=CODE`
 

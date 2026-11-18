@@ -1,20 +1,36 @@
 # =============================================================================
 #  Mohas Roham co-op server — Dockerfile (Node 22, Alpine)
+#
+#  Build context = the REPOSITORY ROOT (docker-compose.yml sets it), because the
+#  image needs the game build and the shared gameplay config:
+#    docker build -f mp-server/Dockerfile -t mohas-roham-mp-server .
 # =============================================================================
+
+# ---- 1) build the single-file game (dist/mohas-roham.html) -------------------
+FROM node:22-alpine AS game
+WORKDIR /repo
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY vite.config.js mohas-roham.html ./
+COPY build ./build
+COPY src ./src
+RUN npx vite build
+
+# ---- 2) the server ------------------------------------------------------------
 FROM node:22-alpine
 
-# App lives here.
-WORKDIR /app
+# Same layout as the repository: /app/mp-server/server.js imports ../src/shared/config.js
+WORKDIR /app/mp-server
 
 # Install dependencies first for better layer caching.
-# (Only package.json + lockfile if present, so code changes don't bust the
-#  npm-install layer.)
-COPY package*.json ./
+COPY mp-server/package*.json ./
 # Use `npm ci` when a lockfile exists (reproducible); otherwise `npm install`.
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
 
-# Copy the rest of the app (server.js, public/, etc.).
-COPY . .
+# server.js, public/ (lobby + net-client.js), the shared config and the built game
+COPY mp-server/ ./
+COPY src/shared /app/src/shared
+COPY --from=game /repo/dist/mohas-roham.html ./public/mohas-roham.html
 
 # Run as the built-in non-root `node` user for safety.
 USER node
