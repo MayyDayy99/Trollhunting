@@ -1,0 +1,27 @@
+{
+  "name": "troll-hunting",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Troll Hunting (Mohás Roham) — single-file Three.js archer survival game, built with Vite.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/animations.test.cjs tests/combat.test.cjs tests/build.test.mjs",
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/smoke.test.mjs"
+  },
+  "dependencies": {
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0",
+    "magic-string": "1.4.5",
+    "playwright-core": "1.64.1",
+    "vite": "8.3.5",
+    "vite-plugin-singlefile": "2.3.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
