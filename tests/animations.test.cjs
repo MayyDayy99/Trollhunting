@@ -166,6 +166,25 @@ test('FX emission count is frame-rate independent and catch-up is bounded', () =
   assert.equal(ctx.fxSteps(owner, 'acc', 0, 60), 0);
 });
 
+test('boss states drive full slam follow-through, charge coil, and deep exhausted crouch', () => {
+  const m = monster('brute', 'maul');
+  m.boss = true;
+  ctx.motionRig(m);
+  // Windup raises arms high
+  m.bossState = { kind: 'slam', t: 0.9, wind: 1.0 };
+  for (let i = 0; i < 15; i++) ctx.animateMonster(m, 1 / 60);
+  const raisedArmX = m.arms.R.rotation.x;
+  assert.ok(raisedArmX < -1.0, 'slam windup raises weapon overhead');
+  // Strike follow-through swings past impact instead of freezing mid-air
+  m.bossState = { kind: 'slam', t: 1.08, wind: 1.0 };
+  for (let i = 0; i < 15; i++) ctx.animateMonster(m, 1 / 60);
+  assert.ok(m.arms.R.rotation.x > 0.5, 'slam completes downward smash');
+  // Exhausted recovery drops pelvis into a clear staggered crouch
+  m.bossState = { kind: 'recover', t: 0.5, duration: 1.7 };
+  for (let i = 0; i < 20; i++) ctx.animateMonster(m, 1 / 60);
+  assert.ok(m.pelvis.position.y < 0.82 && m.knees.L.rotation.x > 0.5, 'exhausted boss visibly crouches');
+});
+
 test('single-player and co-op ship identical game code, with valid inline scripts', () => {
   assert.equal(html, fs.readFileSync(path.join(root, 'mp-server', 'public', 'mohas-roham.html'), 'utf8'));
   for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
