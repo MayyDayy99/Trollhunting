@@ -6,3 +6,4 @@ node_modules/
 dist/
 # generated: npm run build:mp (or the Docker build) copies dist/mohas-roham.html here
 mp-server/public/mohas-roham.html
+*.blend1
