@@ -19,9 +19,9 @@ I18N.en.ui={ runHint:'RUN', tabSet:'Settings', dash:'DASH', dashKey:'DASH · Q',
   tipPerfect:'<b>Perfect shot:</b> release the instant the crosshair ring turns <b>gold</b> — +30% damage. <b>Streak:</b> quick consecutive kills build a score multiplier.' };
 I18N.hu.combat={
   bow:'ÍJAK', equipped:'KÉZBEN', equip:'FELSZEREL', owned:'MEGVÉVE', rank:'MESTERSZINT {n}',
-  mastery:'Elemi ébredés', masteryEff:'Teljes húzáskor varázslat: I hullám, II nagyobb terület, III kataklizma. Rangok: H5 / H10 / H15.',
+  mastery:'Elemi ébredés', masteryEff:'Teljes húzáskor varázslat. A rangok összeadódnak: I varázslat + elemi jel, II + második réteg és reakció-robbantás, III + kataklizma (negyed / fél pálya). Sima nyíllal: I nyílkoszorú, II + nyíleső, III + nyílvihar. Rangok: H5 / H10 / H15.',
   ready:'VARÁZSLAT KÉSZ — TELJES HÚZÁS', cooldown:'VARÁZSLAT {n} mp',
-  spell:{fire:'LÁNGÁRADAT',ice:'JÉGTÜSKE',poison:'MÉREGÖRVÉNY',lightning:'ÉGI ÍTÉLET'},
+  spell:{fire:'LÁNGÁRADAT',ice:'JÉGFAL',poison:'MÉREGÖRVÉNY',lightning:'ÉGI ÍTÉLET'},
   phase:'TROLL KIRÁLY · {n}. FÁZIS', charge:'ROHAM — TÉRJ KI OLDALRA!',
   rocks:'KŐZÁPOR — HAGYD EL A JELÖLÉST!', roots:'TÖVISKERT — KERESS SZABAD UTAT!',
   exposed:'KIFÁRADT — ÍJSEBZÉS +50%', slam:'LÖKÉSHULLÁM — UGORJ VAGY TÉRJ KI!',
@@ -33,9 +33,9 @@ I18N.hu.combat={
 };
 I18N.en.combat={
   bow:'BOWS', equipped:'EQUIPPED', equip:'EQUIP', owned:'OWNED', rank:'MASTERY {n}',
-  mastery:'Elemental Awakening', masteryEff:'Full draw casts a spell: I wave, II wider area, III cataclysm. Ranks: W5 / W10 / W15.',
+  mastery:'Elemental Awakening', masteryEff:'Full draw casts a spell. Ranks stack: I spell + elemental mark, II + a second layer that detonates reactions, III + cataclysm (a quarter / half of the map). Base arrows: I arrow halo, II + arrow rain, III + arrow storm. Ranks: W5 / W10 / W15.',
   ready:'SPELL READY — FULL DRAW', cooldown:'SPELL {n}s',
-  spell:{fire:'FLAME SURGE',ice:'FROST SPIRES',poison:'VENOM VORTEX',lightning:'SKY JUDGMENT'},
+  spell:{fire:'FLAME SURGE',ice:'ICE WALL',poison:'VENOM VORTEX',lightning:'SKY JUDGMENT'},
   phase:'TROLL KING · PHASE {n}', charge:'CHARGE — DODGE SIDEWAYS!',
   rocks:'ROCKFALL — LEAVE THE MARKERS!', roots:'THORN GARDEN — FIND AN OPEN PATH!',
   exposed:'EXHAUSTED — BOW DAMAGE +50%', slam:'SHOCKWAVE — JUMP OR DASH!',

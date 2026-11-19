@@ -237,3 +237,18 @@ body.ingame #hud, body.ingame #elhud, body.ingame #ulthud, body.ingame #dmgnums,
 #coopWaitList li .pd{width:8px;height:8px;border-radius:50%;background:#5fe0ff;flex:none;box-shadow:0 0 6px rgba(95,224,255,.7);}
 #coopWaitList li.me{color:#ffe9c0;} #coopWaitList li.me .pd{background:#ffd27a;}
 #coopWaitList li .tag{margin-left:auto;font:700 10px/1 inherit;letter-spacing:.1em;color:#8fa6c9;text-transform:uppercase;}
+/* ELEM-TAKTIKA: elemi lánc a célkereszt alatt + hullám-ómen a hullám-kijelző alatt */
+#chainHud{position:fixed;left:50%;top:calc(50% + 44px);transform:translateX(-50%);z-index:6;pointer-events:none;text-align:center;text-shadow:var(--ts-hud);}
+#chainHud[hidden]{display:none;}
+#chainHud .pips{display:inline-flex;gap:6px;vertical-align:middle;margin-right:6px;}
+#chainHud .pips i{width:8px;height:8px;transform:rotate(45deg);border-radius:1px;box-shadow:0 0 8px currentColor,0 0 2px #000;}
+#chainHud b{font:700 15px/1 var(--f-disp);color:var(--gold);letter-spacing:.08em;vertical-align:middle;}
+#chainHud .t{display:block;width:74px;height:3px;margin:5px auto 0;border-radius:2px;background:var(--glass-deep);overflow:hidden;}
+#chainHud .t i{display:block;height:100%;background:linear-gradient(90deg,var(--ember),var(--gold));}
+#chainHud.pop b{animation:chainPop .35s ease-out;}
+@keyframes chainPop{0%{transform:scale(1.6);filter:brightness(1.8);}100%{transform:scale(1);filter:none;}}
+#omenHud{position:fixed;top:92px;left:50%;transform:translateX(-50%);z-index:6;pointer-events:none;padding:3px 11px;border-radius:10px;
+  background:var(--glass-deep);border:1px solid var(--line);font:600 11px/1.3 var(--f-body);color:var(--ink-sub);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;text-shadow:var(--ts-hud);}
+#omenHud[hidden]{display:none;}
+#omenHud.done{color:var(--gold);border-color:rgba(255,190,90,.5);}
+html.touch #omenHud{top:calc(78px * var(--u));font-size:9px;}

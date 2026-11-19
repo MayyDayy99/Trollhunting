@@ -117,9 +117,20 @@ function elementalImpact(pos, elKey, head){
 }
 // MÉREGTÓCSA: felülnézetes Blender flipbook a talajon (POISONPOOL, 15-fire-burst.js) a becsapódás ALATT, R = a valódi méreg-sugár
 // (a tócsa területe ~R sugarú kör, a kifröccsenő ujjak kicsit túlnyúlnak), körben lassan felszálló alacsony mérgező pára és buborék-pukkanások.
+const _poisonQ=[];   // késleltetett méregpárna-hullámok: a tócsa még ~2 mp-ig újra és újra felbugyog
+function poisonMounds(x,gy,z,R,n,durMul){   // a tócsa TELJES területéről felfelé növő, alacsony méregpárnák (nem lapos folt)
+  for(let i=0;i<n;i++){ const a=i/n*6.283+rand(-0.35,0.35), rr=R*rand(0.2,0.85);
+    POISONCLOUD.spawn(x+Math.cos(a)*rr,gy,z+Math.sin(a)*rr,R*rand(0.5,0.72),(durMul||1)*rand(1.0,1.45)); }
+}
 function poisonPool(x,y,z,R,durMul){
   const gy=flipbookGround(x,y,z), lowFx=gfxTier==='low';
   POISONPOOL.spawn(x,y,z,R*2.6,durMul);
+  // TÉRBELI MÉREG: középen magas felhő-oszlop, körben a tócsa egész területén felgomolygó méregpárnák,
+  // majd még két késleltetett hullám (a magas fűből is kilátszik) + felszálló koponya
+  POISONCLOUD.spawn(x,gy,z,R*1.25,durMul,0.3);
+  poisonMounds(x,gy,z,R,lowFx?3:6,durMul);
+  if(_poisonQ.length<24){ _poisonQ.push({t:0.55,x,gy,z,R,n:lowFx?2:4,d:durMul}); if(!lowFx) _poisonQ.push({t:1.15,x,gy,z,R:R*0.9,n:3,d:durMul}); }
+  POISONSKULL.spawn(x,gy+R*0.55+0.5,z,1.15,1,0.4);
   for(let i=0,n=lowFx?3:5;i<n;i++){ const a=i/n*6.283+rand(-0.4,0.4), rr=R*rand(0.7,0.95), ca=Math.cos(a), sa=Math.sin(a);
     SMK.spawn(x+ca*rr,gy+0.18,z+sa*rr, ca*0.18,rand(0.22,0.42),sa*0.18, pick([0x5e8f22,0x4f7d1c,0x6f9f2a]), 0.45*Math.sqrt(R),1.25*Math.sqrt(R), rand(1.3,1.9), -0.1,0.9, 0.34); }
   for(let i=0,n=lowFx?3:6;i<n;i++){ const a=rand(0,6.283), rr=R*0.7*Math.sqrt(Math.random());
@@ -272,10 +283,37 @@ function updateNockElement(){   // a nockolt nyíl FINOMAN mutassa az elemet —
   bowInlayMat.emissive.setHex(base?0x2b4254:def.glow); bowInlayMat.emissiveIntensity=base?0.25:1.0;   // íj-berakás az elem színében
   nockVis.el=currentElement; nockVis.elemHolder=na._elemHolder; nockVis.flames=null; buildElemHead(nockVis); na._flames=nockVis.flames;   // elem-specifikus fej (megosztott, nincs dispose/new)
 }
-function animateNock(t){   // finom, elem-megfelelő pulzálás feszítés közben
+const _nkP=new THREE.Vector3(), _nkD=new THREE.Vector3(), _nkOwner={}; let _nkT=null, _nkAcc=0;
+function animateNock(t){   // finom, elem-megfelelő pulzálás feszítés közben + LOOPOLT elem-animáció a nyílhegyen
   const na=nockArrow; if(!na._glow || currentElement==='base') return;
   na._glow.material.opacity=0.2*(0.6+0.4*Math.sin(t*7));
   if(na._flames) for(let i=0;i<na._flames.length;i++){ const sp=na._flames[i]; if(sp.material) sp.material.opacity=0.4+0.35*Math.abs(Math.sin(t*12+i)); }
+  // a hegyről világtérben induló apró részecskék (a játékos sebességével sodródnak, így a nyílon maradnak):
+  // tűz = lángnyelv + parázs + füstcsík, jég = keringő dér-csillogás + lefelé kúszó hideg pára,
+  // méreg = csöpögő cseppek + felszálló buborékok, villám = a hegyen pattogó apró ívek + szikrák. Teljes húzásnál sűrűbb.
+  const dt=_nkT==null?0:Math.min(0.05,Math.max(0,t-_nkT)); _nkT=t;
+  if(dt<=0 || !na.visible || !na._tip || !running) return;
+  na._tip.getWorldPosition(_nkP); camera.getWorldDirection(_nkD); _nkP.addScaledVector(_nkD,0.025);
+  const el=currentElement, k=0.45+0.55*Math.min(1,charge/RUNM.drawCap), vx=playerMotion.x, vz=playerMotion.z, x=_nkP.x, y=_nkP.y, z=_nkP.z;
+  if(el==='fire') VFX.hold(_nkOwner, x, y-0.035, z, 0.03+0.02*k, 0.1+0.12*k, VFX.PAL.fire, 0.95);
+  _nkAcc+=dt*(el==='lightning'?18:38)*k;
+  while(_nkAcc>=1){ _nkAcc-=1;
+    if(el==='fire'){
+      RP.spawn(x+rand(-0.02,0.02),y+rand(0,0.03),z+rand(-0.02,0.02), vx+rand(-0.1,0.1),rand(0.25,0.6),vz+rand(-0.1,0.1), pick([0xff8a3a,0xffc24d,0xfff1c4]), rand(0.022,0.038),0.004,rand(0.3,0.5),-0.5,1,0.95);
+      if(Math.random()<0.12) SMK.spawn(x,y+0.08,z,vx,0.25,vz,0x2a1c14,0.03,0.1,0.6,-0.3,1,0.22);
+    } else if(el==='ice'){
+      const a=rand(0,6.283), r=rand(0.025,0.07);
+      RP.spawn(x+Math.cos(a)*r,y+rand(-0.035,0.035),z+Math.sin(a)*r, vx,rand(-0.03,0.05),vz, pick([0xffffff,0xd8f2ff,0x9fdcff]), rand(0.02,0.034),0.002,rand(0.2,0.38),0.1,1,1);
+      if(Math.random()<0.18) SMK.spawn(x+rand(-0.03,0.03),y,z+rand(-0.03,0.03),vx+rand(-0.05,0.05),-0.08,vz+rand(-0.05,0.05),0xd6ecf8,0.035,0.12,rand(0.6,0.9),0.05,1,0.26);
+    } else if(el==='poison'){
+      if(Math.random()<0.3) RP.spawn(x+rand(-0.01,0.01),y-0.02,z+rand(-0.01,0.01), vx,rand(-0.05,0),vz, pick([0x9fdc4a,0x7ecb3a]), 0.026,0.016,rand(0.4,0.6),6,1,0.95);   // csöpögés
+      else RP.spawn(x+rand(-0.03,0.03),y+rand(-0.02,0.02),z+rand(-0.03,0.03), vx+rand(-0.04,0.04),rand(0.08,0.22),vz+rand(-0.04,0.04), pick([0xc8f26a,0xe2ff9a,0x9fdc4a]), rand(0.014,0.024),0.03,rand(0.3,0.5),-0.2,1,0.85);   // buborék
+      if(Math.random()<0.1) SMK.spawn(x,y+0.02,z,vx,0.08,vz,0x5e8f22,0.03,0.1,0.7,-0.1,1,0.3);
+    } else {
+      const a=rand(0,6.283), b=rand(-0.8,0.8), r=rand(0.06,0.14);
+      VFX.bolt(x,y,z, x+Math.cos(a)*r,y+b*r,z+Math.sin(a)*r, pick([0xd8ccff,0xb9a4ff,0xffffff]), 0.08, 0.02, 0.006, true);
+      if(Math.random()<0.6) VFX.streak(x,y,z, vx+rand(-0.8,0.8),rand(-0.2,0.8),vz+rand(-0.8,0.8), 0xd8ccff, rand(0.1,0.2),2,2,0.005,0.035);
+    } }
 }
 const _swV=new THREE.Vector3();
 function elementSwapFx(id){   // elemváltás: az íj megpördül, a markolat előtt az új elem színében szikra-koszorú villan

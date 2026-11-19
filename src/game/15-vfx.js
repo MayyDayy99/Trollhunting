@@ -339,7 +339,7 @@ const VFX=(function(){
     'void main(){ float sw=vUv.x+vUv.y*0.9+uTime*0.85; float n=texture2D(uNoise,vec2(sw*3.0+uSeed,vUv.y*1.1-uTime*0.55)).r; float n2=texture2D(uNoise,vec2(sw*6.0-uSeed,vUv.y*2.3-uTime*0.9)).r;'+
     ' float s=smoothstep(0.40,0.78,n*0.6+n2*0.4); float env=smoothstep(1.0,0.62,vUv.y)*smoothstep(0.0,0.10,vUv.y);'+
     ' float al=(0.10+0.90*s)*env*uAlpha; gl_FragColor=vec4(mix(uColA,uColB,s)*(1.0-0.5*uBloom)*al,al*0.45);'+TONE+'}';
-  const VX_N=3, vort=[]; let vxI=0;
+  const VX_N=6, vort=[]; let vxI=0;   // 6: a II. rangú méregörvény 3 mellék-örvényt is nyit
   { const geo=new THREE.CylinderGeometry(1,0.2,1,24,8,true); geo.translate(0,0.5,0);
     for(let i=0;i<VX_N;i++){ const mat=shader(VS_FUN,FS_FUN,{uNoise:{value:NOISE},uTime:U_TIME,uSeed:{value:Math.random()*9},uAlpha:{value:0},uBloom:BLOOM_PASS_U,uColA:{value:new THREE.Color(0x3f9a1c).convertSRGBToLinear()},uColB:{value:new THREE.Color(0xc4f86a).convertSRGBToLinear()}},HYB);
       const m=pooled(new THREE.Mesh(geo,mat),5); enableBloom(m); vort.push({m,u:mat.uniforms,d:null,age:0,max:0,r:1,h:1,x:0,z:0,acc:0}); } }

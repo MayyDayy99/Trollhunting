@@ -180,32 +180,65 @@ function queueSpell(e){
   if(spellEvents.length>=64) spellEvents.shift();
   spellEvents.push(e);
 }
+// JÉGFAL tüskesora: a játékos előtt indul alacsonyan, és a fal vége felé EXPONENCIÁLISAN nő (0,55 m -> 4,1–5,1 m), a csúcsok előredőlnek, mint egy megtörő hullám.
+// 2. rangtól két alacsonyabb oldalsor vastagítja a falat. Fába/kőbe ütközve a sor megáll.
+function iceWallSpikes(px,pz,fx,fz,dist,rank){
+  const end=clamp(dist,10,18+rank*2), n=Math.max(4,Math.round(end-2.5)+1), h0=0.55, h1=3.6+rank*0.5, k=Math.log(h1/h0), RM=Math.sqrt(RUNM.elemRadiusMul);
+  const rows=rank>=2?[0,-1,1]:[0], out=[];
+  for(const row of rows){ const side=row!==0, off=row*1.05*RM;
+    for(let i=0;i<n;i++){ if(side && i===n-1) break;
+      const t=n>1?i/(n-1):1, d=2.5+(end-2.5)*t+(side?0.5:0);
+      const h=h0*Math.exp(k*t)*(side?0.62:1)*rand(0.9,1.1), r=(0.1+h*0.18)*(side?0.85:1)*RM;   // karcsú tüskék: a kicsik sem lesznek pamacsszerűek
+      const x=px+fx*d-fz*off, z=pz+fz*d+fx*off;
+      if(sightBlocked(px,GROUND_Y+0.8,pz,x,GROUND_Y+0.8,z)) break;
+      const lean=0.06+0.3*t;
+      out.push({x,z,h,r,delay:i*0.035+(side?0.07:0),tiltX:fz*lean+rand(-0.07,0.07),tiltZ:-fx*lean+rand(-0.07,0.07),main:!side,final:!side&&i===n-1});
+    } }
+  return out;
+}
+/* ELEMI ÉBREDÉS — a rangok HALMOZÓDNAK: a magasabb rang nem cseréli le az előzőt, hanem vele együtt sül el.
+   I.  az alap-varázslat (lángsor / jégfal / méregörvény / égi csapás) — rangonként nagyobb
+   II. + második réteg (tűzgolyó-robbanás / fagylöket / 3 mellék-örvény / 4 mellékcsapás), és a varázslat-találatok
+       a megjelölt trollokon hűtés nélkül, teljes erővel kiváltják a reakciót
+   III.+ KATAKLIZMA, ha a töltése megtelt (17-tactics.js) */
 function castElementSpell(draw){
+  if(currentElement==='base'){ castBaseSpell(draw); return false; }   // sima nyíl: a szellemnyilak a rendes lövés MELLÉ jönnek (17-tactics.js)
   if(!spellReady() || draw<RUNM.drawCap*0.98) return false;
   const rank=RUN.awakening, el=currentElement, weapon=activeBow(), target=spellTarget();
-  const tx=target.x, tz=target.z;
+  const tx=target.x, tz=target.z, RM=RUNM.elemRadiusMul;
   const dmg=(18+draw*30)*RUNM.dmgMul*RUNM.elemPowerMul*weapon.spell*(perfectShot?1.3:1)*
     (player.witherT>0?TROLL_TYPES.shaman.witherDmgMul:1);
   spellCd=Math.max(2.2,7-rank-weapon.cooldown);
   const shared=new Set(), counter={hit:false}, px=player.pos.x, pz=player.pos.z;
   const vx=tx-px, vz=tz-pz, dist=Math.hypot(vx,vz)||1, fx=vx/dist, fz=vz/dist;
-  if(el==='fire'||el==='ice'){
-    const steps=2+rank, lanes=(el==='ice'&&rank>=2)||(el==='fire'&&rank>=3)?[-1,0,1]:[0];
+  if(el==='fire'){
+    const steps=2+rank, lanes=rank>=3?[-1,0,1]:[0], endD=Math.min(18,dist);
     for(let i=0;i<steps;i++){
-      const start=Math.min(2.5,dist), d=lerp(start,Math.min(18,dist),i/(steps-1));
-      const width=(el==='fire'?1.7+rank*0.45:1.3+rank*0.2)*RUNM.elemRadiusMul;
+      const start=Math.min(2.5,dist), d=lerp(start,endD,i/(steps-1));
+      const width=(1.7+rank*0.45)*RM;
       for(const lane of lanes){
         const x=px+fx*d-fz*lane*1.6, z=pz+fz*d+fx*lane*1.6;
         if(sightBlocked(px,GROUND_Y+0.8,pz,x,GROUND_Y+0.8,z)) continue;
         queueSpell({el,x,z,r:width,dmg:dmg*(0.9+rank*0.15),delay:i*0.09,rank,shared,counter,fx,fz,lane,final:i===steps-1&&lane===0});
       }
     }
+    if(rank>=2) queueSpell({el,x:px+fx*endD,z:pz+fz*endD,r:6*RM,dmg:dmg*1.1,delay:(steps-1)*0.09+0.16,rank,counter,blast:true});   // II: záró tűzgolyó-robbanás
+  } else if(el==='ice'){
+    const spikes=iceWallSpikes(px,pz,fx,fz,dist,rank), e={el,dmg:dmg*(0.9+rank*0.15),rank,shared,counter};
+    ICEWALL.spawnWall(spikes,{onRise:s=>resolveSpell(Object.assign({},e,{x:s.x,z:s.z,r:s.r+0.35,wallSpike:true,final:s.final}))});
+    if(rank>=2){ const last=spikes.filter(s=>s.main).pop()||{x:tx,z:tz,delay:0};   // II: fagylöket a fal végén
+      queueSpell({el,x:last.x,z:last.z,r:7*RM,dmg:dmg*0.8,delay:last.delay+0.3,rank,counter,nova:true}); }
   } else if(el==='poison'){
-    const pulses=3+rank, rad=(2.5+rank*0.65)*RUNM.elemRadiusMul;
+    const pulses=3+rank, rad=(2.5+rank*0.65)*RM;
     VFX.vortex(tx,tz,rad,(pulses-1)*0.4+0.75,2.6+rank*0.7);
     for(let i=0;i<pulses;i++) queueSpell({el,x:tx,z:tz,r:rad,dmg:dmg*0.28,delay:i*0.4,rank,counter,final:i===pulses-1});
+    if(rank>=2){ const a0=Math.atan2(fz,fx)+0.5;   // II: három mellék-örvény a fő örvény körül
+      for(let k=0;k<3;k++){ const a=a0+k*2.094, sx=tx+Math.cos(a)*4.8*RM, sz=tz+Math.sin(a)*4.8*RM;
+        if(sightBlocked(tx,GROUND_Y+0.8,tz,sx,GROUND_Y+0.8,sz)) continue;
+        VFX.vortex(sx,sz,2.2*RM,1.95,1.9);
+        for(let i=0;i<3;i++) queueSpell({el,x:sx,z:sz,r:2.3*RM,dmg:dmg*0.2,delay:0.3+i*0.45+k*0.1,rank,counter,sat:true}); } }
   } else {
-    const rad=(2.4+rank*0.55)*RUNM.elemRadiusMul;
+    const rad=(2.4+rank*0.55)*RM;
     queueSpell({el,x:tx,z:tz,r:rad,dmg:dmg*1.25,delay:0.22,rank,counter});
     // előjel: összehúzódó célgyűrű + halvány vezetőcsatorna az égből + a talajról felszálló töltés-szikrák
     VFX.ring(tx,GROUND_Y+0.07,tz,0xb9a4ff,rad,0.3,0.22,0.9);
@@ -213,6 +246,8 @@ function castElementSpell(draw){
     VFX.bolt(tx+rand(-2,2),GROUND_Y+16,tz+rand(-2,2),tx,GROUND_Y+0.2,tz,0x8f7ae0,0.2,0.5,0.045,true);
     for(let i=0;i<10;i++){ const a=rand(0,6.28), rr=rand(0.2,rad*0.85);
       VFX.streak(tx+Math.cos(a)*rr,GROUND_Y+0.1,tz+Math.sin(a)*rr, 0,rand(3,7),0, 0xd8ccff, 0.26,-2,0.8,0.016,0.07); }
+    if(rank>=2) for(let k=0;k<4;k++){ const a=k*1.5708+rand(-0.3,0.3), sx=tx+Math.cos(a)*4.5*RM, sz=tz+Math.sin(a)*4.5*RM;   // II: négy sebző mellékcsapás
+      queueSpell({el,x:sx,z:sz,r:2.3*RM,dmg:dmg*0.75,delay:0.42+k*0.09,rank,counter,side:true}); }
   }
   // varázs-indítás az íjnál: elem-színű csillagvillanás a húr előtt + a cél felé kilövellő szikrák
   { const col=EL[el].fx, mx=camera.position.x+_spDir.x*1.5, my=camera.position.y+_spDir.y*1.5-0.12, mz=camera.position.z+_spDir.z*1.5;
@@ -222,6 +257,7 @@ function castElementSpell(draw){
   bowKick=1; bowKickRot=1; spellKick=1; relTwang=0.18;
   if(AUD.spell) AUD.spell(el,rank); else if(AUD.twang) AUD.twang(draw);
   buzz(45);
+  if(rank>=3 && cataReady()) castCataclysm(el,px,pz,fx,fz,dmg);   // III: KATAKLIZMA a többi réteggel együtt
   return true;
 }
 function bossDamageMultiplier(m){ return m.boss && m.bossState && m.bossState.kind==='recover'?1.5:1; }
@@ -233,12 +269,23 @@ function hitWithSpell(m,e,mul){
   m.hp-=dmg;
   m.hurtFlash=0.22;
   const pos={x:m.g.position.x,y:m.g.position.y+m.bodyCY,z:m.g.position.z};
-  if(!elementMechanic(pos,e.el,m,dmg,false,m.statusEl,1,false,true)) applyStatus(m,e.el,1,e.el==='ice'?e.rank:1);
+  if(!elementMechanic(pos,e.el,m,dmg,false,m.statusEl,1,e.rank>=2,true)) applyStatus(m,e.el,1,e.el==='ice'?e.rank:1);   // II. rangtól a jelölt trollon hűtés nélkül sül el a reakció
   if(m.hp<=0 && m.alive) killMonster(m,false);
 }
 function resolveSpell(e){
   const y=GROUND_Y+0.1, main=!e.lane, P=VFX.PAL;   // main: a középső sáv (a szélső sávok könnyebb látványt kapnak -> nem fogy ki az effekt-készlet)
   if(e.el==='fire'){
+    if(typeof ICEWALL!=='undefined') ICEWALL.fireAt(e.x,e.z,e.r,e.dmg);   // a láng a jégfalba csap -> végigfutó gőzrobbanás
+    if(e.blast){   // II. RÉTEG: záró TŰZGOLYÓ-robbanás a lángsor végén (Blender tűz-flipbook + tűzgolyó + lökéshullám + égő talaj)
+      FIREBURST.spawn(e.x,y+e.r*0.32,e.z,e.r*1.25); VFX.ball(e.x,y+0.9,e.z,e.r*0.22,e.r*0.82,0.6,P.fire);
+      VFX.flare(e.x,y+1.3,e.z,0xffb35a,e.r*1.5,0.26); VFX.ring(e.x,y,e.z,0xff7a2a,0.4,e.r*1.15,0.5,0.85); EFX.ring(e.x,GROUND_Y+0.06,e.z,0xffc24d,0.3,e.r*0.75,0.4,0.6);
+      VFX.decal(e.x,GROUND_Y,e.z,e.r*0.85,1,0x120805,0.85,8,0xff6a1a,3);
+      VFX.spray(e.x,y+0.5,e.z,24,[0xffe9a8,0xffa63d,0xff5a1a],12,{up:0.2,lift:3,life:0.8,grav:8,w:0.024,len:0.06});
+      for(let i=0;i<5;i++) SMK.spawn(e.x+rand(-1,1),y+rand(1,2.5),e.z+rand(-1,1),rand(-0.8,0.8),rand(1,2),rand(-0.8,0.8),0x241610,0.8,e.r*0.7,rand(1,1.4),-0.8,0.9,0.42);
+      if(EFX.light) EFX.light(e.x,y+2,e.z,0xff8a3d,7,0.42);
+      if(typeof shake==='number') shake=Math.max(shake,0.42);
+      if(typeof spawnZone==='function') spawnZone('fire',e.x,e.z,{});
+    } else {
     // LÁNGHULLÁM: a talajból kitörő tűzoszlop + táguló tűzgolyó + izzó repedés + szikra-eső + utófüst
     const h=1.5+e.rank*0.62;
     VFX.flame(e.x,GROUND_Y,e.z,e.r*(main?0.62:0.5),h*(main?1.95:1.5),0.68,P.fire,1);
@@ -256,7 +303,20 @@ function resolveSpell(e){
       RP.spawn(e.x+Math.cos(a)*e.r*0.4,y+rand(0.4,h),e.z+Math.sin(a)*e.r*0.4, Math.cos(a)*sp,rand(1.6,3.6),Math.sin(a)*sp, pick([0xff8a3a,0xffc24d,0xfff1c4]), rand(0.16,0.3),0.02,rand(0.6,1.1),-1.2,1.1); }
     SMK.spawn(e.x,y+h*0.9,e.z,rand(-0.4,0.4),1.5,rand(-0.4,0.4),0x241610,0.6,e.r*1.1,0.9,-0.9,1,0.36);
     if(e.final && e.rank>=2 && typeof spawnZone==='function') spawnZone('fire',e.x,e.z,{});
+    }
   } else if(e.el==='ice'){
+    if(e.nova){   // II. RÉTEG: FAGYLÖKET a jégfal végén — táguló dér-gyűrű, kifelé dőlő kristálykoszorú, fagyos pára, dér-zóna; a benne állók befagynak
+      EFX.ring(e.x,GROUND_Y+0.05,e.z,0xbfe6ff,0.5,e.r,0.55,0.9); VFX.ring(e.x,y,e.z,0xffffff,0.3,e.r*0.7,0.42,0.7);
+      VFX.flare(e.x,y+1.1,e.z,0xdff4ff,e.r*0.8,0.26);
+      for(let i=0;i<7;i++){ const a=i/7*6.283+rand(-0.2,0.2), rr=e.r*rand(0.45,0.7), ca=Math.cos(a), sa=Math.sin(a);
+        VFX.crystal(e.x+ca*rr,GROUND_Y-0.04,e.z+sa*rr,rand(0.45,0.7),rand(1.0,1.7),1.0+rand(0,0.3),sa*0.45,-ca*0.45,i%2===1); }
+      VFX.spray(e.x,y+0.3,e.z,26,[0xffffff,0xbfe9ff,0x8fd4ff],11,{up:0.1,life:0.55,grav:12,w:0.022,len:0.04});
+      for(let i=0;i<6;i++){ const a=rand(0,6.283), rr=rand(0.5,e.r*0.8); SMK.spawn(e.x+Math.cos(a)*rr,y+0.25,e.z+Math.sin(a)*rr,Math.cos(a)*1.2,0.25,Math.sin(a)*1.2,0xd6ecf8,0.8,2.6,1.3,-0.1,1,0.32); }
+      VFX.decal(e.x,GROUND_Y,e.z,e.r*0.9,0,0xd2ecfa,0.6,9);
+      if(EFX.light) EFX.light(e.x,y+1.4,e.z,0x8fd8ff,6,0.4);
+      if(typeof shake==='number') shake=Math.max(shake,0.3);
+      if(typeof spawnZone==='function') spawnZone('frost',e.x,e.z,{});
+    } else if(!e.wallSpike){   // (régi, egyedi jégtüske — a jégfal tüskéit a ICEWALL rajzolja)
     // JÉGTÖVISEK: a hullám irányába dőlő kristályfürt tör ki, megáll, majd szilánkokra pattan; alatta dér-folt, körülötte fagyos pára
     const h=1.55+e.rank*0.62, tiltX=(e.fz||0)*0.26, tiltZ=-(e.fx||0)*0.26;
     VFX.crystal(e.x,GROUND_Y-0.04,e.z,e.r*(main?1.0:0.78),h*(main?1.25:1.0),0.9+rand(0,0.2),tiltX,tiltZ,false);
@@ -270,16 +330,18 @@ function resolveSpell(e){
     }
     VFX.spray(e.x,y+0.3,e.z,main?10:5,[0xffffff,0xbfe9ff,0x8fd4ff],6.5,{up:0.1,life:0.45,grav:13,w:0.022,len:0.03});
     SMK.spawn(e.x+rand(-0.4,0.4),y+0.25,e.z+rand(-0.4,0.4),rand(-0.5,0.5),0.3,rand(-0.5,0.5),0xcfe8f6,0.5,e.r*1.3,0.9,-0.1,1,0.26);
+    }
     if(e.final && e.rank>=3 && typeof spawnZone==='function') spawnZone('frost',e.x,e.z,{});
   } else if(e.el==='poison'){
     // MÉREGÖRVÉNY-lüktetés: befelé húzó gyűrű + középre csavarodó spóra-csíkok + felbuggyanó méregbuborék
     VFX.ring(e.x,y,e.z,0x9fdc4a,e.r,0.3,0.4,0.7);
-    VFX.ball(e.x,y+0.5,e.z,0.3,e.r*0.38,0.32,P.toxic);
+    POISONCLOUD.spawn(e.x+rand(-0.4,0.4),GROUND_Y,e.z+rand(-0.4,0.4),e.r*(e.sat?0.8:0.95),0.75);   // a pulzus felfelé gomolygó méregfelhőt lök ki (a régi zöld gömb helyett)
     for(let i=0;i<12;i++){ const a=i/12*6.283+rand(0,0.5), ca=Math.cos(a), sa=Math.sin(a);
       VFX.streak(e.x+ca*e.r*0.95,y+rand(0.1,0.6),e.z+sa*e.r*0.95, -ca*5.2-sa*3.4,rand(0.6,2.2),-sa*5.2+ca*3.4, pick([0x7ecb3a,0xb8f25a,0xe2ff9a]), rand(0.3,0.5),-1,1.0,0.02,0.07); }
     SMK.spawn(e.x+rand(-0.5,0.5),y+0.45,e.z+rand(-0.5,0.5),0,0.55,0,0x3c5a1c,0.55,e.r*1.15,0.8,-0.5,1,0.3);
     if(e.final){   // az örvény összeomlik: méregrobbanás, szétfröccsenő cseppek, maradandó tócsa + gázfelhő
-      VFX.ball(e.x,y+0.6,e.z,e.r*0.25,e.r*0.9,0.5,P.toxic);
+      POISONCLOUD.spawn(e.x,GROUND_Y,e.z,e.r*1.6,1.2); for(let i=0;i<3;i++){ const a=i*2.094+rand(0,1); POISONCLOUD.spawn(e.x+Math.cos(a)*e.r*0.6,GROUND_Y,e.z+Math.sin(a)*e.r*0.6,e.r*0.9,1.1); }
+      POISONSKULL.spawn(e.x,GROUND_Y+e.r*0.8+0.6,e.z,1.3);
       VFX.ring(e.x,y+0.04,e.z,0xd8ff7a,0.3,e.r*1.3,0.52,0.85);
       VFX.flare(e.x,y+0.8,e.z,0xd8ff9a,e.r*1.5,0.22);
       VFX.spray(e.x,y+0.4,e.z,18,[0x9fdc4a,0xc8f060,0x5fae2a],8,{up:0.2,lift:2,life:0.7,grav:11,w:0.028,len:0.05});
@@ -287,15 +349,18 @@ function resolveSpell(e){
       if(EFX.light) EFX.light(e.x,y+1.2,e.z,0x9fdc4a,3.5,0.3);
       if(typeof spawnZone==='function') spawnZone('gas',e.x,e.z,{});
     }
+  } else if(e.side){   // II. RÉTEG: sebző MELLÉKCSAPÁS a fő csapás körül
+    skyStrike(e.x,e.z,1.05);
+    VFX.ring(e.x,y+0.04,e.z,0xd8ccff,0.3,e.r*1.1,0.36,0.8);
+    if(EFX.light) EFX.light(e.x,y+2,e.z,0xc8b4ff,4,0.28);
+    if(typeof shake==='number') shake=Math.max(shake,0.24);
   } else {
-    // VIHARCSAPÁS: fő villám az égből + a talajon szétfutó ívek + (2. rangtól) késleltetett mellékcsapások
+    // VIHARCSAPÁS: fő villám az égből + a talajon szétfutó ívek (2. rangtól a sebző mellékcsapások külön eseményként jönnek)
     skyStrike(e.x,e.z,1.5);
     VFX.bolt(e.x+rand(-2.5,2.5),y+17,e.z+rand(-2.5,2.5),e.x,y+0.1,e.z,0xffffff,0.24,0.75,0.12);
     VFX.ring(e.x,y+0.04,e.z,0xffffff,0.3,e.r*1.15,0.4,0.9);
     for(let b=0;b<5+e.rank*2;b++){ const a=b/(5+e.rank*2)*6.283+rand(-0.3,0.3), rr=e.r*rand(0.6,1.1);
       VFX.bolt(e.x,y+0.2,e.z, e.x+Math.cos(a)*rr,y+0.06,e.z+Math.sin(a)*rr, b%2?0xd8ccff:0xa98cff, rand(0.22,0.36), 0.28, 0.045, true); }
-    if(e.rank>=2){ for(let b=0;b<e.rank;b++){ const a=b/e.rank*6.283+rand(0,2), rr=e.r*rand(0.6,0.85);
-      laterStrike(0.09+b*0.08,e.x+Math.cos(a)*rr,e.z+Math.sin(a)*rr,0.75); } }
     if(EFX.light) EFX.light(e.x,y+2.5,e.z,0xc8b4ff,6.5+e.rank*1.2,0.36);
     if(typeof shake==='number') shake=Math.max(shake,0.32+e.rank*0.09);
   }
@@ -316,9 +381,11 @@ function resolveSpell(e){
     }
     hitWithSpell(m,e,1); hit=true;
   }
-  if(e.el==='lightning'){
+  if(e.nova){ for(const m of near) if(m.alive && !m.boss && !m.elite && !coopIsRemote(m)) freezeFull(m); }   // fagylöket: a kicsik befagynak
+  if(e.el==='lightning' && !e.side){
+    const cap=e.rank>=2?6:2+e.rank;   // II. rangtól 6 trollra ugrik át
     for(const m of nearestTrolls(e.x,e.z,null,6+e.rank*2,12)){
-      if(near.includes(m) || strikes>=2+e.rank) continue;
+      if(near.includes(m) || strikes>=cap) continue;
       if(sightBlocked(prev.x,prev.y,prev.z,m.g.position.x,m.g.position.y+m.bodyCY,m.g.position.z)) continue;
       VFX.bolt(prev.x,prev.y,prev.z,m.g.position.x,m.g.position.y+m.bodyCY,m.g.position.z,0xb9a4ff,0.26,0.4);
       VFX.flare(m.g.position.x,m.g.position.y+m.bodyCY,m.g.position.z,0xd8ccff,1.4,0.18);
@@ -344,7 +411,7 @@ function updateArsenalHud(){
   const el=document.getElementById('arsenalHud');
   el.hidden=!!coop || !running || !player.alive;
   if(el.hidden) return;
-  const status=RUN.awakening>0 && currentElement!=='base'?' · '+tr('combat.rank',{n:RUN.awakening})+' · '+
+  const status=RUN.awakening>0?' · '+tr('combat.rank',{n:RUN.awakening})+' · '+
     (spellCd<=0?tr('combat.ready'):tr('combat.cooldown',{n:Math.ceil(spellCd)})):'';
   const text=tr('combat.bows.'+equippedBow)[0]+status;
   if(text!==arsenalText){ arsenalText=text; el.textContent=text; }
@@ -357,6 +424,7 @@ function startWave(n){
   spawnAngles=[]; for(let i=0;i<toSpawn;i++) spawnAngles.push(CAVES[(Math.random()*CAVES.length)|0].ang); // FÁZIS 5: barlang-irányok a radar-előrejelzéshez
   setWaveHud(n); AUD.wave(); toast(bossPending?tr('ui.bossWave',{n:n}):(eliteToSpawn?tr('toast.eliteWave',{n:n,count:eliteToSpawn}):tr('toast.wave',{n:n})));
   resetHpOrbs();   // FÁZIS 4: minden hullám frissíti az élet-gömböket (fenntartás)
+  startOmen(n);    // ELEM-TAKTIKA: a hullám opcionális ómen-feladata
 }
 function pickTrollType(){
   const w=wave, haveShaman=monsters.some(m=>m.alive && m.typeId==='shaman');
@@ -386,7 +454,7 @@ function spawnMonster(){
   if(isElite && !(id==='grunt'||id==='brute'||id==='spitter'||id==='wisp')) id=pick(['grunt','grunt','brute','spitter','wisp']);   // elit sámán/kobold kizárva (frusztráló)
   const T=TROLL_TYPES[id];
   // GÖRBE: lineáris a futam alatt + enyhe rásegítés w20 után + négyzetes fal a w25-ös erő-csúcs után (endless mód) — SP-tükör; a co-op HP-t az mp-server/server.js sorsolja (régi képlet)!
-  const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=24+wave*8+Math.max(0,wave-5)*3+6*Math.max(0,wave-20)+0.35*Math.pow(Math.max(0,wave-25),2), baseSp=(1.9+wave*0.12)*rand(0.85,1.15);
+  const baseSc=rand(0.85,1.15)*(1+wave*0.012), baseHp=waveBaseHp(wave), baseSp=(1.9+wave*0.12)*rand(0.85,1.15);
   const sc=baseSc*T.scaleMul*(isBoss?1.9:(isElite?1.3:1)), hp=Math.round(baseHp*T.hpMul*(isBoss?4.5:(isElite?2.8:1))), sp=Math.min(baseSp*T.speedMul*(isBoss?0.9:1), T.speedCap);   // elit: nagyobb + szívósabb, de NEM gyorsabb (kite-olható)
   const m=makeMonster(id, sc, hp, sp, rollMonsterEl(id));
   if(isElite){ m.elite=true; m.dmgMul*=1.5;   // elit: ×1.5 sebzés + arany aura + izzóbb szem
@@ -398,6 +466,7 @@ function spawnMonster(){
     aura.scale.setScalar(3.0); aura.position.y=(m.bodyCY||1.1)/(m.scale||1); m.g.add(aura); m.eliteAura=aura;   // a csoport már skálázott -> itt NEM szorzunk újra
     if(m.eyes) m.eyes.forEach(e=>e.material.emissiveIntensity=(e.material.emissiveIntensity||1)*1.8);
     const bn=bossBarEl.querySelector('.bn'); if(bn) bn.textContent=tr('ui.boss'); bossFill.style.width='100%'; bossBarEl.classList.add('on'); shake=Math.max(shake,0.5); }
+  if((isElite||isBoss) && !coop) giveArmor(m);   // ELEM-TAKTIKA: elemi páncél, csak a jelzett reakció töri át
   const inx=-cave.x/R_CAVE, inz=-cave.z/R_CAVE;   // befelé (központ felé) egységvektor
   m.g.position.set(cave.x + inx*2.4 + rand(-0.9,0.9), GROUND_Y, cave.z + inz*2.4 + rand(-0.9,0.9));   // a barlang szája előtt bújik elő, majd befelé indul
   monsters.push(m); aliveCount++; trollSpawnFx(m);
