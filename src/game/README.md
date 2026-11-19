@@ -33,6 +33,8 @@ kivágott kódrészek akkor is működnek, ha egy függvény fájlhatáron átny
 | 15-fire-burst | Blender adat-atlasz betöltő (`loadDataAtlas`), flipbook-gyár (`makeFlipbook`: egy instanced háló + egy közös shader) és a négy Blender flipbook: tűz-robbanás (`FIREBURST`), talajon fekvő méregtócsa (`POISONPOOL`, talaj-mód), porfelhő (`DUSTPOOF`), villám-csillag (`ZAPBURST`) |
 | 15-vfx | effekt-rétegek és VFX-készlet; az `SMK` füst a Blender füstpamacs-atlaszból rajzol |
 | 16-elements, 17-freeze-reactions | elemi rendszer, fagyás, zónák, reakciók |
+| 17-tactics | elem-taktika (csak egyjátékos): reakció-jutalom, elemi lánc, elemi páncél, hullám-ómen, jégfal (Blender-tüskék), kataklizma, reakció-robbanások, elemi jelek, sima nyíl ébredése (szellemnyilak: koszorú, eső, vihar), taktika-HUD |
+| 18-gravhand | gravitációs bal kéz (a közelharc helyett, SP): felemelés → döngölés → ellökés kombó, Blender-kéz a kamerán + óriás varázskéz |
 | 18-troll-projectiles, 19-troll-looks | troll-lövedékek, sámán, HP-csíkok, troll-megjelenés, `makeMonster` |
 | 20-audio-input | hang, bemenet (egér, billentyű, érintés) |
 | 21-hud-mechanics | HUD, kitérés, Troll Király veszélyzónái |

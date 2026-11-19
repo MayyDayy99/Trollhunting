@@ -31,7 +31,7 @@ function harness() {
     // The pooled shader VFX kit is presentation-only: every call is a no-op here.
     VFX: new Proxy({ PAL: {} }, { get: (t, k) => (k in t ? t[k] : () => null) }),
     FIREBURST: { spawn() {}, update() {}, reset() {} },   // the Blender flipbooks are presentation-only too
-    POISONPOOL: { spawn() {}, update() {}, reset() {} }, poisonPool() {}, DUSTPOOF: { spawn() {}, update() {}, reset() {} }, ZAPBURST: { spawn() {}, update() {}, reset() {} },
+    POISONPOOL: { spawn() {}, update() {}, reset() {} }, poisonPool() {}, POISONCLOUD: { spawn() {}, update() {}, reset() {} }, POISONSKULL: { spawn() {}, update() {}, reset() {} }, DUSTPOOF: { spawn() {}, update() {}, reset() {} }, ZAPBURST: { spawn() {}, update() {}, reset() {} },
     GROUND_Y: 0, SLAM_R: 9, SOLIDS: [], monsters: [], coop: false,
     player: { pos: new Vec(0, 1.7, 0), feet: 0, alive: true, witherT: 0 },
     camera: { position: new Vec(0, 1.7, 0), getWorldDirection: v => v.set(0, -0.1, -1) },
@@ -49,6 +49,10 @@ function harness() {
     pushMob: (x, z) => ({ x, z }), meleeBase: () => 10,
     document: { querySelector: () => null },
     damagePlayerFrom: (m, d) => { ctx.damageTaken += d; }, damageTaken: 0,
+    // the ice wall and the cataclysm live in 17-tactics.js (instanced meshes); here we only record what the spell asked for
+    ICEWALL: { spawnWall(spikes, opt) { ctx.walls.push({ spikes, opt }); }, fireAt() {} }, walls: [],
+    castBaseSpell: () => { ctx.baseCasts++; return true; }, baseCasts: 0,
+    cataReady: () => ctx.cataReadyFlag, cataReadyFlag: false, castCataclysm(el) { ctx.cataCasts.push(el); }, cataCasts: [],
   });
   vm.runInContext(between('let running=false, wave=0', 'function sightBlocked('), ctx);
   vm.runInContext(between('function sightBlocked(', 'function startWave('), ctx);
@@ -115,6 +119,7 @@ test('full draw replaces arrows only with learned, ready single-player elemental
   assert.equal(c.castElementSpell(0.7), false);
   c.currentElement = 'base';
   assert.equal(c.castElementSpell(1), false);
+  assert.equal(c.baseCasts, 1, 'base arrows route to the arrow halo, and the normal arrow still fires');
   c.currentElement = 'fire';
   c.coop = true;
   assert.equal(c.castElementSpell(1), false);
@@ -132,21 +137,59 @@ test('full draw replaces arrows only with learned, ready single-player elemental
 });
 
 test('mastery expands actual attack shapes and poison pulses instead of just arrow damage', () => {
+  let last;
   const cast = (el, rank) => {
-    const c = harness();
+    const c = harness(); last = c;
     c.currentElement = el; c.game.RUN.awakening = rank;
     c.castElementSpell(1);
     return c.game.spellEvents;
   };
-  const fire1 = cast('fire', 1), fire3 = cast('fire', 3), ice2 = cast('ice', 2);
+  const fire1 = cast('fire', 1), fire3 = cast('fire', 3);
   assert.equal(fire1.length, 3);
-  assert.equal(fire3.length, 15);
+  assert.equal(fire3.length, 16, 'rank III keeps the 3-lane flame wave and adds the rank II fireball');
   assert.ok(fire3.some(e => e.x !== 0), 'third-tier flame wave has side lanes');
-  assert.equal(ice2.length, 12);
-  assert.ok(ice2.some(e => e.x > 0) && ice2.some(e => e.x < 0));
+  assert.equal(fire3.filter(e => e.blast).length, 1);
   assert.equal(cast('poison', 1).length, 4);
-  assert.equal(cast('poison', 3).length, 6);
-  assert.ok(cast('lightning', 3)[0].r > cast('lightning', 1)[0].r);
+  assert.equal(cast('poison', 3).length, 15, 'rank III keeps the 6-pulse vortex and adds three satellite vortices');
+  const l1 = cast('lightning', 1), l3 = cast('lightning', 3);
+  assert.ok(l3[0].r > l1[0].r);
+  assert.equal(l1.length, 1);
+  assert.equal(l3.filter(e => e.side).length, 4, 'rank II+ adds four damaging side strikes');
+});
+
+test('the ice spell raises an exponentially growing wall; rank II thickens it and adds a frost nova', () => {
+  const wall = rank => {
+    const c = harness();
+    c.currentElement = 'ice'; c.game.RUN.awakening = rank;
+    c.castElementSpell(1);
+    return { c, w: c.walls[0], ev: c.game.spellEvents };
+  };
+  const one = wall(1), two = wall(2);
+  const main = one.w.spikes.filter(s => s.main);
+  assert.equal(one.w.spikes.length, main.length, 'rank I is a single row');
+  assert.ok(main.length >= 8);
+  for (let i = 2; i < main.length; i++) assert.ok(main[i].h > main[i - 2].h, 'the wall grows away from the player');
+  const n = main.length, mid = main[(n - 1) >> 1].h;
+  assert.ok(mid < (main[0].h + main[n - 1].h) / 2 * 0.7, 'exponential: the middle stays well below the linear midpoint');
+  assert.ok(main[main.length - 1].h > main[0].h * 5);
+  assert.ok(main[0].h < 0.6 && main[main.length - 1].h > 3);
+  assert.equal(main.filter(s => s.final).length, 1);
+  assert.equal(one.ev.length, 0);
+  assert.ok(two.w.spikes.some(s => !s.main), 'rank II adds side rows');
+  assert.equal(two.ev.filter(e => e.nova).length, 1);
+  assert.equal(typeof two.w.opt.onRise, 'function');
+});
+
+test('rank III adds the cataclysm on top of the regular spell only when it is charged', () => {
+  const c = harness();
+  c.currentElement = 'fire'; c.game.RUN.awakening = 3;
+  c.castElementSpell(1);
+  assert.deepEqual(c.cataCasts, []);
+  assert.equal(c.game.spellEvents.length, 16);
+  c.updateSpells(9); c.game.spellEvents.length = 0; c.cataReadyFlag = true;
+  c.castElementSpell(1);
+  assert.deepEqual(c.cataCasts, ['fire']);
+  assert.equal(c.game.spellEvents.length, 16, 'the earlier layers still fire with the cataclysm');
 });
 
 test('spell damage respects absorption, resistance, frozen vulnerability, recovery and remote authority', () => {
@@ -291,4 +334,74 @@ test('stunning boss preserves exhausted +50% window, prevents 0s recast, and kee
   const spitter = Object.assign(boss(), { typeId: 'spitter', seed: 3 });
   const h = c.tacticalHeading(spitter, 0.1, 0, -12, 12);
   assert.ok(Math.abs(h.z) < 1e-6 && Math.abs(Math.abs(h.x) - 1) < 1e-6);
+});
+
+function tactics() {
+  const ctx = vm.createContext({
+    coop: false, now: 100, performance: { now: () => ctx.now * 1000 },
+    RUN: { awakening: 0 }, RUNM: { scoreMul: 1 }, score: 0, wave: 6,
+    addScore(n) { ctx.score += n; }, toast() {}, callout() {}, tr: k => k,
+  });
+  vm.runInContext(between('const TAC_REACT_MUL', '/* --- JÉGFAL-KÉSZLET --- */'), ctx);
+  vm.runInContext('this.T={CHAIN,CATA,OMEN}', ctx);
+  return ctx;
+}
+test('reactions pay off and a chain of different elements builds x1.25 / x1.5 / x2', () => {
+  const c = tactics(), m = {};
+  assert.equal(c.tacticReaction('steam', 'fire', m), 1.6);
+  assert.equal(c.tacticReaction('overload', 'lightning', m), 1.6 * 1.25);
+  assert.equal(c.tacticReaction('overload', 'lightning', m), 1.6 * 1.25, 'the same element again does not grow the chain');
+  c.now += 1;
+  assert.equal(c.tacticReaction('ignite', 'poison', m), 1.6 * 1.5);
+  assert.equal(c.tacticReaction('frostrot', 'ice', m), 1.6 * 2);
+  assert.equal(c.tacticReaction('steam', 'fire', m), 1.6 * 2, 'x2 is the cap');
+  assert.ok(c.score > 0, 'chain reactions give score');
+  c.now += 4.5;
+  assert.equal(c.tacticReaction('steam', 'ice', m), 1.6, 'the chain breaks after 4 s');
+  c.coop = true;
+  assert.equal(c.tacticReaction('steam', 'ice', m), 1, 'co-op keeps the server numbers');
+});
+test('elemental armor takes 30% of every hit until its key reaction breaks it', () => {
+  const c = tactics(), m = { hp: 1000, maxHp: 1000 };
+  c.giveArmor(m);
+  assert.ok(m.armor);
+  m.hp -= 100;
+  assert.equal(m.hp, 970);
+  m.hp = Math.min(m.maxHp, m.hp + 20);
+  assert.equal(m.hp, 990, 'healing is not reduced');
+  const wrong = m.armor.rid === 'steam' ? 'ignite' : 'steam';
+  c.tacticReaction(wrong, 'fire', m);
+  assert.ok(m.armor, 'another reaction does not break it');
+  c.tacticReaction(m.armor.rid, 'ice', m);
+  assert.equal(m.armor, null);
+  m.hp -= 100;
+  assert.equal(m.hp, 890);
+});
+test('the cataclysm charges over time and from reactions; omens reward a reaction count', () => {
+  const c = tactics();
+  c.cataAdd(1);
+  assert.equal(c.T.CATA.charge, 0, 'no charge before rank III');
+  c.RUN.awakening = 3;
+  for (let i = 0; i < 7; i++) c.tacticReaction('steam', i % 2 ? 'fire' : 'ice', {});
+  assert.equal(c.cataReady(), false);
+  c.tacticReaction('steam', 'fire', {});
+  assert.equal(c.cataReady(), true, '8 reactions fill the gauge');
+  c.startOmen(2);
+  assert.equal(c.T.OMEN.rid, null, 'no omen before wave 3');
+  c.startOmen(9);
+  const rid = c.T.OMEN.rid, need = c.T.OMEN.need, before = c.score;
+  assert.ok(rid && need >= 3);
+  for (let i = 0; i < need; i++) c.omenCount(rid);
+  assert.equal(c.T.OMEN.done, true);
+  assert.equal(c.score - before, c.T.OMEN.pts);
+});
+test('the gravity hand combo runs lift -> slam -> push inside the window and restarts after it', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(between('const GRAV_WIN=', 'function gravDmg('), ctx);
+  vm.runInContext('this.H=GHAND', ctx);
+  const next = now => { const st = ctx.gravNextStage(now); ctx.H.stage = st; ctx.H.lastT = now; return st; };
+  assert.deepEqual([next(0), next(0.8), next(1.6), next(2.2)], [1, 2, 3, 1], 'after the push the combo starts over');
+  assert.equal(next(5), 1, 'a late press starts over');
+  assert.equal(next(5.5), 2);
+  assert.equal(next(7.5), 1, 'the window is 1.6 s');
 });
