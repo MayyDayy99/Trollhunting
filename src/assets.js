@@ -8,8 +8,8 @@ import dustPoof from './assets/vfx/dust_poof.webp?url';
 import zapBurst from './assets/vfx/zap_burst.webp?url';
 import poisonSkull from './assets/vfx/poison_skull.webp?url';
 import poisonCloud from './assets/vfx/poison_cloud.webp?url';
-import iceSpikes from './assets/vfx/ice_spikes.glb?url';
-import leftHand from './assets/vfx/left_hand.glb?url';   // riggelt, animált bal kéz (tools/vfx/left_hand.*): gravitációs kéz + varázskéz   // Blender-modellezett jégtüske-változatok (tools/vfx/ice_spikes.*)
+import iceSpikes from './assets/vfx/ice_spikes.glb?url';   // Blender-modellezett jégtüske-változatok (tools/vfx/ice_spikes.*)
+import leftHand from './assets/vfx/left_hand.glb?url';   // riggelt, animált bal kéz (tools/vfx/left_hand.*): gravitációs kéz + varázskéz
 
 // Generated sound effects (see src/assets/sfx/README.md): every src/assets/sfx/<name>[_<n>].mp3,
 // imported with ?url and grouped by name -> { hit: [url, url, url], growl: [...], ... }.
