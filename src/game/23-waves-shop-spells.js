@@ -111,11 +111,13 @@ function applyUpgrades(){
   RUNM.dmgMul*=weapon.dmg; RUNM.drawMul*=weapon.draw; RUNM.reloadMul*=weapon.reload;
   RUNM.multishotN+=weapon.extra; RUNM.pierce+=weapon.pierce;
 }
-function sightBlocked(ax,ay,az,bx,by,bz){
+// below: ha meg van adva, az ennél nem magasabb tetejű testek (amin / ami fölött állsz) nem takarnak
+function sightBlocked(ax,ay,az,bx,by,bz,below){
   const dx=bx-ax, dy=by-ay, dz=bz-az;
   const left=Math.min(ax,bx),right=Math.max(ax,bx),back=Math.min(az,bz),front=Math.max(az,bz);
   for(const s of SOLIDS){
     if(s.noArrow) continue;
+    if(below!=null && s.top>0 && s.top<=below) continue;
     const minY=s.abot!=null?s.abot:(s.bottom||GROUND_Y), maxY=s.top!=null?s.top:GROUND_Y+3.6;
     if(Math.max(ay,by)<minY || Math.min(ay,by)>maxY) continue;
     const minX=s.kind==='box'?s.minX:s.x-s.r,maxX=s.kind==='box'?s.maxX:s.x+s.r;
@@ -167,14 +169,22 @@ function spellTarget(){
   }
   const target=_spOut.set(start.x,start.y,start.z).addScaledVector(_spDir,distance);
   target.y=GROUND_Y;
-  // Ground eruptions cannot be placed through a trunk or building.
-  for(let n=1;n<=Math.ceil(distance*2);n++){
-    const t=Math.min(1,n/(distance*2)), px=lerp(start.x,target.x,t), pz=lerp(start.z,target.z,t);
-    if(sightBlocked(start.x,GROUND_Y+0.8,start.z,px,GROUND_Y+0.8,pz)){
-      const f=Math.max(0,(n-2)/(distance*2)); target.x=lerp(start.x,target.x,f);target.z=lerp(start.z,target.z,f);break;
+  // A talajkitörés nem kerülhet takarásba (barlang, bálvány, jégfal): a cél felé haladva az első NEM LÁTHATÓ talajpont előtt 1 m-rel megáll.
+  const N=Math.ceil(Math.hypot(target.x-start.x,target.z-start.z)*2);
+  for(let n=1;n<=N;n++){
+    const t=n/N, px=lerp(start.x,target.x,t), pz=lerp(start.z,target.z,t);
+    if(spellSightBlocked(px,pz)){
+      const f=Math.max(0,(n-2)/N); target.x=lerp(start.x,target.x,f);target.z=lerp(start.z,target.z,f);break;
     }
   }
   return target;
+}
+// VARÁZSLAT-LÁTÓVONAL: a SZEMBŐL a talajpont fölé (0,6 m) húzott vonal, és ami a szemmagasságod alatt végződik (amin állsz, a
+// tartóoszlopa, és az alacsony kő/láda/lépcső, ami fölött átlátsz), az nem takar — csak a magas akadály (barlang, bálvány, magas jégfal).
+// Korábban a lábad alatti talajon 0,8 m magasan futó vonal ezekbe akadt bele, és a varázslat a lábadnál, a kő/fedélzet alatt sült el.
+function spellSightBlocked(x,z){
+  const e=camera.position;
+  return sightBlocked(e.x,e.y,e.z, x,GROUND_Y+0.6,z, e.y-0.2);
 }
 function queueSpell(e){
   if(spellEvents.length>=64) spellEvents.shift();
@@ -190,7 +200,7 @@ function iceWallSpikes(px,pz,fx,fz,dist,rank){
       const t=n>1?i/(n-1):1, d=2.5+(end-2.5)*t+(side?0.5:0);
       const h=h0*Math.exp(k*t)*(side?0.62:1)*rand(0.9,1.1), r=(0.1+h*0.18)*(side?0.85:1)*RM;   // karcsú tüskék: a kicsik sem lesznek pamacsszerűek
       const x=px+fx*d-fz*off, z=pz+fz*d+fx*off;
-      if(sightBlocked(px,GROUND_Y+0.8,pz,x,GROUND_Y+0.8,z)) break;
+      if(spellSightBlocked(x,z)) break;
       const lean=0.06+0.3*t;
       out.push({x,z,h,r,delay:i*0.035+(side?0.07:0),tiltX:fz*lean+rand(-0.07,0.07),tiltZ:-fx*lean+rand(-0.07,0.07),main:!side,final:!side&&i===n-1});
     } }
@@ -218,7 +228,7 @@ function castElementSpell(draw){
       const width=(1.7+rank*0.45)*RM;
       for(const lane of lanes){
         const x=px+fx*d-fz*lane*1.6, z=pz+fz*d+fx*lane*1.6;
-        if(sightBlocked(px,GROUND_Y+0.8,pz,x,GROUND_Y+0.8,z)) continue;
+        if(spellSightBlocked(x,z)) continue;
         queueSpell({el,x,z,r:width,dmg:dmg*(0.9+rank*0.15),delay:i*0.09,rank,shared,counter,fx,fz,lane,final:i===steps-1&&lane===0});
       }
     }
@@ -234,7 +244,7 @@ function castElementSpell(draw){
     for(let i=0;i<pulses;i++) queueSpell({el,x:tx,z:tz,r:rad,dmg:dmg*0.28,delay:i*0.4,rank,counter,final:i===pulses-1});
     if(rank>=2){ const a0=Math.atan2(fz,fx)+0.5;   // II: három mellék-örvény a fő örvény körül
       for(let k=0;k<3;k++){ const a=a0+k*2.094, sx=tx+Math.cos(a)*4.8*RM, sz=tz+Math.sin(a)*4.8*RM;
-        if(sightBlocked(tx,GROUND_Y+0.8,tz,sx,GROUND_Y+0.8,sz)) continue;
+        if(spellSightBlocked(sx,sz)) continue;
         VFX.vortex(sx,sz,2.2*RM,1.95,1.9);
         for(let i=0;i<3;i++) queueSpell({el,x:sx,z:sz,r:2.3*RM,dmg:dmg*0.2,delay:0.3+i*0.45+k*0.1,rank,counter,sat:true}); } }
   } else {

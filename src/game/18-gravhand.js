@@ -16,6 +16,10 @@ const GHAND={stage:0, lastT:-99, clock:0, lifted:new Set(), knocked:new Set(), s
 // a kombó következő ütése (1..3) a legutóbbi ütés ideje alapján
 function gravNextStage(now){ return (GHAND.stage>0 && GHAND.stage<3 && now-GHAND.lastT<GRAV_WIN) ? GHAND.stage+1 : 1; }
 function gravDmg(){ return MELEE_DMG*(1+wave*0.08)*RUNM.dmgMul; }
+// SÚLYOSZTÁLY: a kéz a kis, fürge trollok ellen való. 0 = könnyű (kobold, kőszilánk): teljes emelés/lökés;
+// 1 = közepes (mohás troll, lidérc, sámán, köpködő): alacsonyabbra és rövidebben emeli; 2 = nehéz (kőbunkó, minden elit, a király):
+// nem emeli fel, csak megtántorítja, és a lökés is csak arrébb taszítja (nincs repülés, szaltó)
+function gravWeight(m){ if(m.boss || m.elite || m.typeId==='brute') return 2; return (m.typeId==='scout' || m.typeId==='shard') ? 0 : 1; }
 /* --- a kéz: nézet-kéz (kamerán) + óriás varázskéz (a világban); a GLB két külön példányban töltődik be --- */
 const GRAVHAND=(function(){
   const url=window.GAME_ASSETS && window.GAME_ASSETS.leftHand;
@@ -74,7 +78,7 @@ function gravCone(range, cosMin, max){   // trollok a nézési kúpban, közeleb
   for(const m of monsters){ if(!m.alive || m.dying>0 || coopIsRemote(m)) continue;
     const dx=m.g.position.x-player.pos.x, dz=m.g.position.z-player.pos.z, d=Math.hypot(dx,dz);
     if(d>range+(m.bodyR||0.5) || d<0.01) continue; if((dx*fx+dz*fz)/d<cosMin) continue;
-    if(sightBlocked(player.pos.x,GROUND_Y+0.9,player.pos.z,m.g.position.x,GROUND_Y+0.9,m.g.position.z)) continue;
+    if(sightBlocked(player.pos.x,GROUND_Y+0.9,player.pos.z,m.g.position.x,GROUND_Y+0.9,m.g.position.z,player.feet+STEP)) continue;   // a kő/láda, amin állsz, ne takarjon
     out.push([d,m]); }
   out.sort((a,b)=>a[0]-b[0]); return {list:out.slice(0,max).map(e=>e[1]), fx, fz};
 }
@@ -96,8 +100,9 @@ function gravLift(){
   if(EFX.light) EFX.light(cx,GROUND_Y+1.5,cz,GRAV_COL,5,0.5);
   for(const m of list){
     if(gravHit(m,dmg)) continue;
-    if(m.boss){ m.rooted=Math.max(m.rooted||0,0.4); continue; }   // a király túl nehéz: csak megtántorodik
-    const el=!!m.elite; m.grav={t:0, dur:el?1.1:1.7, h:(el?2.1:3.7)*(0.85+0.3*Math.random()), spin:rand(-5,5), ph:rand(0,6.283), cx, cz, y0:m.g.position.y};   // DRASZTIKUSABB: magasabbra és gyorsabban
+    const w=gravWeight(m);
+    if(w>=2){ m.rooted=Math.max(m.rooted||0,0.5); m.squash={t:0}; GHAND.squash.add(m); DUSTPOOF.spawn(m.g.position.x,GROUND_Y,m.g.position.z,2.2*(m.scale||1)); continue; }   // túl nehéz: csak megroggyan és megtántorodik
+    const mid=w===1; m.grav={t:0, dur:mid?1.15:1.7, h:(mid?1.5:3.7)*(0.85+0.3*Math.random()), spin:rand(-5,5)*(mid?0.5:1), ph:rand(0,6.283), cx, cz, y0:m.g.position.y};   // a kicsit magasra, a közepeset csak alacsonyan
     m.rooted=Math.max(m.rooted||0,m.grav.dur+0.1); GHAND.lifted.add(m); }
   callout(tr('tac.grav.lift'),true); shake=Math.max(shake,0.18); if(AUD.whoosh) AUD.whoosh();
 }
@@ -129,7 +134,8 @@ function gravPush(){
   for(const m of list){
     const dx=m.g.position.x-player.pos.x, dz=m.g.position.z-player.pos.z, d=Math.hypot(dx,dz)||1;
     if(gravHit(m,dmg)) continue;
-    const mass=m.boss?6:(m.elite?2.2:Math.max(0.7,(m.scale||1)));
+    if(gravWeight(m)>=2){ m.knock={vx:dx/d*8, vz:dz/d*8, t:0, dur:0.45, hit:new Set(), y0:m.g.position.y, flip:0, arc:0.25}; m.rooted=Math.max(m.rooted||0,0.5); GHAND.knocked.add(m); continue; }   // nehéz: ~2 m-t taszít rajta
+    const mass=Math.max(0.7,(m.scale||1));
     m.knock={vx:dx/d*40/Math.sqrt(mass), vz:dz/d*40/Math.sqrt(mass), t:0, dur:0.75, hit:new Set(), y0:m.g.position.y, flip:rand(0.8,1.2)};   // messzebb (~15 m)
     m.rooted=Math.max(m.rooted||0,0.7); GHAND.knocked.add(m); }
   callout(tr('tac.grav.push'),true); shake=Math.max(shake,0.3); if(AUD.whoosh) AUD.whoosh();
@@ -183,9 +189,9 @@ function updateGravHand(dt){
   for(const m of GHAND.knocked){ const k=m.knock; if(!m.alive || !k){ GHAND.knocked.delete(m); continue; }
     k.t+=dt; const u=k.t/k.dur, p=m.g.position, sp=Math.max(0,1-u);
     const nx=p.x+k.vx*sp*dt, nz=p.z+k.vz*sp*dt, r=(m.bodyR||0.5)*0.9;
-    const res=pushMob(nx,nz,r); p.x=res.x; p.z=res.z; p.y=GROUND_Y+Math.sin(Math.min(1,u)*Math.PI)*1.6;   // magas ív
-    m.g.rotation.x=-Math.min(1,u)*6.283*(k.flip||1)*0.85;   // hátraszaltó repülés közben
-    if(m.arms && m.arms.L) m.arms.L.rotation.x=-2.2; if(m.arms && m.arms.R) m.arms.R.rotation.x=-2.2;
+    const res=pushMob(nx,nz,r); p.x=res.x; p.z=res.z; p.y=GROUND_Y+Math.sin(Math.min(1,u)*Math.PI)*(k.arc!=null?k.arc:1.6);   // magas ív (a nehéznek alacsony)
+    m.g.rotation.x=-Math.min(1,u)*6.283*(k.flip!=null?k.flip:1)*0.85;   // hátraszaltó repülés közben
+    if(k.flip!==0){ if(m.arms && m.arms.L) m.arms.L.rotation.x=-2.2; if(m.arms && m.arms.R) m.arms.R.rotation.x=-2.2; }
     if(sp>0.15){ const vl=Math.hypot(k.vx,k.vz)||1;   // OLDALRA futó sebesség-vonalak a repülés mögött
       for(let i=0;i<2;i++) VFX.streak(p.x+rand(-0.5,0.5),p.y+rand(0.4,2.2),p.z+rand(-0.5,0.5), -k.vx/vl*14,0,-k.vz/vl*14, i?0xd8ccff:GRAV_COL, 0.14,0,1,0.025,0.6); }
     if(Math.random()<0.6) RP.spawn(p.x,p.y+0.6,p.z,0,0.3,0,GRAV_COL,0.22,0.04,0.35,0,1,0.8);
@@ -198,7 +204,8 @@ function updateGravHand(dt){
       k.t=Math.max(k.t,k.dur*0.8); m.rooted=Math.max(m.rooted||0,1.0); shake=Math.max(shake,0.4); m.squash={t:0}; GHAND.squash.add(m); }
     for(const o of nearestTrolls(p.x,p.z,m,r+0.9,4)){ if(k.hit.has(o) || o.boss) continue; k.hit.add(o);   // tekézés: a repülő troll meglöki, akit eltalál
       gravHit(o,gravDmg()*0.6); const dx=o.g.position.x-p.x, dz=o.g.position.z-p.z, d=Math.hypot(dx,dz)||1;
-      if(o.alive && !o.knock){ o.knock={vx:dx/d*14,vz:dz/d*14,t:0,dur:0.45,hit:new Set([m]),flip:0.5}; o.rooted=Math.max(o.rooted||0,0.6); GHAND.knocked.add(o); } }
+      if(o.alive && !o.knock){ if(gravWeight(o)>=2){ o.rooted=Math.max(o.rooted||0,0.4); continue; }   // nehezet nem dönt fel
+        o.knock={vx:dx/d*14,vz:dz/d*14,t:0,dur:0.45,hit:new Set([m]),flip:0.5}; o.rooted=Math.max(o.rooted||0,0.6); GHAND.knocked.add(o); } }
     if(u>=1){ p.y=GROUND_Y; m.g.rotation.x=0; m.knock=null; GHAND.knocked.delete(m); DUSTPOOF.spawn(p.x,GROUND_Y,p.z,2.4); m.squash={t:0}; GHAND.squash.add(m); }   // landolás: porfelhő + lapulás
   }
 }
