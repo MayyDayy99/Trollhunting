@@ -471,7 +471,7 @@ function spawnMonster(){
   m.g.position.set(cave.x + inx*2.4 + rand(-0.9,0.9), GROUND_Y, cave.z + inz*2.4 + rand(-0.9,0.9));   // a barlang szája előtt bújik elő, majd befelé indul
   monsters.push(m); aliveCount++; trollSpawnFx(m);
   if(id==='wisp'){ sparks.burst(m.g.position.x, GROUND_Y+1.0, m.g.position.z, 16, 0x9becff, 5, 0.7); if(!window.__wispSeen){ window.__wispSeen=1; toast(tr('toast.wisp')); } }   // LIDÉRC TELEGRÁF: cián felvillanás + egyszeri figyelmeztetés
-  if(Math.random()<0.5 && AUD.growl) AUD.growl();
+  if(Math.random()<0.12 && AUD.growl) AUD.growl();   // spawnkor csak ritkán morran (ne minden troll)
 }
 // HP-csík + "kárnyom" szellem-csík: a fehér sáv az ELŐZŐ értéken marad, majd lassan lecsorog az újra -> a veszteség jól látszik
 let _hpShown=-1, _hpMaxShown=-1;

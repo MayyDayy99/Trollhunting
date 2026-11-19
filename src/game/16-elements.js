@@ -291,8 +291,13 @@ function animateNock(t){   // finom, elem-megfelelő pulzálás feszítés közb
   // a hegyről világtérben induló apró részecskék (a játékos sebességével sodródnak, így a nyílon maradnak):
   // tűz = lángnyelv + parázs + füstcsík, jég = keringő dér-csillogás + lefelé kúszó hideg pára,
   // méreg = csöpögő cseppek + felszálló buborékok, villám = a hegyen pattogó apró ívek + szikrák. Teljes húzásnál sűrűbb.
+  _nkWant=true;   // a részecskék/láng helyét a kamera + íj VÉGLEGES állása után számoljuk (nockLoopFx) -> nem marad le a hegyről
+}
+let _nkWant=false;
+function nockLoopFx(t){   // a fő ciklus applyCamera() UTÁN hívja: ekkor a hegy világ-pozíciója már az idei képkockáé
+  const na=nockArrow, want=_nkWant; _nkWant=false;
   const dt=_nkT==null?0:Math.min(0.05,Math.max(0,t-_nkT)); _nkT=t;
-  if(dt<=0 || !na.visible || !na._tip || !running) return;
+  if(!want || dt<=0 || !na.visible || !na._tip || !running || currentElement==='base') return;
   na._tip.getWorldPosition(_nkP); camera.getWorldDirection(_nkD); _nkP.addScaledVector(_nkD,0.025);
   const el=currentElement, k=0.45+0.55*Math.min(1,charge/RUNM.drawCap), vx=playerMotion.x, vz=playerMotion.z, x=_nkP.x, y=_nkP.y, z=_nkP.z;
   if(el==='fire') VFX.hold(_nkOwner, x, y-0.035, z, 0.03+0.02*k, 0.1+0.12*k, VFX.PAL.fire, 0.95);

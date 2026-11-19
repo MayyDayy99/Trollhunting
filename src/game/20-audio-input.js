@@ -12,11 +12,13 @@ let shake=0;
 const AUD=(function(){
   let ctx=null,master=null,noise=null,vol=0.45;
   const SFX_SRC=(window.GAME_ASSETS&&window.GAME_ASSETS.sfx)||{};
-  const buf={}, live={}, lastT={}, lastIdx={};   // név -> [AudioBuffer]; szóló hangok; utolsó indítás (cooldown); utolsó variáns
+  const buf={}, live={}, lastT={}, lastIdx={}, recent={};   // név -> [AudioBuffer]; szóló hangok; utolsó indítás (cooldown); utolsó variáns(ok)
+  // HÁTTÉR-RÉTEGEK: zene + éjszakai erdő-atmoszféra, végtelenítve (a fájlok vágása már varratmentes), saját hangerővel a master alatt
+  const BEDS={ music:{want:0,src:null,g:null}, amb:{want:0,src:null,g:null} };
   function decode(ab){ return new Promise((res,rej)=>{ const p=ctx.decodeAudioData(ab,res,rej); if(p&&p.catch) p.catch(rej); }); }   // callback-forma: régi Safari is
   function loadSfx(){
     for(const name in SFX_SRC){ const list=buf[name]=[];
-      for(const url of SFX_SRC[name]) fetch(url).then(r=>r.arrayBuffer()).then(decode).then(b=>{ list.push(b); }).catch(()=>{}); } }   // data: URL is működik
+      for(const url of SFX_SRC[name]) fetch(url).then(r=>r.arrayBuffer()).then(decode).then(b=>{ list.push(b); if(BEDS[name]) bed(name,BEDS[name].want,1.5); }).catch(()=>{}); } }   // data: URL is működik; a háttér-réteg dekódolás után azonnal indul, ha kérték
   function unlock(){ if(ctx){ if(ctx.state==='suspended') ctx.resume(); return; }
     const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; ctx=new AC();
     master=ctx.createGain(); master.gain.value=vol; master.connect(ctx.destination);
@@ -30,12 +32,23 @@ const AUD=(function(){
     if(o.cd && lastT[name]!=null && t-lastT[name]<o.cd) return true;
     const v=live[name]||(live[name]=[]), max=o.max||3;
     while(v.length>=max){ const old=v.shift(); try{ old.g.gain.setTargetAtTime(0,t,0.012); old.s.stop(t+0.06); }catch(_e){} }
-    let i=(Math.random()*list.length)|0; if(list.length>1 && i===lastIdx[name]) i=(i+1)%list.length; lastIdx[name]=i;   // ne ugyanaz a variáns kétszer egymás után
+    let i=(Math.random()*list.length)|0; if(list.length>1 && i===lastIdx[name]) i=(i+1)%list.length;   // ne ugyanaz a variáns kétszer egymás után
+    if(list.length>=5){ const r=recent[name]||(recent[name]=[]); let n=0; while(r.indexOf(i)>=0 && n++<list.length) i=(i+1)%list.length; r.push(i); if(r.length>Math.min(4,list.length-1)) r.shift(); }   // sok variánsnál az utolsó 4 egyike se ismétlődjön
+    lastIdx[name]=i;
     const s=ctx.createBufferSource(), ga=ctx.createGain(); s.buffer=list[i];
     s.playbackRate.value=o.rate||(o.vary?0.95+Math.random()*0.1:1); ga.gain.value=g;
     s.connect(ga).connect(master); s.start(t);
     const rec={s,g:ga}; v.push(rec); s.onended=()=>{ const k=v.indexOf(rec); if(k>=0) v.splice(k,1); };
     lastT[name]=t; return true; }
+  // háttér-réteg (zene/atmoszféra) be/ki úsztatással; g: cél-hangerő (0 = ki). Ha még nincs dekódolva, a kérés megmarad és dekódoláskor indul.
+  // a hurok a valódi hanganyagon fusson: ha a dekóder meghagyta az MP3 elején/végén a néma kitöltést, azt kihagyjuk (különben kattanó szünet)
+  function loopSpan(b){ if(b._lp) return b._lp; const d=b.getChannelData(0), n=d.length, lim=Math.min(n,(b.sampleRate*0.15)|0); let a=0; while(a<lim && Math.abs(d[a])<1e-5) a++;
+    let e=n-1; while(e>n-lim && Math.abs(d[e])<1e-5) e--; return b._lp=[a/b.sampleRate,(e+1)/b.sampleRate]; }
+  function bed(name,g,fade){ const B=BEDS[name]; if(!B) return; B.want=g; if(!ctx) return; const list=buf[name], t=ctx.currentTime;
+    if(g>0 && !B.src && list && list.length){ const s=ctx.createBufferSource(), ga=ctx.createGain(), b=list[0], lp=loopSpan(b); s.buffer=b; s.loop=true; s.loopStart=lp[0]; s.loopEnd=lp[1]; ga.gain.value=0.0001;
+      s.connect(ga).connect(master); s.start(t,lp[0]); B.src=s; B.g=ga; }
+    if(B.g){ B.g.gain.cancelScheduledValues(t); B.g.gain.setValueAtTime(Math.max(0.0001,B.g.gain.value),t); B.g.gain.linearRampToValueAtTime(Math.max(0.0001,g),t+(fade||1));
+      if(g<=0){ const s=B.src, gg=B.g; B.src=null; B.g=null; try{ s.stop(t+(fade||1)+0.05); }catch(_e){} } } }
   function stop(name,fade){ const v=live[name]; if(!ctx||!v) return; const t=ctx.currentTime;
     while(v.length){ const r=v.shift(); try{ r.g.gain.setTargetAtTime(0,t,fade||0.03); r.s.stop(t+(fade||0.03)*5); }catch(_e){} } }
   const HIT_EL={fire:'hitFire', ice:'hitIce', poison:'hitPoison', lightning:'hitLightning'};
@@ -51,6 +64,9 @@ const AUD=(function(){
   return {
     unlock,
     setVol(v){ vol=v; if(master) master.gain.value=v; },
+    music(on){ bed('music',on?0.26:0,on?2.5:1.6); },   // játék közben szól, vereségnél elhalkul
+    amb(on){ bed('amb',on?0.42:0,on?2:1.5); },
+    beds(){ return { music:!!BEDS.music.src, amb:!!BEDS.amb.src, ctx:ctx?ctx.state:null }; },   // csak olvas (teszt / dev)          // éjszakai erdő: crickets, szél, bagoly — a csöndbe ne a semmiből jöjjenek az effektek
     status(){ const o={}; for(const n in SFX_SRC) o[n]=!!buf[n] && buf[n].length===SFX_SRC[n].length; return o; },   // csak olvas: {név: minden variáns dekódolva?}
     perfect(){ if(!ok())return; if(play('perfect',0.4,{max:2})) return; const t=ctx.currentTime; tone(1320,t,0.10,'sine',0.16,1760); tone(1980,t+0.05,0.14,'sine',0.12,2640); },
     dashS(){ if(!ok())return; nz(ctx.currentTime,0.22,0.16,'bandpass',1500,0.8); },
@@ -85,7 +101,8 @@ const AUD=(function(){
       else if(el==='ice'){ tone(2093,t,0.12,'sine',0.06*k,2637); nz(t,0.08,0.05*k,'highpass',4000,1.2); }
       else if(el==='poison') nz(t,0.2,0.08*k,'bandpass',500,3);
       else { nz(t,0.12,0.08*k,'highpass',3000,0.9); tone(1200,t,0.06,'square',0.035*k,300); } },
-    growl(){ if(!ok())return; if(play('growl',0.35,{vary:true,max:2,cd:0.3})) return; const t=ctx.currentTime; tone(90,t,0.4,'sawtooth',0.12,60); },   // gyakran hívják: max 2 egyszerre + 0,3 s szünet
+    growl(){ if(!ok())return; if(play('growl',0.35,{vary:true,max:2,cd:1.1})) return;   // 14 trollhang, ritkítva (cd 1,1 mp)
+      const t=ctx.currentTime; tone(90,t,0.4,'sawtooth',0.12,60); },   // gyakran hívják: max 2 egyszerre + 0,3 s szünet
     die(){ if(!ok())return; if(play('die',0.5,{vary:true})) return; const t=ctx.currentTime; tone(260,t,0.5,'sawtooth',0.22,40); nz(t,0.4,0.16,'lowpass',700,0.6); },
     hurt(){ if(!ok())return; if(play('hurt',0.5,{vary:true,max:2})) return; const t=ctx.currentTime; tone(120,t,0.3,'square',0.3,50); nz(t,0.18,0.2,'lowpass',400,0.7); },
     wave(){ if(!ok())return; if(play('wave',0.45,{max:1})) return; const t=ctx.currentTime; [392,523,659].forEach((f,i)=>tone(f,t+i*0.13,0.4,'triangle',0.28)); },

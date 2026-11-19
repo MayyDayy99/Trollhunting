@@ -571,7 +571,6 @@ function updateTactics(dt, t){
   ICEWALL.update(dt);
   ARMOR_FX.update(dt);
   MARKS.update(t);
-  updateCataBowGlow(dt,t);
-  GHOST.update(dt);
+  updateCataBowGlow(dt,t);   // (a GHOST a fő ciklusban az applyCamera UTÁN fut: a koszorú a kamerához igazodik)
   updateTacticsHud();
 }

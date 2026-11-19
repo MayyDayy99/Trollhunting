@@ -419,6 +419,8 @@ sGeo.attributes.position.needsUpdate=true;
 
   /* --- kamera --- */
   applyCamera(); camera.rotation.z=camRoll;
+  if(running) GHOST.update(dt);   // szellemnyíl-koszorú: a kamera végleges állásához igazítva
+  nockLoopFx(t);   // nyílhegy elem-loop: a kamera végleges állása után (különben gyors fordulásnál leszakad a hegyről)
   if(running){ camera.rotation.x+=(bowKick>0?bowKick*bowKick*0.013:0)+(spellKick>0?Math.sin(spellKick*Math.PI)*0.02:0); }   // elengedés / varázslat: apró, gyorsan lecsengő visszarúgás (a nyíl ekkor már úton van)
   const menuCam=!running && !startScreen.classList.contains('hide');   // TURBÓ: a főmenü mögött lassan keringő kamera mutatja a tisztást
   if(menuCam){ const a=t*0.045+0.6; camera.position.set(Math.cos(a)*27, 6.5+Math.sin(t*0.13)*1.2, Math.sin(a)*27); camera.lookAt(0,3.2,0); }
