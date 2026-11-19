@@ -17,5 +17,17 @@
   ["storm", 2.0, 1, "massive magical storm surge, thunder rumble and wind"],
   ["hurt", 0.6, 1, "player hit, short grunt with an impact thump"],
   ["wave", 1.6, 1, "short heroic horn call, new wave begins"],
-  ["over", 2.0, 1, "somber falling tones, defeat"]
+  ["over", 2.0, 1, "somber falling tones, defeat"],
+  ["growl_5", 1.0, 1, "angry troll snarl, short aggressive hissing growl"],
+  ["growl_6", 0.9, 1, "big troll grunt, deep effortful hrrmph"],
+  ["growl_7", 1.4, 1, "huge troll roar, short furious bellow"],
+  ["growl_8", 1.4, 1, "troll menacing chuckle, low guttural laugh"],
+  ["growl_9", 0.8, 1, "small raspy troll screech, goblin-like shriek"],
+  ["growl_10", 1.2, 1, "troll sniffing and snorting, curious heavy huffs"],
+  ["growl_11", 1.1, 1, "troll battle cry, short guttural war shout"],
+  ["growl_12", 1.2, 1, "troll panting growl while charging, heavy breaths and grunts"],
+  ["growl_13", 1.3, 1, "grumpy old troll grumbling groan, annoyed mutter"],
+  ["growl_14", 1.1, 1, "troll wet gurgling growl, throaty rumble"],
+  ["amb", 24, 1, "calm night forest ambience, crickets chirping, soft wind through leaves, occasional distant owl hoot, gentle and continuous, no music (loop on, prompt influence 0.4; tools/sfx/loopify.mjs <in> amb.mp3 1 48 1.5 -4)"],
+  ["music", 75, 1, "MUSIC v2.5, instrumental: dark fantasy forest night battle theme for an action game: steady tribal war drums, deep low string ostinato, mysterious wooden flute melody, gritty troll-hunt energy, moody but driving, around 95 bpm, consistent intensity from start to end so it loops seamlessly, no vocals (tools/sfx/loopify.mjs <in> music.mp3 2 64 2.5 -2)"]
 ]

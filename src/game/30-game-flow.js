@@ -29,7 +29,7 @@ function resetGame(){
 function beginPlay(){
   if(coopActive() && running) return;                                             // idempotens: welcome+room_start egy frame-ben ne indítson kétszer (halál utáni restart OK, mert running=false)
   if(coopActive() && coopInWaitRoom){ if(coop) coop.send({t:'start'}); return; }   // várószobás manuális Start -> a SZERVER szinkronizál mindenkit (nem helyi indítás)
-  AUD.unlock(); applySettings(false); resetGame(); ult=0; running=true; coopStarted=true; coopHideWait(); document.body.classList.add('ingame');
+  AUD.unlock(); AUD.amb(true); AUD.music(true); applySettings(false); resetGame(); ult=0; running=true; coopStarted=true; coopHideWait(); document.body.classList.add('ingame');
   startScreen.classList.add('hide'); pauseScreen.classList.add('hide'); overScreen.classList.add('hide');
   ensureLock(); startWave(1);
   if(!window.__elHintShown && !MOBILE_INPUT){ window.__elHintShown=true; setTimeout(()=>{ if(running) toast(tr('toast.elemHint')); }, 1900); }  // felfedezhetőség: az elemi FX csak 2–5 nyíllal látszik
@@ -37,7 +37,7 @@ function beginPlay(){
 function pauseGame(){ if(shopOpen) return; if(!running) return; running=false; dragLook=false; cancelDraw(); clearKeys(); showLockHint(false); pauseScreen.classList.remove('hide');
   if(document.pointerLockElement) document.exitPointerLock(); }
 function resumeGame(){ if(player.hp<=0) return; AUD.unlock(); running=true; pauseScreen.classList.add('hide'); ensureLock(); }
-function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.over();
+function gameOver(){ running=false; cancelDraw(); showLockHint(false); AUD.music(false); AUD.over();
   document.getElementById('overStat').innerHTML=tr('over.stat',{wave:wave,score:fmtPts(score)}); renderOverStats(); document.body.classList.remove('ingame'); comboReset();
   pauseScreen.classList.add('hide'); startScreen.classList.add('hide'); overScreen.classList.remove('hide'); if(document.pointerLockElement) document.exitPointerLock(); }
 

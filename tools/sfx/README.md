@@ -23,3 +23,10 @@
    (`<név>_<n>.mp3` = a `<név>` hang n-edik változata). A `20-audio-input.js` `AUD` metódusa
    `play('<név>', hangerő, {vary, max, cd})`-del játssza; ha a minta nincs dekódolva, a régi
    szintetizált hang szól.
+
+## Zene és atmoszféra (háttér-rétegek)
+
+A `music.mp3` (ElevenLabs Music v2.5, hangszeres, 75 mp) és az `amb.mp3` (Sound Effects v3, `loop` be, 24 mp) végtelenítve szól
+(`AUD.music(on)`, `AUD.amb(on)` a `20-audio-input.js`-ben). A varratmentes hurkot a `tools/sfx/loopify.mjs` készíti:
+a fájl végét egyenletes-teljesítményű áttűnéssel az elejére keveri, majd csúcs-normalizál és kódol
+(paraméterek a `sounds.json`-ban). A lejátszó a hurok határát a valódi hanganyaghoz igazítja (az MP3 néma kitöltése kimarad).
