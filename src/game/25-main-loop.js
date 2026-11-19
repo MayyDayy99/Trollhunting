@@ -52,7 +52,9 @@ function update(dt,t){
   if(lmbHeld && !drawing && meleeCd<=0) startDraw();   // BUFFERELT FELHÚZÁS: ha a reload alatt nyomtad le a gombot, a reload végén AZONNAL indul a húzás
   // KÖZELHARC-SUHINTÁS animáció a TELJES meleeCd alatt: LE -> nagy balról-jobbra suhintás -> VISSZA (a nyíl az íj gyermeke, vele süllyed/emelkedik)
   let meleeX=0, meleeY=0, meleeRotX=0, meleeRotY=0, meleeRotZ=0;
-  if(meleeCd>0){ const mp=1-meleeCd/MELEE_CD;
+  if(meleeCd>0 && !coop){ const k=Math.sin(Math.min(1,1-meleeCd/MELEE_CD)*Math.PI);   // GRAVITÁCIÓS KÉZ (SP): az íj csak kicsit jobbra-le billen, helyet ad a bal kéznek (nincs vágó-suhintás)
+    meleeY=-0.07*k; meleeX=0.06*k; meleeRotZ=-0.14*k; if(slashArc.visible) slashArc.visible=false; }
+  else if(meleeCd>0){ const mp=1-meleeCd/MELEE_CD;
     if(mp<0.18){ const e=easeOutCubic(mp/0.18);                          // LE + felhúzás balra (windup)
       meleeY=-0.18*e; meleeRotX=-0.6*e; meleeRotY=0.75*e; meleeRotZ=0.7*e; meleeX=-0.28*e; }
     else if(mp<0.52){ const s=easeInOut((mp-0.18)/0.34);                 // NAGY SUHINTÁS balról -> jobbra, FEL a kép közepébe ívelve
@@ -204,9 +206,11 @@ function update(dt,t){
     { const ax=a.g.position.x, ay=a.g.position.y, az=a.g.position.z; let solidHit=false;
       for(const s of SOLIDS){ if(s.noArrow) continue; const bot=(s.abot!=null?s.abot:(s.bottom!=null?s.bottom:GROUND_Y)), topH=(s.top!=null?s.top:GROUND_Y+3.6);
         if(ay<bot || ay>topH) continue;
-        if(s.kind==='cyl'){ const ddx=ax-s.x, ddz=az-s.z; if(ddx*ddx+ddz*ddz < s.r*s.r){ solidHit=true; break; } }
-        else if(ax>s.minX && ax<s.maxX && az>s.minZ && az<s.maxZ){ solidHit=true; break; } }
+        if(s.kind==='cyl'){ const ddx=ax-s.x, ddz=az-s.z; if(ddx*ddx+ddz*ddz < s.r*s.r){ solidHit=s; break; } }
+        else if(ax>s.minX && ax<s.maxX && az>s.minZ && az<s.maxZ){ solidHit=s; break; } }
       if(solidHit){ arrowThud(ax,ay,az,a.vel.x,a.vel.z); a.stuck=true; a.life=0; a.vel.set(0,0,0);
+        if(solidHit.iceWall){ if(a.el==='fire' && !coop) ICEWALL.burst(solidHit.iceWall, solidHit.slot, a.dmg);   // JÉGFAL: tűz-nyíl -> végigfutó gőzrobbanás
+          else VFX.spray(ax,ay,az,6,[0xffffff,0xbfe9ff],5,{up:-0.2,life:0.35,grav:10,w:0.02,len:0.03}); }
         if(a.el==='poison') poisonPool(ax,ay,az,splashR('poison')*0.5*RUNM.elemRadiusMul);   // a tócsa a fa/kő tövében, a talajon
         if(a.el!=='base'){ if(coop) coop.send({t:'splash_at', x:ax, z:az, el:a.el, dmg:a.dmg, charge:a.charge}); else elementalSplashAt(ax, az, a.el, a.dmg, a.charge, false, null, 0.5*RUNM.elemRadiusMul); }   // FEJLESZTÉS: Robbanó Szív (SP; co-op sugarat a szerver birtokolja)
         continue; } }
@@ -263,7 +267,7 @@ function update(dt,t){
   if(running) updateAbolts(dt); updateWither(dt);   // SÁMÁN: arkán lövedékek + gyengítés-csillapodás (a nyaláb-elrejtés mindig fusson)
 
   /* --- szörnyek --- */
-  if(running){ updateSpells(dt); updateBossHazards(dt); samplePlayerVelocity(dt); }
+  if(running){ updateSpells(dt); updateBossHazards(dt); samplePlayerVelocity(dt); updateTactics(dt,t); }   // ELEM-TAKTIKA: jégfal, kataklizma, páncél, jelek, HUD
   if(running) applyWispAuras();   // LIDÉRC-aura frissítése a monster-loop ELŐTT (hogy a trollAI friss buffot lásson)
   aliveCount=0;
   for(let i=monsters.length-1;i>=0;i--){ const m=monsters[i]; try {
@@ -372,6 +376,7 @@ function update(dt,t){
     } catch(_e){ if(!window.__loopErr){ window.__loopErr=String((_e&&_e.stack)||_e); console.error('[update monster-loop caught — game continues; please report this]', _e); } }
   }
   if(running) separateMonsters();   // troll-vs-troll szétválás (a torlódás/beszorulás ellen)
+  if(running) updateGravHand(dt);   // GRAVITÁCIÓS KÉZ: lebegtetés / döngölés / ellökés a mozgás UTÁN (az AI ne írja felül a magasságot)
 
   /* --- hullám-vezérlés --- */
   if(running && !coopShouldSuppressLocalSpawner()){
@@ -388,7 +393,7 @@ function update(dt,t){
   /* --- effektek --- */
   updateElemFx(dt);
   updateDmgNums(dt);
-  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running); FIREBURST.update(dt); POISONPOOL.update(dt); DUSTPOOF.update(dt); ZAPBURST.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
+  RP.update(dt); SMK.update(dt); EFX.update(dt); VFX.update(dt, running); FIREBURST.update(dt); POISONPOOL.update(dt); DUSTPOOF.update(dt); ZAPBURST.update(dt); POISONCLOUD.update(dt); POISONSKULL.update(dt);   // ELEM-CINEMA: gazdag additív FX-réteg + VFX-készlet léptetése
   updateUltHud();   // PLAYER: VIHAR-csík + rezonancia-ragyogás
   updateTurboHud(dt); envUltK=ult/100;
   if(arrowLightT>0){ arrowLightT-=dt; if(arrowLightT<=0) arrowLight.intensity=0; }   // repülő elemi nyíl fénye lecseng (visible marad: konstans fény-szám)

@@ -24,7 +24,7 @@ function loadDataAtlas(url){
    spawn(x,y,z,size[,durMul[,front]]) — size = a lap oldalhossza világegységben; front = ennyivel a kamera felé tolva
    (vízszintesen), hogy egy test közepén indított effektet ne takarjon el a test eleje. */
 function makeFlipbook(o){
-  const N=o.max||14, FRAMES=o.frames||16, GRID=o.grid||4, DUR=o.dur||0.6, ROT=(o.rot==null?0.22:o.rot), LIFT=o.lift||0, GROUND=!!o.ground;
+  const N=o.max||14, FRAMES=o.frames||16, GRID=o.grid||4, DUR=o.dur||0.6, ROT=(o.rot==null?0.22:o.rot), LIFT=o.lift||0, GROUND=!!o.ground, RISE=o.rise||0;   // RISE: felszállás m/mp (pl. a méreg-koponya)
   const { tex, ready } = loadDataAtlas(o.url);
   if(!tex) return { ready, spawn(){}, update(){}, reset(){} };
 
@@ -79,8 +79,8 @@ function makeFlipbook(o){
   }
   function update(dt){
     if(!live) return; let any=false;
-    for(let i=0;i<N;i++){ const o4=i*4; if(D[o4]<0) continue; D[o4]+=dt/dur[i]; if(D[o4]>1) D[o4]=-1; else any=true; }
-    aData.needsUpdate=true; live=any; mesh.visible=any;
+    for(let i=0;i<N;i++){ const o4=i*4; if(D[o4]<0) continue; D[o4]+=dt/dur[i]; if(D[o4]>1) D[o4]=-1; else { any=true; if(RISE) P[i*3+1]+=RISE*dt*(1-0.5*D[o4]); } }   // felszálló ikon: lassulva emelkedik
+    aData.needsUpdate=true; if(RISE) aPos.needsUpdate=true; live=any; mesh.visible=any;
   }
   function reset(){ for(let i=0;i<N;i++) D[i*4]=-1; aData.needsUpdate=true; live=false; mesh.visible=false; }
   return { ready, spawn, update, reset, mesh };
@@ -102,3 +102,9 @@ const DUSTPOOF=makeFlipbook({ url:GA.dustPoof, max:20, dur:0.95, rot:0.04, lift:
 // VILLÁM-CSILLAG (tools/vfx/zap_burst.*): sötét perem, ibolya, cián, világoscián, fehér mag; kemény vágás (pattogó szikra), csak a mag + belső sugarak izzanak
 const ZAPBURST=makeFlipbook({ url:GA.zapBurst, max:16, dur:0.36, rot:3.1416, lerp:false, order:4,
   palette:[0x261060,0x6a46f0,0x4fb2ff,0xc2efff,0xffffff], bandAlpha:[1,1,1,1,1], glow:[0,0,0,0.30,0.85] });
+// MÉREGFELHŐ (tools/vfx/poison_cloud.*): oldalnézetes, felfelé gomolygó, térbeli méreg-oszlop a talajon (lift); a világos sávok halványan izzanak
+const POISONCLOUD=makeFlipbook({ url:GA.poisonCloud, max:56, dur:1.6, rot:0, lift:0.415, order:3,   // lift: az atlasz talajvonala a kocka aljától 8,5%-ra van
+  palette:[0x14260a,0x2f5e14,0x5e9a24,0x8fd03a,0xd8ff8a], bandAlpha:[0.9,0.86,0.82,0.82,0.88], glow:[0,0,0,0.12,0.35] });
+// MÉREG-KOPONYA (tools/vfx/poison_skull.*): becsapódáskor felszálló rajzfilmes koponya keresztbe tett csontokkal (RISE)
+const POISONSKULL=makeFlipbook({ url:GA.poisonSkull, max:10, dur:1.4, rot:0, lerp:false, rise:0.8, order:6,   // kemény vágás: ropogós „pukk”; függőleges (rot 0)
+  palette:[0x0e1a08,0x2f6a10,0x6cb51c,0xa8e23e,0xeaffb0], bandAlpha:[1,1,1,1,1], glow:[0,0,0.1,0.35,0.7] });

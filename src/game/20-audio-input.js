@@ -133,6 +133,7 @@ function releaseDraw(){
 }
 function meleeSwing(){   // bal gomb: gyors közelharc-csapás a néző-kúpban (panic mid-reload)
   if(!(running&&player.alive) || meleeCd>0) return;
+  if(!coop){ gravStrike(); return; }   // EGYJÁTÉKOS: gravitációs kéz-kombó (18-gravhand.js); co-op-ban marad a régi, szerver-hiteles vágás
   meleeCd=MELEE_CD; if(AUD.whoosh) AUD.whoosh();
   slashArc.material.uniforms.uColor.value.setHex(EL[currentElement].fx).convertSRGBToLinear();   // a vágás-ív a kiválasztott elem színében
   const fx=-Math.sin(player.yaw), fz=-Math.cos(player.yaw);

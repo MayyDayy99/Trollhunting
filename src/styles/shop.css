@@ -125,3 +125,14 @@ html.touch #arsenalHud{bottom:calc(68px * var(--u) + env(safe-area-inset-bottom)
   .touch .mobile-actions,.touch .mobile-elements,.touch #mobileMove,.touch #mobileLook,.touch #mobileShootAlt,.touch #mobilePause,.touch #mobileFullscreen,.touch #mobileRotate{opacity:.25;}
 }
 
+/* ELEM-TAKTIKA: kataklizma-töltés az arzenál-sor fölött */
+#cataHud{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);z-index:5;pointer-events:none;text-align:center;color:#cfe6ff;font:700 10px/1.4 var(--f-body);letter-spacing:.14em;text-shadow:var(--ts-hud);}
+#cataHud[hidden]{display:none;}
+#cataHud .bar{display:block;width:200px;height:5px;margin:3px auto 0;border-radius:3px;background:var(--glass-deep);border:1px solid var(--line);overflow:hidden;}
+#cataHud .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#6fb4e4,#c9a8ff,#ffd27a);}
+#cataHud.full{color:var(--gold);}
+#cataHud.full .bar{box-shadow:0 0 10px rgba(255,200,110,.75);}
+#cataHud.full .bar i{animation:cataGlow .9s ease-in-out infinite alternate;}
+@keyframes cataGlow{from{filter:brightness(1);}to{filter:brightness(1.6);}}
+html.touch #cataHud{bottom:calc(90px * var(--u) + env(safe-area-inset-bottom));font-size:9px;}
+@media (max-width:1240px){ html:not(.touch) #cataHud{bottom:256px;} }

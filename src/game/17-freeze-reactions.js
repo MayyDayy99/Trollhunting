@@ -76,7 +76,7 @@ function igniteTree(f){
   VFX.flame(f.x,GROUND_Y+0.3,f.z,1.3,cy*1.15,0.9,VFX.PAL.fire,1);   // belobbanás: a láng felfut a törzsön
   for(let i=0;i<14;i++) RP.spawn(f.x+rand(-0.5,0.5),GROUND_Y+rand(0.6,cy),f.z+rand(-0.5,0.5),rand(-0.8,0.8),rand(1,3),rand(-0.8,0.8),pick([0xff5a2a,0xff8a3a,0xffc24d]),rand(0.2,0.4),0.03,rand(0.6,1.2),-1.5,1.2);
 }
-function spawnGasCloud(x,y,z){ spawnZone('gas', x, z, {y:y}); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,2.2,0.5,0.7); VFX.ball(x,Math.max(GROUND_Y+0.6,y),z,0.3,1.3,0.45,VFX.PAL.toxic);
+function spawnGasCloud(x,y,z){ spawnZone('gas', x, z, {y:y}); EFX.ring(x,GROUND_Y+0.05,z,0x9fdc4a,0.4,2.2,0.5,0.7); POISONCLOUD.spawn(x,GROUND_Y,z,2.6,1.3);   // térbeli méregfelhő a régi zöld gömb helyett
   for(let i=0;i<8;i++){ const a=rand(0,6.28),s=rand(1,4); RP.spawn(x,Math.max(GROUND_Y+0.5,y),z,Math.cos(a)*s,rand(0.5,2),Math.sin(a)*s,pick([0x7e9a2e,0x9fdc4a]),rand(0.22,0.36),0.05,rand(0.5,0.9),3,1); } }
 function freezeFull(m){
   const fresh=!(m.frozenSolid>0); m.frozenSolid=Math.max(m.frozenSolid||0, 2.0);
@@ -111,6 +111,7 @@ function resolveReaction(el, m){
 /* visszaad: true ha a hívó NE alkalmazza utána az alap applyStatus(a.el)-t (a reakció maga kezeli a státuszt) */
 function applyReaction(id, pos, hit, dmg, charge){
   const px=pos.x, py=pos.y, pz=pos.z; charge=(charge==null?0.5:charge); STATS.reacts++;
+  if(typeof reactFx==='function') reactFx(id, px, py, pz);   // reakciónként saját „aláírás”-robbanás (17-tactics.js)
   if(id==='overload'){                                        // FAGYTÚLTÖLTÉS — jég+villám
     hit.hp-=dmg*1.2; hit.hurtFlash=0.2; shatterShell(hit); hit.rooted=Math.max(hit.rooted||0,1.6);
     // a fagyott troll "kisül": fényoszlop + kettős lökéshullám + jégszilánk-vihar + kékes repedés a talajon
@@ -182,7 +183,9 @@ function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant, p
     if(rid){
       const innateOnly=reactionFromInnateOnly(el, hit);
       if(innateOnly && (now-(hit.lastInnateReactT||-999))<2.5){ rid=null; }   // PARITY-KRITIKUS: innate-only reakció a 2.5s hűtésen -> elnyomva, esik az alap-mechanikára (kliens=szerver azonos)
-      else { hit.lastReactT=now; if(innateOnly) hit.lastInnateReactT=now; gainUlt(innateOnly?6:12); return applyReaction(rid, pos, hit, dmg*(resonant?1.3:1), charge); }   // reakció helyettesíti az alap-mechanikát + tölti a VIHAR-t (innate-only: kevesebb ult)
+      else { hit.lastReactT=now; if(innateOnly) hit.lastInnateReactT=now; gainUlt(innateOnly?6:12);
+        const tm=(typeof tacticReaction==='function')?tacticReaction(rid, el, hit):1;   // ELEM-TAKTIKA (SP): reakció-jutalom × elemi lánc; lánc/töltés/ómen/páncél-törés
+        return applyReaction(rid, pos, hit, dmg*(resonant?1.3:1)*tm, charge); }   // reakció helyettesíti az alap-mechanikát + tölti a VIHAR-t (innate-only: kevesebb ult)
     }
   }
   if(preciseArea) return false;
@@ -193,6 +196,7 @@ function elementMechanic(pos, el, hit, dmg, head, wasStatus, charge, resonant, p
   return false;
 }
 function updateElemFx(dt){   // ELEM-ENV: zóna-léptetés (gáz/tűz/fagy/tócsa/gőz) + tűz-terjedés a fákra
+  for(let i=_poisonQ.length-1;i>=0;i--){ const q=_poisonQ[i]; q.t-=dt; if(q.t<=0){ _poisonQ.splice(i,1); poisonMounds(q.x,q.gy,q.z,q.R,q.n,q.d); } }   // a méregtócsa újra felbugyog
   for(let i=zones.length-1;i>=0;i--){ const c=zones[i]; c.life+=dt; c.tick-=dt; c.r=Math.min(c.rMax, c.r+dt*0.9);
     const env=Math.min(1,c.life/0.22)*Math.max(0,1-c.life/c.max), grow=Math.min(1,env*2);
     VFX.discSet(c.fx,c.x,GROUND_Y+0.045,c.z,c.r,c.baseOp*Math.min(1,env*1.6));
@@ -204,7 +208,8 @@ function updateElemFx(dt){   // ELEM-ENV: zóna-léptetés (gáz/tűz/fagy/tócs
     }
     const steps=fxSteps(c,'_fxAcc',dt,30);
     for(let step=0;step<steps;step++){
-    if(c.kind==='gas'){ if(Math.random()<0.14) SMK.spawn(c.x+rand(-c.r,c.r)*0.7,c.y+rand(-0.3,0.3),c.z+rand(-c.r,c.r)*0.7,rand(-0.3,0.3),rand(0.2,0.6),rand(-0.3,0.3),pick([0x3f5a1e,0x4f6e24]),0.6,1.9,rand(0.9,1.4),-0.3,0.8,0.3);   // gomolygó méreg-pára
+    if(c.kind==='gas'){ if(Math.random()<(gfxTier==='low'?0.012:0.026)) POISONCLOUD.spawn(c.x+rand(-c.r,c.r)*0.7,GROUND_Y,c.z+rand(-c.r,c.r)*0.7,rand(1.1,1.7),1.25);   // a gázzóna egész élete alatt felfelé gomolyog (nem lapos korong)
+      if(Math.random()<0.14) SMK.spawn(c.x+rand(-c.r,c.r)*0.7,c.y+rand(-0.3,0.3),c.z+rand(-c.r,c.r)*0.7,rand(-0.3,0.3),rand(0.2,0.6),rand(-0.3,0.3),pick([0x3f5a1e,0x4f6e24]),0.6,1.9,rand(0.9,1.4),-0.3,0.8,0.3);   // gomolygó méreg-pára
       if(Math.random()<0.35) RP.spawn(c.x+rand(-c.r,c.r),GROUND_Y+0.1,c.z+rand(-c.r,c.r),rand(-0.2,0.2),rand(0.5,1.3),rand(-0.2,0.2),pick([0x9fdc4a,0xc8e26a]),rand(0.2,0.36),0.3,rand(0.6,1.0),-0.8,1.2,0.8); }   // felszálló spórák
     else if(c.kind==='fire'){ if(Math.random()<0.5) RP.spawn(c.x+rand(-c.r,c.r),c.y+0.1,c.z+rand(-c.r,c.r),rand(-0.3,0.3),rand(1.2,2.8),rand(-0.3,0.3),pick([0xff8a3a,0xffc24d,0xfff1c4]),rand(0.18,0.34),0.02,rand(0.5,0.9),-1.5,1.2);
       if(Math.random()<0.10) SMK.spawn(c.x+rand(-c.r,c.r)*0.6,c.y+1.2,c.z+rand(-c.r,c.r)*0.6,rand(-0.3,0.3),rand(0.8,1.4),rand(-0.3,0.3),0x20160e,0.55,1.7,rand(0.8,1.2),-0.8,1,0.3);
