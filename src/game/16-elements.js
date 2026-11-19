@@ -82,6 +82,7 @@ function emitArrowTrail(a,dt){
 // megnyúlt szikrák, füst, fény és (talaj közelében) lökéshullám + tartós talaj-matrica. Nincs kiégett fehér folt.
 function elementalImpact(pos, elKey, head){
   const x=pos.x, y=pos.y, z=pos.z, big=head?1.35:1, gy=GROUND_Y, low=(y-gy)<2.6;
+  if(elKey!=='base' && AUD.hitEl) AUD.hitEl(elKey, head?1.15:1);   // elemi becsapódás-hang (a nyíl 'hit'/'head' hangja mellé, halkabban)
   if(elKey==='base'){
     VFX.flare(x,y,z,0xcfe0ff,head?1.3:0.9,0.12);
     VFX.spray(x,y,z,head?14:9,[0xffffff,0xcfe0ff,0xffe7b8],6*big,{up:-0.3,life:0.3,grav:10,drag:1.5,w:0.014,len:0.04});

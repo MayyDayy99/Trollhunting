@@ -1,0 +1,21 @@
+[
+  ["bowDraw", 0.9, 1, "wooden longbow creaking as it is drawn, taut string stretching"],
+  ["twang", 0.6, 2, "bow string release twang, deep thrum"],
+  ["whoosh", 0.5, 2, "arrow whooshing past, short airy swish"],
+  ["perfect", 0.7, 1, "bright crystalline ping, satisfying reward"],
+  ["hit", 0.5, 3, "arrow thudding into thick troll hide, meaty impact"],
+  ["head", 0.6, 1, "critical arrow hit, sharp crack with a ringing accent"],
+  ["hitFire", 0.8, 1, "fiery impact, whoomph burst with crackle"],
+  ["hitIce", 0.7, 1, "ice impact, crisp crystalline shatter"],
+  ["hitPoison", 0.7, 1, "toxic splash, wet bubbly splat"],
+  ["hitLightning", 0.6, 1, "electric zap crack, short sizzle"],
+  ["growl", 1.2, 4, "big forest troll growling, low guttural"],
+  ["die", 1.4, 1, "troll death groan collapsing, heavy body thud"],
+  ["slam", 1.2, 1, "giant smashing the ground, deep boom with debris"],
+  ["spellFire", 1.2, 1, "fire eruption bursting from the ground, roaring whoosh"],
+  ["zap", 1.2, 1, "lightning strike, thunder crack, electric sizzle"],
+  ["storm", 2.0, 1, "massive magical storm surge, thunder rumble and wind"],
+  ["hurt", 0.6, 1, "player hit, short grunt with an impact thump"],
+  ["wave", 1.6, 1, "short heroic horn call, new wave begins"],
+  ["over", 2.0, 1, "somber falling tones, defeat"]
+]
