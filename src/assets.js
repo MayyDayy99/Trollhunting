@@ -4,6 +4,14 @@ import trollIdol from './assets/props/troll_idol.glb?url';
 import oldWell from './assets/props/old_well.glb?url';      // a régi kút helyére (07-landmarks.js)
 import altarDais from './assets/props/altar_dais.glb?url';  // a középső emelvény helyére (06-arena.js)
 import mossRock from './assets/props/moss_rock.glb?url';    // az aréna sziklái (rock(), instanced)
+// a holdkör-tisztás egyedi elemei (07-landmarks.js, 11-environment.js, 12-camera-collision.js helyett; 07-troll-idol.js rakja ki)
+import megalithArch from './assets/props/megalith_arch.glb?url';
+import fallenTree from './assets/props/fallen_tree.glb?url';
+import brokenPillars from './assets/props/broken_pillars.glb?url';
+import cairnShrine from './assets/props/cairn_shrine.glb?url';
+import brazier from './assets/props/brazier.glb?url';
+import caveMouthA from './assets/props/cave_mouth_a.glb?url';
+import caveMouthB from './assets/props/cave_mouth_b.glb?url';
 import fireBurst from './assets/vfx/fire_burst.webp?url';   // Blender flipbooks (tools/vfx)
 import smokePuff from './assets/vfx/smoke_puff.webp?url';
 import poisonPool from './assets/vfx/poison_pool.webp?url';
@@ -24,4 +32,4 @@ for (const file of Object.keys(sfxFiles).sort()) {
   (sfx[name] || (sfx[name] = [])).push(sfxFiles[file]);
 }
 
-window.GAME_ASSETS = { trollIdol, oldWell, altarDais, mossRock, fireBurst, smokePuff, poisonPool, dustPoof, zapBurst, poisonSkull, poisonCloud, iceSpikes, leftHand, sfx };
+window.GAME_ASSETS = { trollIdol, oldWell, altarDais, mossRock, megalithArch, fallenTree, brokenPillars, cairnShrine, brazier, caveMouthA, caveMouthB, fireBurst, smokePuff, poisonPool, dustPoof, zapBurst, poisonSkull, poisonCloud, iceSpikes, leftHand, sfx };

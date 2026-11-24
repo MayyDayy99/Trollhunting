@@ -50,6 +50,69 @@ function loadGenProp(name, place){
     }, undefined, e => { console.warn('[props] '+name+' failed to load', e); resolve(null); });
   });
 }
+// --- több helyre kerülő modellek (holdkapu, kidőlt fa, oszlopcsoport, kőhalom, parázstartó, barlangszáj) ---
+// a modellek "eleje" a saját terükben (a generálási jelentés szerint): ebből számoljuk a forgatást
+const GEN_FRONT = { megalithArch:'+x', fallenTree:'+x', brokenPillars:'+x', cairnShrine:'+x', brazier:'+z', caveMouthA:'+x', caveMouthB:'+x' };   // holdkapu: az átjáró iránya; kidőlt fa: a gyökérlabda felőli vég
+const _genFrontAng = { '+z':0, '+x':Math.PI/2, '-z':Math.PI, '-x':-Math.PI/2 };
+function genYaw(name, fx, fz){ return Math.atan2(fx, fz) - (_genFrontAng[GEN_FRONT[name]] || 0); }   // a modell eleje a (fx,fz) világ-irányba
+// a modellt egy tartó-csoportba teszi: a befoglaló doboz alja-közepe a tartó origójában -> (x,z)-re ültetve a talpa a talajon
+function genHolder(g, box, k, yaw){
+  const c = box.getCenter(new THREE.Vector3()), h = new THREE.Group();
+  g.position.set(-c.x, -box.min.y, -c.z); h.add(g);
+  if(k && k.isVector3) h.scale.copy(k); else h.scale.setScalar(k || 1);
+  h.rotation.y = yaw || 0;
+  return h;
+}
+function genGround(h, x, z, sink){ h.position.set(x, GROUND_Y + hillH(x, z) - (sink == null ? 0.06 : sink), z); return h; }
+// egy modell több helyre (klónok: közös geometria és anyag). place(g, spot, box, size, i) -> a jelenetbe teendő objektum (vagy null, ha maga csatolta)
+function loadGenPropMulti(name, spots, place){
+  const url = window.GAME_ASSETS && window.GAME_ASSETS[name];
+  if(!url || !THREE.GLTFLoader) return Promise.resolve(null);
+  return new Promise(resolve => {
+    new THREE.GLTFLoader().load(url, gltf => {
+      try{
+        const src = gltf.scene, box = new THREE.Box3().setFromObject(src), size = box.getSize(new THREE.Vector3());
+        const list = spots();   // a helyek a betöltés után olvasva: addigra minden építő (08–12) lefutott
+        list.forEach((s, i) => {
+          const g = src.clone(true), meshes = [];
+          g.traverse(o => { if(o.isMesh) meshes.push(o); });
+          for(const o of meshes){ o.castShadow = true; o.receiveShadow = true; propGlowLayer(o); }
+          const obj = place(g, s, box, size, i);
+          if(obj) scene.add(obj);
+        });
+        resolve(list.length);
+      }catch(e){ console.warn('[props] '+name, e); resolve(null); }
+    }, undefined, e => { console.warn('[props] '+name+' failed to load', e); resolve(null); });
+  });
+}
+const FALLEN_TREE = { a:[-19.34, 4.13], b:[-11.56, 13.14] };   // a régi rönk ütközőinek két vége (12-camera-collision.js): b-nél a gyökérlabda
+function loadGenLandmarks(){
+  const arch = loadGenPropMulti('megalithArch', () => GEN_SPOTS.arch, (g, s, box, size) =>
+    genGround(genHolder(g, box, 6.8 * s.s / size.y, genYaw('megalithArch', Math.sin(s.facing), Math.cos(s.facing))), s.x, s.z, 0.15));
+  const fallen = loadGenPropMulti('fallenTree', () => GEN_SPOTS.fallen.slice(0, 1), (g, s, box, size) => {
+    const A = FALLEN_TREE.a, B = FALLEN_TREE.b, dx = B[0] - A[0], dz = B[1] - A[1], len = Math.hypot(dx, dz);
+    const along = GEN_FRONT.fallenTree.slice(1) === 'x' ? size.x : size.z;   // a hossz-tengely; az "eleje" a gyökérlabda felőli vég
+    return genGround(genHolder(g, box, len / along, genYaw('fallenTree', dx, dz)), (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, 0.12);
+  });
+  const pillars = loadGenPropMulti('brokenPillars', () => GEN_SPOTS.pillars, (g, s, box, size) =>
+    genGround(genHolder(g, box, 4.5 / size.y, s.rot), s.x, s.z, 0.1));
+  const cairn = loadGenPropMulti('cairnShrine', () => GEN_SPOTS.cairn, (g, s, box, size) => {
+    const k = 1.6 / size.y, h = genGround(genHolder(g, box, k, Math.random() * 6.283), s.x, s.z, 0.05);
+    for(const o of s.g.children) if(o.isSprite || (o.geometry && o.geometry.type === 'OctahedronGeometry')) o.position.y = size.y * k + 0.5;   // a lebegő kristály a csúcs fölé
+    return h;
+  });
+  const brazier = loadGenPropMulti('brazier', () => GEN_SPOTS.brazier, (g, s, box, size) => {
+    const h = genHolder(g, box, 1.32 / size.y, 0); h.position.y = -0.02; s.g.add(h); return null;   // a parázstartó csoportjába: a parázs/láng/fény ott marad
+  });
+  const caveSpots = i => () => GEN_SPOTS.cave.filter((c, k) => (GEN_PROP('caveMouthB') ? k % 2 === i : i === 0));
+  const cavePlace = (name, H, W) => (g, c, box, size) => {
+    const k = Math.min(H / size.y, W / Math.max(size.x, size.z));
+    return genGround(genHolder(g, box, k, genYaw(name, -c.x, -c.z)), c.x, c.z, 0.15);   // a száj a tisztás közepe felé
+  };
+  const caveA = loadGenPropMulti('caveMouthA', caveSpots(0), cavePlace('caveMouthA', 4.2, 6.5));
+  const caveB = loadGenPropMulti('caveMouthB', caveSpots(1), cavePlace('caveMouthB', 3.2, 7.5));
+  return Promise.all([arch, fallen, pillars, cairn, brazier, caveA, caveB]);
+}
 const PROPS_READY = (function loadGenProps(){
   const I = TROLL_IDOL, idolY = GROUND_Y + hillH(I.x, I.z);
   // ütköző + talaj-árnyékfolt MOST (szinkron): a folt-háló a növényzet után épül, addigra itt kell lennie
@@ -114,5 +177,5 @@ const PROPS_READY = (function loadGenProps(){
       }catch(e){ console.warn('[props] mossRock', e); resolve(null); }
     }, undefined, e => { console.warn('[props] mossRock failed to load', e); resolve(null); });
   });
-  return Promise.all([idol, well, altar, rocks]);
+  return Promise.all([idol, well, altar, rocks, loadGenLandmarks()]);
 })();

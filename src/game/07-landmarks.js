@@ -15,6 +15,7 @@
 
   /* ---------- 1) RUINED MEGALITH ARCH (trilithon moon-gate): két vésett menhir + ferdén ülő szemöldökkő, bevésett rúna ---------- */
   function megalithArch(x,z,facing,s){
+    if(GEN_PROP('megalithArch')){ GEN_SPOTS.arch.push({x,z,facing,s:s||1}); return; }   // generált holdkapu (07-troll-idol.js)
     const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=facing; g.scale.setScalar(s||1);
     const upG=makeMenhirGeo(7.7+x, 1.8,6.4,1.5);
     const l=stone(upG,-2.6,3.0,0,1,1,1,0.1); l.rotation.z=0.06; g.add(l);
@@ -45,6 +46,7 @@
 
   /* ---------- 3) FALLEN GIANT TREE: göcsörtös, kéreg-barázdás rönk törött véggel, moha-párnákkal, kiforduló gyökérzettel ---------- */
   function fallenTree(x,z,rot,s){
+    if(GEN_PROP('fallenTree')){ GEN_SPOTS.fallen.push({x,z,rot,s:s||1}); return; }   // generált kidőlt fa (07-troll-idol.js; az ütközők mentén)
     const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=rot; g.scale.setScalar(s||1);
     const items=[{geo:taperTube([V3(-5.6,1.25,0),V3(-2.5,1.08,0.1),V3(1.5,1.0,-0.08),V3(5.6,0.92,0.05)], t=>1.22-0.34*t+0.08*Math.sin(t*9), 12, 12, 0.2)}];
     for(let i=0;i<7;i++){ const a=i*0.9+0.3, len=1.5+_h3(i,2,x)*1.3;   // kiforduló gyökerek a tőnél
@@ -71,6 +73,7 @@
     const g=mergeGeos(items); vcolAttr(g,(px,py)=>{ const k=0.7+0.3*clamp(py/(h*0.5),0,1); return [k,k,k]; }); return smoothNormals(g,44);
   }
   function brokenPillars(x,z,rot){
+    if(GEN_PROP('brokenPillars')){ GEN_SPOTS.pillars.push({x,z,rot}); return; }   // generált oszlopcsoport (07-troll-idol.js)
     const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=rot;
     const hs=[3.4,2.1,4.3], offs=[[-1.3,0.4],[1.1,-0.9],[0.2,1.3]];
     for(let i=0;i<3;i++){ const col=stone(pillarGeo(hs[i], i!==2, x+i*3.1), offs[i][0],0,offs[i][1], 1,1,1, rand(0,6.28)); col.rotation.z=(Math.random()-0.5)*0.08; g.add(col); }
@@ -82,7 +85,8 @@
   /* ---------- 5) MOSS SHRINE / CAIRN: egymásra rakott lapos vésett kövek, a tetején lebegő rúna-kristály ---------- */
   function cairnShrine(x,z){
     const g=new THREE.Group(); g.position.set(x,GROUND_Y,z);
-    let y=0; const rads=[1.0,0.82,0.62,0.46,0.32];
+    let y=0; const rads=GEN_PROP('cairnShrine')?[]:[1.0,0.82,0.62,0.46,0.32];   // generált kőhalom esetén csak a lebegő kristály + gyűrű marad (a kövek a 07-troll-idol.js-ből)
+    if(rads.length===0){ y=1.3; GEN_SPOTS.cairn.push({x,z,g}); }
     for(let i=0;i<rads.length;i++){ const hh=0.3; g.add(stone(ROCK_GEOS[i%ROCK_GEOS.length], (Math.random()-0.5)*0.16, y+hh*0.5, (Math.random()-0.5)*0.16, rads[i],hh*1.05,rads[i]*rand(0.9,1.1), rand(0,6.28))); y+=hh*0.86; }
     const orb=mesh(new THREE.OctahedronGeometry(0.3,0), runeMat, 0, y+0.62, 0); orb.scale.y=1.5; orb.castShadow=false; g.add(orb); enableBloom(orb);
     const sp=glowSprite(1.5,0.42,0x7fe2ff); sp.position.y=y+0.62; g.add(sp);

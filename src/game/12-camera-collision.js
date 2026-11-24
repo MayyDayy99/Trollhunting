@@ -235,6 +235,7 @@ solidCyl(-12.61, 11.93, 1.8, {});       // fallenTree gyökérlabda
 const envRockDark=applyStylized(std({color:0x555c6c,roughness:.97,vertexColors:true,emissive:0x10151f,emissiveIntensity:0.5}),'rock');
 const CAVE_GEO=makeRockGeo(88.8, GEO_DETAIL, 11);
 function buildCave(c){
+  if(GEN_PROP('caveMouthA')){ GEN_SPOTS.cave.push(c); contactBlob(c.x,c.z,5.0); solidCyl(c.x, c.z, 1.9, {top:GROUND_Y+2.8}); return; }   // generált barlangszáj (07-troll-idol.js); az ütköző ugyanaz
   const g=new THREE.Group(); g.position.set(c.x, GROUND_Y, c.z); g.rotation.y=Math.atan2(-c.x,-c.z);   // a száj a központ felé néz (local +z)
   const rk=(geo,x,y,z,sx,sy,sz,ry)=>{ const m=new THREE.Mesh(geo,envRockDark); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.y=ry||0; m.castShadow=true; m.receiveShadow=true; g.add(m); };
   rk(CAVE_GEO, 0,1.15,-0.1, 3.1,2.9,3.0, rand(0,6.28));                                   // fő szikla-tömb
