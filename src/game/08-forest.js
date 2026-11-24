@@ -11,6 +11,7 @@ const CAVES=CAVE_ANGS.map(a=>({ ang:a, x:Math.cos(a)*R_CAVE, z:Math.sin(a)*R_CAV
 // foglalt zónák, amiket KERÜLÜNK (cx,cz,r) — spawn + mászó-építmények + landmarkok + barlangok
 const KEEP_CLEAR = [
   ...CAVES.map(c=>[c.x, c.z, 3.2]),   // barlangok köré ne kerüljön fa/kő
+  ...CAVE_FOOT.map(f=>[Math.cos(f.ang)*(CAVE_FRONT_R-4), Math.sin(f.ang)*(CAVE_FRONT_R-4), 5.5]),   // a nagy barlangszáj előtere szabad: a trollok kijárata, és a száj kilátszik
   [0,0,6.5],            // spawn-tisztás
   ...[0,1,2,3].map(i=>[Math.cos(0.39+i*Math.PI/2)*8.0, Math.sin(0.39+i*Math.PI/2)*8.0, 1.7]),   // parázstartók
   [-7.0,5.5,2.0],[-8.6,6.2,2.0],[-7.6,4.0,2.0],                    // fa ládák
@@ -33,7 +34,7 @@ const KEEP_CLEAR = [
   [32.3,-3.8,2.8],[27.6,0.5,2.8],[22.8,4.8,2.8],                               // híd TH1<->A-kilátó
   [-28.8,-10.2,2.8],[-26.6,-2.4,2.8],[-24.4,5.5,2.8],[-22.2,13.4,2.8]          // híd TH3<->TH4 (hosszú nyugati átkelő)
 ];
-function zoneFree(x,z,pad){ for(const c of KEEP_CLEAR){ if(Math.hypot(x-c[0],z-c[1]) < c[2]+(pad||0)) return false; } return true; }
+function zoneFree(x,z,pad){ if(inCaveFoot(x,z,(pad||0)+0.8)) return false; for(const c of KEEP_CLEAR){ if(Math.hypot(x-c[0],z-c[1]) < c[2]+(pad||0)) return false; } return true; }
 
 // --- KÖZÉPSŐ LANDMARKOK ütközői (a buildLandmarks() vizuáljaihoz illesztve) ---
 solidCyl(11.55, 7.90, 1.5);                 // oldWell kőperem
@@ -53,9 +54,10 @@ for(const gr of GROVES){ const ca=gr[0], cr=gr[1];
 }
 // --- SŰRŰ HATÁR-FASOR a perem mentén (vizuális zártság, fenn ütköző) ---
 for(let i=0;i<40;i++){ const a=(i/40)*6.283+rand(-0.06,0.06), r=BOUND_R+rand(0.5,2.2);
+  if(inCaveFoot(Math.cos(a)*r, Math.sin(a)*r, 1.0)) continue;   // a barlangtömbbe nem nő fa
   tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.1,1.9)); }
 // néhány nagy fa a fal mögött (sziluett, ütköző nem szükséges – peremen kívül)
-for(let i=0;i<26;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 100); tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.0,1.8)); }
+for(let i=0;i<26;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 100); if(inCaveFoot(Math.cos(a)*r, Math.sin(a)*r, 2.0)) continue; tree(Math.cos(a)*r, Math.sin(a)*r, rand(1.0,1.8)); }
 
 // --- KŐ-KIBÚVÁSOK / sziklacsoportok a tisztáson belül (klaszteres) ---
 const OUTCROPS = [ [0.9,15],[2.4,17],[3.5,12],[4.2,18],[5.1,14],[5.9,16],
@@ -67,6 +69,6 @@ for(const oc of OUTCROPS){ const ca=oc[0], cr=oc[1];
     if(tries<8){ rock(rx,rz, rr0); KEEP_CLEAR.push([rx,rz,rr0+0.9]); } }
 }
 // szórt kis kövek a peremen kívül (díszlet, ütköző peremen kívül – ártalmatlan)
-for(let i=0;i<24;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 115); rock(Math.cos(a)*r, Math.sin(a)*r, rand(0.6,1.8)); }
+for(let i=0;i<24;i++){ const a=rand(0,6.28), r=rand(BOUND_R+8, 115); if(inCaveFoot(Math.cos(a)*r, Math.sin(a)*r, 0.5)) continue; rock(Math.cos(a)*r, Math.sin(a)*r, rand(0.6,1.8)); }
 // fű-foltok az arénában
 const grassMat=std({color:0x47803f,roughness:1});

@@ -218,7 +218,7 @@ példánnyal kb. 29 000 háromszög; a parázs vöröse csíkokban a kő repedé
 
 | | |
 | --- | --- |
-| Hely a játékban | Még nincs bekötve. Cél: kb. 4 m magas és 6 m széles sziklakibúvó, a sötét nyílás a kamera felé |
+| Hely a játékban | 4 barlang a 7 troll-spawnpontból (`CAVE_MODEL`, `src/game/06-arena.js`): 16,8 m magas, 19,2 m széles, 14,2 m mély sziklatömb a peremfalba ágyazva, a nyílás a tisztás közepe felé. Az eleje `R_CAVE − 3`-nál van, így a trollok a száj belsejéből lépnek ki |
 | Méret | 4999 háromszög, 7257 csúcspont, 214 KB (1024-es WebP alapszín) |
 | Bemenő kép | FLUX.2 Pro a Higgsfield-en (1 kredit), 1:1; seed nem állítható, job `3ccbd8ef-179e-45d7-ad7e-c1c935ff7bdd`. Előtte 3 Z-Image-kép el lett dobva (a barlang belseje csak sötétszürke); a képekre összesen 1,45 kredit ment |
 | 3D modell | Tripo P2 Image to 3D a Higgsfield-en (34 kredit): `face_limit` 8000, textúra, PBR nélkül, `delight` |
@@ -242,7 +242,7 @@ földpárkányok és egy kőcsúcs vannak.
 
 | | |
 | --- | --- |
-| Hely a játékban | Még nincs bekötve. Cél: alacsony, széles sziklahalom széles, alacsony barlangnyílással, a nyílás a kamera felé |
+| Hely a játékban | 3 barlang a 7 troll-spawnpontból (`CAVE_MODEL`, `src/game/06-arena.js`): 11,4 m magas, 30 m széles, 28 m mély sziklahalom a peremfalba ágyazva, a nyílás a tisztás közepe felé. A déli holdkapu melletti helyen (5,0 rad) nem fér el, ott A-típus áll |
 | Méret | 4944 háromszög, 7452 csúcspont, 220 KB (1024-es WebP alapszín) |
 | Bemenő kép | FLUX.2 Pro a Higgsfield-en (1 kredit), 1:1; seed nem állítható, job `8c549be3-e554-41d7-9ff6-0096527cca77`. Előtte 3 Z-Image-kép el lett dobva (a barlang belseje csak sötétszürke); a képekre összesen 1,45 kredit ment |
 | 3D modell | Tripo P2 Image to 3D a Higgsfield-en (34 kredit): `face_limit` 8000, textúra, PBR nélkül, `delight` |

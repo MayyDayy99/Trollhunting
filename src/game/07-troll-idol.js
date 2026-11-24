@@ -104,13 +104,13 @@ function loadGenLandmarks(){
   const brazier = loadGenPropMulti('brazier', () => GEN_SPOTS.brazier, (g, s, box, size) => {
     const h = genHolder(g, box, 1.32 / size.y, 0); h.position.y = -0.02; s.g.add(h); return null;   // a parázstartó csoportjába: a parázs/láng/fény ott marad
   });
-  const caveSpots = i => () => GEN_SPOTS.cave.filter((c, k) => (GEN_PROP('caveMouthB') ? k % 2 === i : i === 0));
-  const cavePlace = (name, H, W) => (g, c, box, size) => {
-    const k = Math.min(H / size.y, W / Math.max(size.x, size.z));
-    return genGround(genHolder(g, box, k, genYaw(name, -c.x, -c.z)), c.x, c.z, 0.15);   // a száj a tisztás közepe felé
+  // barlangszáj: a lábnyom (CAVE_FOOT, 06-arena.js) közepén, a száj a tisztás közepe felé; a modell nem lóghat ki a lefoglalt lábnyomból
+  const cavePlace = name => (g, f, box, size) => {
+    const k = Math.min(f.h / size.y, 2 * f.hw / size.z, 2 * f.hd / size.x);   // eleje +x: mélység x, szélesség z
+    return genGround(genHolder(g, box, k, genYaw(name, -f.x, -f.z)), f.x, f.z, 0.3);
   };
-  const caveA = loadGenPropMulti('caveMouthA', caveSpots(0), cavePlace('caveMouthA', 4.2, 6.5));
-  const caveB = loadGenPropMulti('caveMouthB', caveSpots(1), cavePlace('caveMouthB', 3.2, 7.5));
+  const caveA = loadGenPropMulti('caveMouthA', () => GEN_SPOTS.cave.filter(f => f.model === 'caveMouthA'), cavePlace('caveMouthA'));
+  const caveB = loadGenPropMulti('caveMouthB', () => GEN_SPOTS.cave.filter(f => f.model === 'caveMouthB'), cavePlace('caveMouthB'));
   return Promise.all([arch, fallen, pillars, cairn, brazier, caveA, caveB]);
 }
 const PROPS_READY = (function loadGenProps(){
