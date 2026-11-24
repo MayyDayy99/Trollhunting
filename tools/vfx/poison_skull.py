@@ -30,6 +30,8 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from vfx_device import use_best_device  # noqa: E402  (CPU; VFX_DEVICE=GPU esetén a videókártya)
 
 FRAMES = 16
 SIZE = 256
@@ -319,7 +321,7 @@ def build_scene():
     world = bpy.data.worlds.new("World"); world.use_nodes = True; sc.world = world
     bg = world.node_tree.nodes.get("Background")
     if bg: bg.inputs["Color"].default_value = (0.20, 0.24, 0.30, 1.0)
-    sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = 32; sc.cycles.use_denoising = False
+    sc.render.engine = "CYCLES"; use_best_device(sc); sc.cycles.samples = 32; sc.cycles.use_denoising = False
     sc.cycles.transparent_max_bounces = 32
     sc.render.film_transparent = True
     sc.render.resolution_x = sc.render.resolution_y = SIZE; sc.render.resolution_percentage = 100

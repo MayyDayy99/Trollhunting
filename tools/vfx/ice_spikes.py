@@ -27,6 +27,8 @@ import sys
 import bmesh
 import bpy
 from mathutils import Matrix, Vector
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from vfx_device import use_best_device  # noqa: E402  (CPU; VFX_DEVICE=GPU esetén a videókártya)
 
 NAMES = ("IceSpikeA", "IceSpikeB", "IceSpikeC")
 MAIN_R = 0.2
@@ -243,7 +245,7 @@ def render_preview(path):
     sun.data.energy = 3.2; sun.rotation_euler = (math.radians(50), math.radians(-28), math.radians(-35))
     world = sc.world or bpy.data.worlds.new("World"); sc.world = world; world.use_nodes = True
     bg = world.node_tree.nodes.get("Background"); bg.inputs["Color"].default_value = (0.16, 0.20, 0.27, 1.0); bg.inputs["Strength"].default_value = 0.8
-    sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = 64; sc.cycles.use_denoising = True
+    sc.render.engine = "CYCLES"; use_best_device(sc); sc.cycles.samples = 64; sc.cycles.use_denoising = True
     sc.render.resolution_x, sc.render.resolution_y = 960, 400
     sc.render.film_transparent = False
     sc.view_settings.view_transform = "Standard"

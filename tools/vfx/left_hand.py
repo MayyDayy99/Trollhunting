@@ -45,6 +45,8 @@ import bmesh
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 from mathutils.bvhtree import BVHTree
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from vfx_device import use_best_device  # noqa: E402  (CPU; VFX_DEVICE=GPU esetén a videókártya)
 
 HAND, RUNE, RIG = "Hand", "HandRune", "HandRig"
 FPS = 60
@@ -932,7 +934,7 @@ def render_preview(path):
     txt.data.materials.append(label_mat)
     txt.parent = cam
 
-    sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = 48; sc.cycles.use_denoising = True
+    sc.render.engine = "CYCLES"; use_best_device(sc); sc.cycles.samples = 48; sc.cycles.use_denoising = True
     S = 360
     sc.render.resolution_x = sc.render.resolution_y = S; sc.render.resolution_percentage = 100
     sc.render.film_transparent = False
