@@ -12,8 +12,12 @@ MOSS_T.repeat.set(6,6);   // (a talaj már a GROUND_T-t használja) kevésbé s�
 /* ===== EDIT C — central altar (replaces ARENA_R-sized dais). REPLACE lines 224-225 =====
    Compact fixed-radius cairn so it does NOT balloon with ARENA_R; <0.6 high so walkable.
    Adds the cyan rune torus as the spawn-point landmark. */
-const dais=new THREE.Mesh(vcolAttr(jitter(new THREE.CylinderGeometry(3.4,4.2,0.55,40,2),0.10,0.05),()=>[0.62,0.62,0.66]), envRock);   // AA-indie: festett, mohás kő-emelvény
-dais.position.y=-0.18; dais.receiveShadow=true; dais.castShadow=true; scene.add(dais);
+// GENERÁLT MODELLEK (src/assets/props): ha a GLB megvan, a 07-troll-idol.js tölti be helyettük; nélküle a régi, kódból épített változat
+const GEN_PROP=n=>!!(window.GAME_ASSETS && window.GAME_ASSETS[n]);
+if(!GEN_PROP('altarDais')){
+  const dais=new THREE.Mesh(vcolAttr(jitter(new THREE.CylinderGeometry(3.4,4.2,0.55,40,2),0.10,0.05),()=>[0.62,0.62,0.66]), envRock);   // AA-indie: festett, mohás kő-emelvény
+  dais.position.y=-0.18; dais.receiveShadow=true; dais.castShadow=true; scene.add(dais);
+}
 const altarRune=mesh(new THREE.TorusGeometry(2.4,0.10,6,32),
   new THREE.MeshStandardMaterial({color:0x16414f,emissive:0x36c5ff,emissiveIntensity:1.1,roughness:.6,flatShading:false}),
   0,0.12,0);
@@ -73,10 +77,13 @@ function tree(x,z,s){
   flammables.push({x:x, z:z, r:0.55*s, g:g, onFire:false, zone:null});   // ELEM-ENV: a tűz felgyújthatja
   return g;
 }
+const ROCK_SPOTS=[];   // generált mohás kő esetén csak a helyeket gyűjtjük; a 07-troll-idol.js egy instanced hálóba rakja őket
 function rock(x,z,r){
-  const m=new THREE.Mesh(pickGeo(ROCK_GEOS), envRock), sy=r*rand(0.95,1.25), y=GROUND_Y+hillH(x,z);
-  m.scale.set(r*rand(1.05,1.3), sy, r*rand(1.05,1.3)); m.position.set(x, y+sy*0.5-0.06, z); m.rotation.y=rand(0,6.283);
-  m.castShadow=true; m.receiveShadow=true; scene.add(m);
+  const sy=r*rand(0.95,1.25), sx=r*rand(1.05,1.3), sz=r*rand(1.05,1.3), ry=rand(0,6.283), y=GROUND_Y+hillH(x,z);
+  let m=null;
+  if(GEN_PROP('mossRock')) ROCK_SPOTS.push({x, y:y+sy*0.5-0.06, z, sx, sy, sz, ry});   // ugyanaz a hely/méret, mint a kódból épített kőé
+  else { m=new THREE.Mesh(pickGeo(ROCK_GEOS), envRock); m.scale.set(sx, sy, sz); m.position.set(x, y+sy*0.5-0.06, z); m.rotation.y=ry;
+    m.castShadow=true; m.receiveShadow=true; scene.add(m); }
   if(Math.hypot(x,z)<BOUND_R+4) contactBlob(x,z,r*1.9);
   // ÜTKÖZŐ: MINDEN kő mászható-tetőként regisztrál (rá lehet ugrani, ha eléred a tetejét), és átmenni egyiken sem lehet (mob)
   solidCyl(x, z, r*0.9, {top:GROUND_Y+r*0.78, climb:true, mob:true});

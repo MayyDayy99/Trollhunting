@@ -1,6 +1,9 @@
 // Generated 3D props (see src/assets/props/README.md). In the single-file build Vite inlines
 // them as data: URLs; the game (src/game/07-troll-idol.js) reads them from window.GAME_ASSETS.
 import trollIdol from './assets/props/troll_idol.glb?url';
+import oldWell from './assets/props/old_well.glb?url';      // a régi kút helyére (07-landmarks.js)
+import altarDais from './assets/props/altar_dais.glb?url';  // a középső emelvény helyére (06-arena.js)
+import mossRock from './assets/props/moss_rock.glb?url';    // az aréna sziklái (rock(), instanced)
 import fireBurst from './assets/vfx/fire_burst.webp?url';   // Blender flipbooks (tools/vfx)
 import smokePuff from './assets/vfx/smoke_puff.webp?url';
 import poisonPool from './assets/vfx/poison_pool.webp?url';
@@ -21,4 +24,4 @@ for (const file of Object.keys(sfxFiles).sort()) {
   (sfx[name] || (sfx[name] = [])).push(sfxFiles[file]);
 }
 
-window.GAME_ASSETS = { trollIdol, fireBurst, smokePuff, poisonPool, dustPoof, zapBurst, poisonSkull, poisonCloud, iceSpikes, leftHand, sfx };
+window.GAME_ASSETS = { trollIdol, oldWell, altarDais, mossRock, fireBurst, smokePuff, poisonPool, dustPoof, zapBurst, poisonSkull, poisonCloud, iceSpikes, leftHand, sfx };
