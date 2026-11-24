@@ -14,6 +14,8 @@ MOSS_T.repeat.set(6,6);   // (a talaj már a GROUND_T-t használja) kevésbé s�
    Adds the cyan rune torus as the spawn-point landmark. */
 // GENERÁLT MODELLEK (src/assets/props): ha a GLB megvan, a 07-troll-idol.js tölti be helyettük; nélküle a régi, kódból épített változat
 const GEN_PROP=n=>!!(window.GAME_ASSETS && window.GAME_ASSETS[n]);
+// a több helyre kerülő generált modellek helyei: a kódból építő függvények gyűjtik, a 07-troll-idol.js tölti be és rakja ki
+const GEN_SPOTS={ arch:[], fallen:[], pillars:[], cairn:[], brazier:[], cave:[] };
 if(!GEN_PROP('altarDais')){
   const dais=new THREE.Mesh(vcolAttr(jitter(new THREE.CylinderGeometry(3.4,4.2,0.55,40,2),0.10,0.05),()=>[0.62,0.62,0.66]), envRock);   // AA-indie: festett, mohás kő-emelvény
   dais.position.y=-0.18; dais.receiveShadow=true; dais.castShadow=true; scene.add(dais);

@@ -93,6 +93,173 @@ A kép a prompttól eltérően kb. olyan magas, mint széles, és a tövénél f
 geometriaként a modellben maradtak). A repedezett, részletes oldal a +X felé néz, a hátoldal simább;
 a játék a köveket véletlenszerűen forgatja.
 
+## megalith_arch.glb — megalit holdkapu
+
+| | |
+| --- | --- |
+| Hely a játékban | Még nincs bekötve. Cél: szabadon álló holdkapu átjárható nyílással, kb. 7,6 m magas és 7 m széles |
+| Méret | 6000 háromszög, 7468 csúcspont, 229 KB (1024-es WebP alapszín + rúna-emisszív térkép) |
+| Bemenő kép | Z-Image (Tongyi-MAI) a Higgsfield-en (0,15 kredit), 1:1; seed nem állítható, job `997cf635-6b1b-4830-9a2b-86dac029443a`. A `mcp-tools/Qwen-Image-Fast` Space ZeroGPU-kvótája elfogyott, ezért nem azzal készült |
+| 3D modell | Tripo P2 Image to 3D a Higgsfield-en (34 kredit): `face_limit` 8000, textúra, PBR nélkül, `delight` |
+| Optimalizálás | `node tools/props/optimize.mjs nyers.glb src/assets/props/megalith_arch.glb 6000 1024` (nyersen 6248 háromszög; emisszív pixelek: 1,20%) |
+
+A kép promptja:
+
+> Stylized 3D game asset: an ancient megalithic moon-gate, two tall rough-hewn grey standing stones with
+> one heavy lintel stone laid across their tops, a carved circular rune in the middle of the lintel
+> glowing bright cyan, patches of bright green moss, a few small ferns at the base. Chunky readable
+> shapes, hand-painted textures, stylized indie fantasy game look. Single object, fully visible and
+> centered, three-quarter front view, plain flat light grey background, soft even studio lighting, no
+> cast shadows, no text.
+
+A modell eleje a +X irányba néz (Tripo alapértelmezés), az átjáró az X tengely mentén vezet át, a kapu
+szélessége a Z tengelyen van; a cián rúnakorong mindkét oldalon (±X) izzik. Modellegységben 0,85 (X) ×
+0,76 (Y) × 1,00 (Z). Ismert hibák: a kép a prompttól eltérően lapos kőalapzatot és fűcsomókat is rajzolt
+a kapu alá; a kapu a célnál szélesebb (szélesség : magasság ≈ 1,31 a kért 0,92 helyett), 7,6 m magasra
+nagyítva kb. 10 m széles; a két oszlop közti szabad nyílás a teljes szélesség kb. 26%-a; a „rúna” sima
+izzó korong egy szögletes kőblokkon, nem faragott jel.
+
+## fallen_tree.glb — kidőlt ősfa
+
+| | |
+| --- | --- |
+| Hely a játékban | Még nincs bekötve. Cél: kb. 11 m hosszú kidőlt törzs, a gyökértányér kb. 3,5 m magas |
+| Méret | 6769 háromszög, 14012 csúcspont, 442 KB (1024-es WebP alapszín) |
+| Bemenő kép | FLUX.2 Pro a Higgsfield-en (1 kredit), 1:1; seed nem állítható, job `f2089513-1c80-4ea5-852e-81034ca061f6`. Előtte 4 Z-Image-kép és 1 FLUX-kép el lett dobva (álló fa nőtt ki a törzsből, ill. nem volt gyökértányér); a képekre összesen 2,6 kredit ment |
+| 3D modell | Meshy 7 Image to 3D a Higgsfield-en (38 kredit): `should_texture`, PBR nélkül, `target_polycount` 8000 |
+| Optimalizálás | `node tools/props/optimize.mjs nyers.glb src/assets/props/fallen_tree.glb 6000 1024` (nyersen 8162; a sok UV-varrat miatt 6769-nél állt meg) |
+
+A kép promptja:
+
+> Stylized 3D game asset: a huge fallen ancient tree trunk lying flat on the ground, gnarled deeply
+> furrowed bark, a broken splintered end, a big upturned root ball with tangled roots and clumps of earth
+> at the other end, thick soft moss cushions along the top, a few small orange mushrooms. Chunky readable
+> shapes, hand-painted textures, stylized indie fantasy game look. Single object, fully visible and
+> centered, side view, slightly from above, plain flat light grey background, soft even studio lighting,
+> no cast shadows, no text.
+
+A törzs az X tengely mentén fekszik: a gyökértányér a +X, a szilánkos törött vég a −X végén van; a kép
+oldalnézete a +Z felé néz (Meshy alapértelmezés). Modellegységben 1,90 (X) × 0,72 (Y) × 1,00 (Z); 11 m
+hosszra nagyítva kb. 4,1 m magas és a szétterülő gyökerek miatt 5,8 m széles. Ismert hibák: a
+gyökértányér nem magas, felálló korong, hanem a törzsvég alatti sötét föld- és kőcsomó szétterülő
+gyökerekkel; a kéreg inkább egymásra rakott deszkáknak, a törött vég deszkakötegnek hat.
+
+## broken_pillars.glb — törött oszlopcsoport
+
+| | |
+| --- | --- |
+| Hely a játékban | Még nincs bekötve. Cél: kb. 4,5 m magas oszlopcsoport |
+| Méret | 4999 háromszög, 7671 csúcspont, 220 KB (1024-es WebP alapszín) |
+| Bemenő kép | FLUX.2 Pro a Higgsfield-en (1 kredit), 1:1; seed nem állítható, job `30211225-2fa0-48c0-9c6e-c74e0e3a774a`. Előtte 3 Z-Image-kép (ép oszlopfők, a ledőlt dob dobhangszernek rajzolva) és 1 FLUX-kép (négy oszlop) el lett dobva; a képekre összesen 2,45 kredit ment |
+| 3D modell | Tripo P2 Image to 3D a Higgsfield-en (34 kredit): `face_limit` 8000, textúra, PBR nélkül, `delight` |
+| Optimalizálás | `node tools/props/optimize.mjs nyers.glb src/assets/props/broken_pillars.glb 5000 1024` (nyersen 7539) |
+
+A kép promptja:
+
+> Stylized 3D game asset: a cluster of three ancient fluted grey stone columns of different heights
+> standing on square plinths, their tops broken off and jagged, one fallen column drum lying beside
+> them, small rubble, patches of moss. Chunky readable shapes, hand-painted textures, stylized indie
+> fantasy game look. Single object, fully visible and centered, three-quarter front view, plain flat
+> light grey background, soft even studio lighting, no cast shadows, no text.
+
+A modell eleje (a ledőlt oszlopdobbal) a +X irányba néz. Modellegységben 0,64 (X) × 0,91 (Y) × 1,00 (Z);
+4,5 m magasra nagyítva kb. 5 m széles. Ismert hibák: a legmagasabb oszlop megtartotta az ión oszlopfőt
+(csak a másik kettő törött); a hornyolás nagyrészt csak festett vonal, nem geometria; a talapzatok egy
+közös, lépcsős alapba olvadtak; a tövüknél két apró, vékony lapka-hiba (zöld rombusz) látszik.
+
+## cairn_shrine.glb — rúnás kőhalom-szentély
+
+| | |
+| --- | --- |
+| Hely a játékban | Még nincs bekötve. Cél: kb. 2 m magas kőhalom; fölötte a játék saját lebegő kristálya marad |
+| Méret | 3999 háromszög, 3252 csúcspont, 144 KB (1024-es WebP alapszín + rúna-emisszív térkép) |
+| Bemenő kép | Z-Image (Tongyi-MAI) a Higgsfield-en (0,15 kredit), 1:1; seed nem állítható, job `9cd92e1c-a9aa-4484-ae31-48fe754c0a83` |
+| 3D modell | Tripo P2 Image to 3D a Higgsfield-en (34 kredit): `face_limit` 8000, textúra, PBR nélkül, `delight` |
+| Optimalizálás | `node tools/props/optimize.mjs nyers.glb src/assets/props/cairn_shrine.glb 4000 1024` (nyersen 8268; emisszív pixelek: 1,92%) |
+
+A kép promptja:
+
+> Stylized 3D game asset: a small forest shrine cairn of flat carved grey stones stacked in a tapering
+> pile, engraved spiral runes glowing faint cyan, moss in the gaps, a flat top stone. Chunky readable
+> shapes, hand-painted textures, stylized indie fantasy game look. Single object, fully visible and
+> centered, three-quarter front view, plain flat light grey background, soft even studio lighting, no
+> cast shadows, no text.
+
+A modell eleje a +X irányba néz (az egyik oldalán külön kőkupac). Modellegységben 0,91 (X) × 0,94 (Y)
+× 1,00 (Z). A teteje két egymásra rakott lapos kő, felül sík, csak néhány apró mohacsomóval; a
+kristálynak ezek fölött kell lebegnie. Ismert hibák: a kövek inkább lekerekített görgetegek, mint lapos
+faragott lapok; a spirálrúnák szinte minden kövön izzanak, erősebben, mint a promptbeli „faint”.
+
+## brazier.glb — kő tűztartó
+
+| | |
+| --- | --- |
+| Hely a játékban | Még nincs bekötve. Cél: 4 db, kb. 1,3 m magas; a lángot a játék rajzolja |
+| Méret | 7314 háromszög, 15207 csúcspont, 403 KB (512-es WebP alapszín) |
+| Bemenő kép | FLUX.2 Pro a Higgsfield-en (1 kredit), 1:1; seed nem állítható, job `95b8a8de-6dc5-480b-b9d4-b25a2f826cf4`. Előtte 4 Z-Image-kép (mindegyiken láng volt) és 1 FLUX-kép (kis lángnyelvek) el lett dobva; a képekre összesen 2,6 kredit ment |
+| 3D modell | Meshy 7 Image to 3D a Higgsfield-en (38 kredit): `should_texture`, PBR nélkül, `target_polycount` 8000 |
+| Optimalizálás | `node tools/props/optimize.mjs nyers.glb src/assets/props/brazier.glb 3000 512` (nyersen 8252; a 3000-es cél elérhetetlen: a UV-varratok és a sok különálló parázsdarab miatt 7314-nél állt meg, 0,06-os hibahatárral is csak 7070) |
+
+A kép promptja:
+
+> Stylized 3D game asset: a fantasy stone pedestal brazier, a carved octagonal grey stone pillar about
+> waist high holding a wide shallow dark iron fire bowl filled with glowing orange embers, no flames, no
+> smoke. Chunky readable shapes, hand-painted textures, stylized indie fantasy game look. Single object,
+> fully visible and centered, three-quarter front view, plain flat light grey background, soft even
+> studio lighting, no cast shadows, no text.
+
+Közel forgásszimmetrikus nyolcszögletű talapzat, az eleje a Meshy szerint a +Z (a játékban mindegy).
+Modellegységben 1,81 (X) × 1,90 (Y) × 1,84 (Z): a tál pereme majdnem olyan széles, mint a tárgy magassága
+(1,3 m magasra nagyítva kb. 1,24 m átmérő). A parázs a tálban külön geometria-darabok narancs textúrával,
+de nem izzik (az `optimize.mjs` csak a cián pixelekből készít emisszív térképet). Ismert hibák: négy
+példánnyal kb. 29 000 háromszög; a parázs vöröse csíkokban a kő repedéseibe is átfolyt.
+
+## cave_mouth_a.glb — magas barlangszáj
+
+| | |
+| --- | --- |
+| Hely a játékban | Még nincs bekötve. Cél: kb. 4 m magas és 6 m széles sziklakibúvó, a sötét nyílás a kamera felé |
+| Méret | 4999 háromszög, 7257 csúcspont, 214 KB (1024-es WebP alapszín) |
+| Bemenő kép | FLUX.2 Pro a Higgsfield-en (1 kredit), 1:1; seed nem állítható, job `3ccbd8ef-179e-45d7-ad7e-c1c935ff7bdd`. Előtte 3 Z-Image-kép el lett dobva (a barlang belseje csak sötétszürke); a képekre összesen 1,45 kredit ment |
+| 3D modell | Tripo P2 Image to 3D a Higgsfield-en (34 kredit): `face_limit` 8000, textúra, PBR nélkül, `delight` |
+| Optimalizálás | `node tools/props/optimize.mjs nyers.glb src/assets/props/cave_mouth_a.glb 5000 1024` (nyersen 5980) |
+
+A kép promptja:
+
+> Stylized 3D game asset: a large mossy grey rock outcrop with a tall arched cave entrance in its front
+> face, rough boulders framing the opening, the inside of the cave pitch black, small ferns and moss.
+> Chunky readable shapes, hand-painted textures, stylized indie fantasy game look. Single object, fully
+> visible and centered, three-quarter front view, plain flat light grey background, soft even studio
+> lighting, no cast shadows, no text.
+
+A nyílás a +X irányba néz. Modellegységben 0,74 (X) × 0,88 (Y) × 1,00 (Z); 4 m magasra nagyítva csak
+kb. 4,6 m széles. Ismert hibák: a nyílás belseje sötét szürkésbarna, nem koromfekete (a `delight`
+kivilágosította); a Tripo a hátoldalra (−X) is rajzolt egy vak boltívet (tömör, nem lehet átlátni); a
+boltív illesztett kőtömbökből áll, inkább falazatnak, mint természetes sziklának hat; a tetején barna
+földpárkányok és egy kőcsúcs vannak.
+
+## cave_mouth_b.glb — alacsony barlangszáj
+
+| | |
+| --- | --- |
+| Hely a játékban | Még nincs bekötve. Cél: alacsony, széles sziklahalom széles, alacsony barlangnyílással, a nyílás a kamera felé |
+| Méret | 4944 háromszög, 7452 csúcspont, 220 KB (1024-es WebP alapszín) |
+| Bemenő kép | FLUX.2 Pro a Higgsfield-en (1 kredit), 1:1; seed nem állítható, job `8c549be3-e554-41d7-9ff6-0096527cca77`. Előtte 3 Z-Image-kép el lett dobva (a barlang belseje csak sötétszürke); a képekre összesen 1,45 kredit ment |
+| 3D modell | Tripo P2 Image to 3D a Higgsfield-en (34 kredit): `face_limit` 8000, textúra, PBR nélkül, `delight` |
+| Optimalizálás | `node tools/props/optimize.mjs nyers.glb src/assets/props/cave_mouth_b.glb 5000 1024` (nyersen már 4944 volt, nem egyszerűsített) |
+
+A kép promptja:
+
+> Stylized 3D game asset: a low wide mossy grey rocky mound with a wide low cave entrance in its front
+> face, rough boulders framing the opening, the inside of the cave pitch black, small ferns and moss.
+> Chunky readable shapes, hand-painted textures, stylized indie fantasy game look. Single object, fully
+> visible and centered, three-quarter front view, plain flat light grey background, soft even studio
+> lighting, no cast shadows, no text.
+
+A nyílás a +X irányba néz; a hátoldal tömör. Modellegységben 0,93 (X) × 0,38 (Y) × 1,00 (Z). A nyílás
+belseje majdnem fekete, sekély mélyedés. Ismert hibák: a talpán lapos fűszoknya (talajfolt páfrányokkal)
+van, ezt a terepbe kell süllyeszteni.
+
 ## Új tereptárgy hozzáadása
 
 1. Kép: stilizált, egyetlen tárgy, egyszínű háttér, egyenletes fény, háromnegyedes nézet.

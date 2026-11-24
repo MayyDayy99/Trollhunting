@@ -57,9 +57,11 @@ const hearthLight=new THREE.PointLight(0xff9448, 0.9, 36, 2); hearthLight.positi
   const FL=new THREE.ConeGeometry(0.2,0.75,6,1); FL.translate(0,0.375,0);
   for(let i=0;i<4;i++){ const a=0.39+i*Math.PI/2, x=Math.cos(a)*8.0, z=Math.sin(a)*8.0;
     const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.rotation.y=rand(0,6.28);
-    const ped=jitter(new THREE.CylinderGeometry(0.26,0.44,1.0,7,2),0.07,0.04); gradTint(ped,0x6a7080,0xffffff,-0.5,0.5);
-    const pm=new THREE.Mesh(ped,envRock); pm.position.y=0.5; pm.castShadow=true; pm.receiveShadow=true; g.add(pm);
-    const bowl=mesh(new THREE.CylinderGeometry(0.58,0.30,0.30,8,1), ironMat, 0,1.13,0); g.add(bowl);
+    if(GEN_PROP('brazier')) GEN_SPOTS.brazier.push({g});   // generált talapzat + tál (07-troll-idol.js); a parázs, a láng és a fény marad
+    else {
+      const ped=jitter(new THREE.CylinderGeometry(0.26,0.44,1.0,7,2),0.07,0.04); gradTint(ped,0x6a7080,0xffffff,-0.5,0.5);
+      const pm=new THREE.Mesh(ped,envRock); pm.position.y=0.5; pm.castShadow=true; pm.receiveShadow=true; g.add(pm);
+      const bowl=mesh(new THREE.CylinderGeometry(0.58,0.30,0.30,8,1), ironMat, 0,1.13,0); g.add(bowl); }
     const coals=mesh(new THREE.CylinderGeometry(0.48,0.48,0.06,8), coalMat, 0,1.27,0); coals.castShadow=false; g.add(coals); enableBloom(coals);
     const fl=[]; for(let k=0;k<3;k++){ const f=new THREE.Mesh(FL, k===2?flameMatB:flameMatA); f.position.set(rand(-0.16,0.16),1.28,rand(-0.16,0.16)); f.userData={ph:rand(0,6.28),s:k===2?0.62:rand(0.85,1.15)}; g.add(f); fl.push(f); enableBloom(f); }
     const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xff9a4a,transparent:true,opacity:0.5,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));
