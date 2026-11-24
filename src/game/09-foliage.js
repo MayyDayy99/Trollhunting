@@ -44,7 +44,8 @@ const _ic=new THREE.Color();
   const im=new THREE.InstancedMesh(BLADE, grassBladeMat, N); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
   grassIM=im; im.userData.full=N; syncGrassCount(); im.layers.set(NOBLOOM_LAYER);   // a bloom-passban kimarad (sosem izzik)
   const A=new THREE.Color(0x214a2a), B=new THREE.Color(0x48723a);
-  for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(1.2, ARENA_R+6, 1.7), h=rand(0.75,1.5);
+  const R0=GEN_PROP('altarDais')?4.5:1.2;   // a generált oltár (r 4,2) kőlapjain ne nőjön fű
+  for(let i=0;i<N;i++){ const a=rand(0,6.283), r=rFall(R0, ARENA_R+6, 1.7), h=rand(0.75,1.5);
     _fp.set(Math.cos(a)*r, GROUND_Y-0.02, Math.sin(a)*r);   // a tő a talajban
     _fe.set(0, rand(0,6.283), (Math.random()-0.5)*0.25); _fq.setFromEuler(_fe);
     _fs.set(rand(0.8,1.4), h, rand(0.8,1.4)); _fm.compose(_fp,_fq,_fs); im.setMatrixAt(i,_fm);

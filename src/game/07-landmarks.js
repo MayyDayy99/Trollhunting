@@ -28,6 +28,7 @@
 
   /* ---------- 2) THE OLD WELL: faragott kövekből rakott kávagyűrű, derengő vízzel, fa tetővel és vödörrel ---------- */
   function oldWell(x,z,s){
+    if(GEN_PROP('oldWell')) return;   // a generált kút-modell a helyére kerül (07-troll-idol.js, OLD_WELL)
     const g=new THREE.Group(); g.position.set(x,GROUND_Y,z); g.scale.setScalar(s||1);
     for(let row=0;row<2;row++){ const n=11; for(let i=0;i<n;i++){ const a=(i+row*0.5)/n*6.283, b=stone(roundBox(0.72,0.5,0.46,0.09), Math.cos(a)*1.28,0.27+row*0.5,Math.sin(a)*1.28, rand(0.92,1.06),rand(0.92,1.05),rand(0.9,1.1), -a+Math.PI/2+rand(-0.08,0.08)); g.add(b); } }
     const water=new THREE.Mesh(new THREE.CircleGeometry(1.1,24), new THREE.MeshStandardMaterial({color:0x0c2630,emissive:0x1d6b78,emissiveIntensity:0.85,roughness:.15,metalness:.3}));
