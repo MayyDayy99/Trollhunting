@@ -234,8 +234,16 @@ solidCyl(-12.61, 11.93, 1.8, {});       // fallenTree gyökérlabda
 // === FÁZIS 5: BARLANGOK — troll-spawnpontok az aréna peremén. Tömör (a JÁTÉKOS nem mehet be), de mob NÉLKÜL -> a trollok kisétálnak. ===
 const envRockDark=applyStylized(std({color:0x555c6c,roughness:.97,vertexColors:true,emissive:0x10151f,emissiveIntensity:0.5}),'rock');
 const CAVE_GEO=makeRockGeo(88.8, GEO_DETAIL, 11);
-function buildCave(c){
-  if(GEN_PROP('caveMouthA')){ GEN_SPOTS.cave.push(c); contactBlob(c.x,c.z,5.0); solidCyl(c.x, c.z, 1.9, {top:GROUND_Y+2.8}); return; }   // generált barlangszáj (07-troll-idol.js); az ütköző ugyanaz
+function buildCave(c, i){
+  if(CAVE_FOOT[i]){   // generált barlangszáj (07-troll-idol.js tölti be): nagy sziklatömb, a lábnyoma a 06-arena.js-ben
+    const f=CAVE_FOOT[i], ca=Math.cos(f.ang), sa=Math.sin(f.ang), rs=Math.min(f.hd, f.hw*0.5), off=f.hw-rs;
+    GEN_SPOTS.cave.push(f); contactBlob(f.x, f.z, Math.max(f.hw, f.hd)*1.05);
+    // JÁTÉKOS-fal a tömb elején (nincs mob -> a trollok kisétálnak). noArrow: a szájban előbújó trollt a nyíl/varázslat eléri
+    solidCyl(f.x, f.z, f.hd, {noArrow:true});
+    // a két oldalsó szikla-váll: ezeken a nyíl megáll
+    for(const sd of [-1,1]) solidCyl(f.x - sa*off*sd, f.z + ca*off*sd, rs, {top:GROUND_Y+f.h*0.6});
+    return;
+  }
   const g=new THREE.Group(); g.position.set(c.x, GROUND_Y, c.z); g.rotation.y=Math.atan2(-c.x,-c.z);   // a száj a központ felé néz (local +z)
   const rk=(geo,x,y,z,sx,sy,sz,ry)=>{ const m=new THREE.Mesh(geo,envRockDark); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.rotation.y=ry||0; m.castShadow=true; m.receiveShadow=true; g.add(m); };
   rk(CAVE_GEO, 0,1.15,-0.1, 3.1,2.9,3.0, rand(0,6.28));                                   // fő szikla-tömb
@@ -245,7 +253,7 @@ function buildCave(c){
   scene.add(g); contactBlob(c.x,c.z,5.0);
   solidCyl(c.x, c.z, 1.9, {top:GROUND_Y+2.8});   // PLAYER-fal (nincs climb -> nem mászható; nincs mob -> a trollok átsétálnak)
 }
-for(const c of CAVES) buildCave(c);
+CAVES.forEach(buildCave);
 // landmarkok + parázstartók talaj-kontakt foltjai, majd az összes folt EGY instanced mesh-be
 [[11.55,7.9,2.6],[-7.3,8.2,1.9],[-15.9,-15.2,3.2],[3.7,-19.6,3.2],[-13.85,10.49,2.2],[-16.27,7.69,2.2],[-18.69,4.89,2.2],[-12.61,11.93,2.8]].forEach(b=>contactBlob(b[0],b[1],b[2]));
 for(const b of braziers) contactBlob(b.x,b.z,1.3);

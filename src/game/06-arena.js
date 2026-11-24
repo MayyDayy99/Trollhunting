@@ -16,6 +16,26 @@ MOSS_T.repeat.set(6,6);   // (a talaj már a GROUND_T-t használja) kevésbé s�
 const GEN_PROP=n=>!!(window.GAME_ASSETS && window.GAME_ASSETS[n]);
 // a több helyre kerülő generált modellek helyei: a kódból építő függvények gyűjtik, a 07-troll-idol.js tölti be és rakja ki
 const GEN_SPOTS={ arch:[], fallen:[], pillars:[], cairn:[], brazier:[], cave:[] };
+// GENERÁLT BARLANGSZÁJAK: nagy (a trolloknál jóval magasabb) sziklatömbök a peremfalba ágyazva. A lábnyomukat itt foglaljuk le,
+// hogy a menhirek, a peremfal kövei és a fák ne nőjenek beléjük. A barlangok szöge közös a co-op szerverrel (src/shared/config.js).
+const CAVE_FRONT_R = SHARED.R_CAVE - 3.0;   // a sziklatömb eleje (a száj kerete): a trollok (R_CAVE-2.4 ± 0.9) a száj belsejéből lépnek ki
+// méret: a GLB-k arányaiból (A: mély 0.742 × magas 0.877 × széles 1; B: 0.933 × 0.38 × 1), a régi barlangok 4-szerese
+const CAVE_SIZE = { caveMouthA:{ h:16.8, w:19.2, d:14.2 }, caveMouthB:{ h:11.4, w:30.0, d:28.0 } };
+const CAVE_MODEL = ['caveMouthA','caveMouthB','caveMouthA','caveMouthB','caveMouthA','caveMouthA','caveMouthB'];   // az 5.0-s szögnél A: a déli holdkapu mellett a széles B nem fér el
+const CAVE_FOOT = !GEN_PROP('caveMouthA') ? [] : SHARED.CAVE_ANGS.map((ang, i) => {
+  const model = GEN_PROP(CAVE_MODEL[i]) ? CAVE_MODEL[i] : 'caveMouthA', S = CAVE_SIZE[model], rc = CAVE_FRONT_R + S.d / 2;
+  return { i, ang, model, h:S.h, hw:S.w / 2, hd:S.d / 2, rc, x:Math.cos(ang) * rc, z:Math.sin(ang) * rc };
+});
+// igaz, ha (x,z) a barlangtömb ellipszis-lábnyomán belül van (pad: ráhagyás méterben; negatív = csak a mélyebb belseje)
+function inCaveFoot(x, z, pad){
+  pad = pad || 0;
+  for(const f of CAVE_FOOT){
+    const c = Math.cos(f.ang), s = Math.sin(f.ang), u = x * c + z * s - f.rc, v = -x * s + z * c;
+    const a = f.hd + pad, b = f.hw + pad;
+    if(a > 0 && b > 0 && (u * u) / (a * a) + (v * v) / (b * b) < 1) return true;
+  }
+  return false;
+}
 if(!GEN_PROP('altarDais')){
   const dais=new THREE.Mesh(vcolAttr(jitter(new THREE.CylinderGeometry(3.4,4.2,0.55,40,2),0.10,0.05),()=>[0.62,0.62,0.66]), envRock);   // AA-indie: festett, mohás kő-emelvény
   dais.position.y=-0.18; dais.receiveShadow=true; dais.castShadow=true; scene.add(dais);
@@ -108,21 +128,25 @@ function mushroom(x,z,sc,glow){ const g=new THREE.Group(); g.position.set(x,GROU
   const N_STONE=34, RING=BOUND_R+3.0; const STONE=makeMenhirGeo(4.2, 1.7,5.6,1.15);
   const stoneIM=new THREE.InstancedMesh(STONE, envRock, N_STONE); stoneIM.castShadow=true; stoneIM.receiveShadow=true;
   const _sm=new THREE.Matrix4(), _sq=new THREE.Quaternion(), _ss=new THREE.Vector3(), _sp=new THREE.Vector3(), _se=new THREE.Euler();
+  let nStone=0;
   for(let i=0;i<N_STONE;i++){ const a=(i/N_STONE)*6.283 + rand(-0.04,0.04), r=RING+rand(-0.6,1.2); const fallen=Math.random()<0.12; const h=rand(0.95,1.35);
+    if(inCaveFoot(Math.cos(a)*r, Math.sin(a)*r, 1.2)) continue;   // a generált barlangtömb helyén nincs menhir
     _se.set(fallen?Math.PI/2*rand(.7,1):(Math.random()-0.5)*0.10, a+rand(-0.2,0.2)+Math.PI/2, (Math.random()-0.5)*0.12);
     _sp.set(Math.cos(a)*r, fallen?0.5:2.4*h, Math.sin(a)*r); _sq.setFromEuler(_se); _ss.set(rand(0.95,1.4),h,rand(0.95,1.4));
-    _sm.compose(_sp,_sq,_ss); stoneIM.setMatrixAt(i,_sm); contactBlob(Math.cos(a)*r,Math.sin(a)*r,2.2);
+    _sm.compose(_sp,_sq,_ss); stoneIM.setMatrixAt(nStone++,_sm); contactBlob(Math.cos(a)*r,Math.sin(a)*r,2.2);
     // ütköző csak az álló köveknek (a ledőltek lapos díszek); cyl a hengeres lábnyomra
     if(!fallen) solidCyl(Math.cos(a)*r, Math.sin(a)*r, 0.95); }
-  stoneIM.instanceMatrix.needsUpdate=true; scene.add(stoneIM);
+  stoneIM.count=nStone; stoneIM.instanceMatrix.needsUpdate=true; scene.add(stoneIM);
   /* ---- folytonos MOHÁS SZIKLAFAL-gyűrű a kövek mögött: nagy vésett sziklák (a moha-tetőt a kő-shader adja) ---- */
   const N_WALL=60, WALLR=BOUND_R+6.0;
   const WALLG=makeRockGeo(41.3, GEO_DETAIL, 12);
   const wallIM=new THREE.InstancedMesh(WALLG, envRock, N_WALL); wallIM.castShadow=true; wallIM.receiveShadow=true;
   const _wm=new THREE.Matrix4(), _wq=new THREE.Quaternion(), _wp=new THREE.Vector3(), _we=new THREE.Euler(), _wsv=new THREE.Vector3();
+  let nWall=0;
   for(let i=0;i<N_WALL;i++){ const a=(i/N_WALL)*6.283 + rand(-0.02,0.02), r=WALLR+rand(-1.2,1.2), sc=rand(3.3,5.2);
+    if(inCaveFoot(Math.cos(a)*r, Math.sin(a)*r, -1.5)) continue;   // a barlangtömb belsejében nincs peremfal-kő (a szélein összenőhetnek)
     _we.set(rand(-0.25,0.25),rand(0,6.28),rand(-0.25,0.25)); _wq.setFromEuler(_we);
     _wp.set(Math.cos(a)*r, GROUND_Y+sc*rand(0.28,0.5), Math.sin(a)*r); _wsv.set(sc,sc*rand(1.0,1.5),sc);
-    _wm.compose(_wp,_wq,_wsv); wallIM.setMatrixAt(i,_wm); }
-  wallIM.instanceMatrix.needsUpdate=true; scene.add(wallIM);
+    _wm.compose(_wp,_wq,_wsv); wallIM.setMatrixAt(nWall++,_wm); }
+  wallIM.count=nWall; wallIM.instanceMatrix.needsUpdate=true; scene.add(wallIM);
 
