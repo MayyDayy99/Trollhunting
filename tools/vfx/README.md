@@ -1,5 +1,30 @@
 # Blenderben készült effektek
 
+## Renderelés: CPU vagy videókártya
+
+A szkriptek alapból **CPU-n** renderelnek (Cycles), mert ezek a kockák kicsik (256 px, 16–64 minta). Itt a
+videókártya elindítása és a jelenet feltöltése tovább tart, mint maga a render. Egy RTX 4050 Laptop GPU-n,
+Blender 5.3-mal mérve a teljes futás, CPU kontra OptiX:
+
+| Effekt | CPU | GPU |
+| --- | --- | --- |
+| dust_poof | 4,1 s | 7,0 s |
+| fire_burst | 2,9 s | 6,1 s |
+| poison_skull | 4,2 s | 6,4 s |
+| left_hand előnézet | 7,2 s | 8,0 s |
+| ice_spikes előnézet | 4,7 s | 3,3 s |
+
+A képek gyakorlatilag azonosak (átlagos eltérés 0,000/255). Nagy rendernél (nagy felbontás, sok minta) a
+videókártya gyorsabb; ilyenkor a `VFX_DEVICE` környezeti változóval kérhető (`tools/vfx/vfx_device.py`):
+
+```powershell
+$env:VFX_DEVICE = 'GPU'
+```
+
+`GPU` a leggyorsabb elérhető hátteret választja (OptiX > CUDA > HIP > oneAPI > Metal). `OPTIX`, `CUDA` stb.
+pontosan azt kéri. Ha nincs használható kártya, a render CPU-n fut. A választott eszközt a napló első
+`[vfx] Cycles device:` sora írja ki.
+
 ## fire_burst — stilizált tűz-robbanás
 
 ![előnézet](fire_burst_preview.webp)

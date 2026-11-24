@@ -20,6 +20,8 @@ import bmesh
 import bpy
 import numpy as np
 from mathutils import Vector, noise
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from vfx_device import use_best_device  # noqa: E402  (CPU; VFX_DEVICE=GPU esetén a videókártya)
 
 FRAMES = 16          # flipbook frames (4x4 atlas)
 SIZE = 256           # pixels per frame
@@ -177,7 +179,7 @@ def build_scene():
     bg = world.node_tree.nodes.get("Background")
     if bg: bg.inputs["Color"].default_value = (0.02, 0.03, 0.05, 1.0)
     sc.render.engine = "CYCLES"
-    sc.cycles.device = "CPU"; sc.cycles.samples = 24; sc.cycles.use_denoising = False
+    use_best_device(sc); sc.cycles.samples = 24; sc.cycles.use_denoising = False
     sc.render.film_transparent = True
     sc.render.resolution_x = sc.render.resolution_y = SIZE; sc.render.resolution_percentage = 100
     sc.render.image_settings.file_format = "PNG"; sc.render.image_settings.color_mode = "RGBA"
