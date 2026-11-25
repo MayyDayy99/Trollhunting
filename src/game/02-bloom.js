@@ -14,9 +14,12 @@ let bloomOn = false;                                              // applyGraphi
 
 const _darkMat  = new THREE.MeshBasicMaterial({color:0x000000});  // megosztott, egyszer lefordul
 const _darkMatSkin = new THREE.MeshBasicMaterial({color:0x000000, skinning:true});   // az összevont (skinnelt) troll-hálókhoz: a takaró-forma is mozogjon
+// TELJESÍTMÉNY: az instanced hálók (fű, kövek, peremfal) KÜLÖN fekete anyagot kapnak. Közös anyaggal a three minden
+// instanced <-> sima váltásnál újraválasztotta a shader-programot (getProgram + cache-kulcs építés) — mérve képkockánként több ms.
+const _darkMatInst = new THREE.MeshBasicMaterial({color:0x000000});
 const BLOOM_PASS_U = {value:0};                                   // 1 a bloom-pass alatt: a VFX-shaderek ilyenkor CSAK az izzó részüket adják ki (pl. jégkristály pereme)
 const _darkStack = [];                                            // páros verem [obj, mat, ...] -> nincs uuid-kulcs, nincs delete, nincs 2. scene.traverse!
-function _darken(o){ const m=o.material; if(m && !bloomLayer.test(o.layers)){ _darkStack.push(o, m); o.material=o.isSkinnedMesh?_darkMatSkin:_darkMat; } }
+function _darken(o){ const m=o.material; if(m && !bloomLayer.test(o.layers)){ _darkStack.push(o, m); o.material=o.isSkinnedMesh?_darkMatSkin:(o.isInstancedMesh?_darkMatInst:_darkMat); } }
 function _restoreAll(){ for(let i=_darkStack.length-2;i>=0;i-=2) _darkStack[i].material=_darkStack[i+1]; _darkStack.length=0; }
 
 // GRACEFUL FALLBACK: ha a bloom-addonok (jsdelivr) NEM töltöttek be, a játék sima renderrel fut tovább (nincs összeomlás).
@@ -73,19 +76,23 @@ function bloomSize(){
 bloomSize();
 
 // egyetlen belépési pont: a frame() és a warmup is ezt hívja
-const _blackBG = new THREE.Color(0x000000);
+const _blackBG = new THREE.Color(0x000000), _fogCol = new THREE.Color();
 const FXS={ hurt:0, focus:0, tintK:0, lowHp:0, t:0 };   // a záró grade-pass élő paraméterei (update() írja)
 let _shadowTick=0;
+// TELJESÍTMÉNY: a világ-mátrixokat képkockánként EGYSZER frissítjük (renderFrame elején), nem minden render-passban újra
+scene.autoUpdate=false;
 function renderFrame(){
   if(skyGroup) skyGroup.position.copy(camera.position);   // az ég a kamerával utazik (nincs parallaxis)
+  scene.updateMatrixWorld();
   // árnyéktérkép: minden 2. képkockán (a fény iránya fix, így nincs "úszás"; a mozgó trollok árnyéka 1 képkockát késhet)
   const _shadowNow = ((_shadowTick++)&1)===0;
   if(!bloomOn || !bloomAvail){ renderer.shadowMap.needsUpdate=_shadowNow; renderer.render(scene, camera); return; }
   { const u=gradePass.uniforms; u.uTime.value=FXS.t; u.uHurt.value=FXS.hurt; u.uFocus.value=FXS.focus; u.uTintK.value=FXS.tintK; u.uLowHp.value=FXS.lowHp; }
-  // A bloom-passban FEKETE háttér + fog KI kell: különben a navy ég/köd (küszöb 0.0 mellett)
+  // A bloom-passban FEKETE háttér + FEKETE köd kell: különben a navy ég/köd (küszöb 0.0 mellett)
   // beszűrődne a bloomba és az egész képet feltúlvilágítaná. Csak a címkézett fény-források izzanak.
+  // (A ködöt nem vesszük ki, csak a színét feketítjük: a köd ki-be kapcsolása minden izzó anyagnál shader-programváltást okozott.)
   const _bg=scene.background, _fog=scene.fog;
-  scene.background=_blackBG; scene.fog=null;
+  scene.background=_blackBG; if(_fog){ _fogCol.copy(_fog.color); _fog.color.setRGB(0,0,0); }
   scene.traverse(_darken);
   camera.layers.disable(NOBLOOM_LAYER);
   BLOOM_PASS_U.value=1;
@@ -93,7 +100,7 @@ function renderFrame(){
   BLOOM_PASS_U.value=0;
   camera.layers.enable(NOBLOOM_LAYER);
   _restoreAll();
-  scene.background=_bg; scene.fog=_fog;
+  scene.background=_bg; if(_fog) _fog.color.copy(_fogCol);
   renderer.shadowMap.needsUpdate=_shadowNow;   // CSAK a fő-passban (a feketített bloom-pass árnyékot nem használ)
   finalComposer.render();
 }

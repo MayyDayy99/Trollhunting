@@ -2,11 +2,13 @@ const DEV_HOOKS=location.hash.indexOf('dev')>=0;
 function frame(){
   requestAnimationFrame(frame);
   if(DEV_HOOKS && window.__mrHold) return;   // dev: külső, determinisztikus léptetés (update + renderFrame kézzel)
-  const t=clock.getElapsedTime(); let dt=Math.min(t-prevT,0.05); prevT=t;
+  const t=clock.getElapsedTime(), rawDt=t-prevT; let dt=Math.min(rawDt,0.05); prevT=t;
   if(slowT>0){ slowT-=dt; if(running && !coop) dt*=0.32; }   // TURBÓ: lassított felvétel (utolsó troll / VIHAR)
+  const c0=performance.now();
   update(dt,t);
   if(window.__shotPose){ const p=window.__shotPose; camera.position.set(p[0],p[1],p[2]); camera.lookAt(p[3],p[4],p[5]); }
   renderFrame();
+  dynResTick(rawDt, (performance.now()-c0)/1000);   // dinamikus felbontás (03-textures-lights-gfx.js): képkocka-idő + a fő szál munkaideje
   if(window.__shotPose){ window.__ri=renderer.info.render; window.__shotReady=true; }
 }
 // ELŐMELEGÍTÉS: induláskor egyszer felépítünk + kirenderelünk minden troll-típust és FX-et (az arénán kívül, a töltőképernyő mögött),

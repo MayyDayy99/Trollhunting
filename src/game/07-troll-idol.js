@@ -41,7 +41,7 @@ function loadGenProp(name, place){
       try{
         const g = gltf.scene, box = new THREE.Box3().setFromObject(g), size = new THREE.Vector3();
         box.getSize(size);
-        place(g, box, size);
+        place(g, box, size); g.userData.genProp = name;   // (a teljesítmény-mérők név szerint ki-be kapcsolhatják)
         const meshes = []; g.traverse(o => { if(o.isMesh) meshes.push(o); });   // előbb gyűjtés: az izzó-réteg gyerekként kerül a hálóra
         for(const o of meshes){ o.castShadow = true; o.receiveShadow = true; propGlowLayer(o); }
         scene.add(g);
@@ -78,6 +78,7 @@ function loadGenPropMulti(name, spots, place){
           g.traverse(o => { if(o.isMesh) meshes.push(o); });
           for(const o of meshes){ o.castShadow = true; o.receiveShadow = true; propGlowLayer(o); }
           const obj = place(g, s, box, size, i);
+          (obj || g).userData.genProp = name;
           if(obj) scene.add(obj);
         });
         resolve(list.length);
@@ -173,7 +174,7 @@ const PROPS_READY = (function loadGenProps(){
           im.frustumCulled = false;   // r128: az instanced háló befoglaló gömbje csak az alap-geometriáé, a szétszórt példányokat levágná
           out.add(im);   // (izzó-réteg nincs: a kövön nincs rúna, és a gyerek-háló nem lenne példányosítva)
         });
-        scene.add(out); resolve(out);
+        out.userData.genProp = 'mossRock'; scene.add(out); resolve(out);
       }catch(e){ console.warn('[props] mossRock', e); resolve(null); }
     }, undefined, e => { console.warn('[props] mossRock failed to load', e); resolve(null); });
   });

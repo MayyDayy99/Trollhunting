@@ -5,7 +5,7 @@ const hpfill=document.getElementById('hpfill'), hpghost=document.getElementById(
   hurtEl=document.getElementById('hurt'), witherEl=document.getElementById('wither'), toastEl=document.getElementById('toast'),
   startScreen=document.getElementById('start'), pauseScreen=document.getElementById('pause'), overScreen=document.getElementById('over');
 let toastT=null;
-function toast(txt){ toastEl.textContent=txt; toastEl.classList.toggle('long',(''+txt).length>30); toastEl.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('show'),1400); }
+function toast(txt, ms){ toastEl.textContent=txt; toastEl.classList.toggle('long',(''+txt).length>30); toastEl.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('show'),ms||1400); }
 /* ===================== TURBÓ: HUD-segédek + új játékmechanikák =====================
    Töltés-gyűrű a célkereszt körül, találat-jelölő, sorozat (combo), sebzés-irány, főellenség-sáv, erősítés-címkék;
    KITÉRÉS (Q) rövid sérthetetlenséggel, TÖKÉLETES LÖVÉS időzítés, VIHAR-túltöltés, kontroller-támogatás, mentett rekord. */
