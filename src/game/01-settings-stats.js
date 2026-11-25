@@ -81,7 +81,7 @@ function syncGrassCount(){ if(grassIM) grassIM.count=Math.round(grassIM.userData
 
 const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 400);
 camera.layers.enable(2);   // NOBLOOM_LAYER (lentebb deklarálva)
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});   // két-GPU-s gépen kérjük az erősebbet (ahol a böngésző engedi)
 renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE_INPUT ? 1 : 1.5)); // FPS: mobilon se renderelj túl nagy DPR-en
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;

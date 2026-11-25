@@ -84,6 +84,39 @@ const rim=new THREE.DirectionalLight(0x9fd8ff,0.5); rim.position.set(-24,28,-44)
 const moonFill=new THREE.PointLight(0x88aaff,0.4,120,2); moonFill.position.set(-40,30,-60); scene.add(moonFill);
 
 /* ===================== Grafikai fokozatok (ALACSONY/KÖZEPES/MAGAS) ===================== */
+/* ---- DINAMIKUS FELBONTÁS: gyenge (főleg integrált) GPU-n a kép a pixelek kitöltésén fullad meg. Mérve 1080p-ben, magas fokozaton:
+   Intel UHD 55–70 ms/képkocka (fél felbontáson 23 ms), RTX 4050 12 ms. Ha a képkocka-idő tartósan 40 FPS alá esik, a render-felbontást
+   lépcsőzetesen lejjebb vesszük (a HUD DOM, az éles marad); ha a gép bírja, óvatosan vissza a fokozat maximumáig. A tanult szorzót
+   megjegyezzük, így a következő indításnál nem a lassú képpel kezd. ---- */
+const DYN_KEY='mr_dynres', DYN_MIN=0.5;
+let gfxBasePr=1, dynScale=1;
+try{ const v=parseFloat(localStorage.getItem(DYN_KEY)); if(v>=DYN_MIN && v<=1) dynScale=v; }catch(_e){}
+function dynPr(){ return Math.max(0.5, gfxBasePr*dynScale); }
+// a böngésző által használt GPU neve (integrált kártyán egyszer szólunk, hogy van-e erősebb)
+const GPU_NAME=(function(){ try{ const gl=renderer.getContext(); let s=String(gl.getParameter(gl.RENDERER)||'');
+  if(/^WebKit/i.test(s)){ const e=gl.getExtension('WEBGL_debug_renderer_info'); if(e) s=String(gl.getParameter(e.UNMASKED_RENDERER_WEBGL)||s); } return s; }catch(_e){ return ''; } })();
+const GPU_INTEGRATED=/Intel|UHD|Iris|Radeon\(TM\) Graphics|Vega \d+ Graphics|Microsoft Basic/i.test(GPU_NAME) && !/\bArc\b/i.test(GPU_NAME);
+const DYN={ acc:0, cpu:0, n:0, cool:0, upT:0, upWait:8, sinceUp:99, hinted:false };
+// raw: két képkocka közti idő; cpu: ebből a fő szál munkája (update + renderFrame). Ha a fő szál a lassú (processzor-korlát,
+// pl. sok troll vagy akkus, visszafogott gép), a felbontás csökkentése nem segítene, csak elmosná a képet -> ilyenkor nem nyúlunk hozzá.
+function dynResTick(raw, cpu){
+  if(!running || document.hidden || !(raw>0)){ DYN.acc=0; DYN.cpu=0; DYN.n=0; return; }
+  DYN.cool-=raw; DYN.upT-=raw; DYN.sinceUp+=raw;
+  if(DYN.cool>0) return;                                   // átméretezés után pár képkockát nem mérünk
+  DYN.acc+=Math.min(raw,0.1); DYN.cpu+=Math.min(cpu||0,0.1); DYN.n++;
+  if(DYN.acc<1.5) return;                                  // ~1,5 másodperces átlag
+  const avg=DYN.acc/DYN.n, avgCpu=DYN.cpu/DYN.n; DYN.acc=0; DYN.cpu=0; DYN.n=0;
+  let next=dynScale;
+  if(avg>1/40 && avgCpu<avg*0.7) next=Math.max(DYN_MIN, dynScale*(avg>1/25?0.8:0.88));   // 40 FPS alatt, és a GPU a szűk keresztmetszet: le
+  else if(avg<1/57 && dynScale<1 && DYN.upT<=0) next=Math.min(1, dynScale*1.08); // a képfrissítés ütemét tartja: óvatosan fel
+  if(Math.abs(next-dynScale)<0.005) return;
+  if(next<dynScale){ if(DYN.sinceUp<5) DYN.upWait=Math.min(120, DYN.upWait*2); DYN.upT=DYN.upWait; }   // fel-le pattogás ellen: egyre ritkábban próbál feljebb
+  else DYN.sinceUp=0;
+  dynScale=next; DYN.cool=0.4;
+  renderer.setPixelRatio(dynPr()); renderer.setSize(innerWidth, innerHeight); bloomSize();
+  try{ localStorage.setItem(DYN_KEY, dynScale.toFixed(2)); }catch(_e){}
+  if(GPU_INTEGRATED && dynScale<0.8 && !DYN.hinted){ DYN.hinted=true; toast(tr('toast.gpuHint'), 8000); }
+}
 const GFX_KEY='mr_gfx';
 let gfxTier=(function(){ try{ return localStorage.getItem(GFX_KEY)||(MOBILE_INPUT?'low':'high'); }catch(_e){ return MOBILE_INPUT?'low':'high'; } })();
 function applyGraphics(tier, save){
@@ -93,7 +126,8 @@ function applyGraphics(tier, save){
   if(!T) return;
   const mobilePr={low:1.0, medium:1.15, high:1.25}[tier];
   gfxTier=tier;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE_INPUT ? mobilePr : T.pr));
+  gfxBasePr=Math.min(devicePixelRatio, MOBILE_INPUT ? mobilePr : T.pr);
+  renderer.setPixelRatio(dynPr());   // a dinamikus felbontás szorzójával (lent)
   renderer.setSize(innerWidth, innerHeight);
   bloomOn = !!T.bloom && bloomAvail;           // low (v. hiányzó addon): nincs bloom -> sima render (nincs FPS-regresszió)
   syncFogColor(); SKY_U.uQ.value=(tier==='low')?0:1; syncGrassCount(); syncTreeShadows();
